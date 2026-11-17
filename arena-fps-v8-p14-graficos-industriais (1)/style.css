@@ -1,0 +1,315 @@
+/* ========== VARIÁVEIS E RESET ========== */
+:root {
+  --bg: #0b0d12;
+  --ui: #e8ecf4;
+  --muted: #8791a7;
+  --accent: #ff5a4d;
+  --ok: #3ddc84;
+  --warn: #ffc857;
+  --glass: rgba(10, 12, 18, .62);
+  --line: rgba(255, 255, 255, .12);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden; background: var(--bg); color: var(--ui);
+  font-family: "Courier New", ui-monospace, monospace;
+  user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+}
+canvas { display: block; }
+#game { position: fixed; inset: 0; touch-action: none; }
+
+/* ========== HUD ========== */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 11; touch-action: none; }
+.panel {
+  position: absolute; background: var(--glass); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 14px; backdrop-filter: blur(4px);
+}
+
+/* Vida (canto inferior esquerdo) */
+#health { left: 20px; bottom: 20px; width: 260px; }
+.label { font-size: 11px; letter-spacing: .18em; color: var(--muted); text-transform: uppercase; }
+.bar { height: 12px; margin-top: 6px; background: rgba(255,255,255,.08); border-radius: 6px; overflow: hidden; }
+#hpFill { height: 100%; width: 100%; background: var(--ok); transition: width .15s, background .2s; }
+#hpTxt { font-size: 22px; font-weight: bold; margin-top: 4px; }
+
+/* Pontuação e onda (canto superior direito) */
+#stats { right: 20px; top: 20px; text-align: right; min-width: 170px; }
+#score { font-size: 28px; font-weight: bold; letter-spacing: .08em; }
+#stats .row { display: flex; justify-content: space-between; gap: 18px; margin-top: 4px; font-size: 13px; color: var(--muted); }
+#stats .row b { color: var(--ui); }
+
+/* Arma e munição (canto inferior direito) */
+#weapon { right: 20px; bottom: 20px; text-align: right; min-width: 220px; }
+#wname { font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--warn); }
+#wrole { display: block; margin-top: 2px; font-size: 10px; letter-spacing: .18em; opacity: .85; }
+#ammoLine { font-size: 44px; font-weight: bold; line-height: 1.1; }
+#ammoLine small { font-size: 20px; color: var(--muted); }
+#reloadLabel { display: block; min-height: 11px; color: var(--weapon-color, var(--cyan)); font-size: 9px; letter-spacing: .16em; opacity: 0; transition: opacity .12s; }
+#reloadWrap { height: 4px; margin-top: 8px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; opacity: 0; }
+#reloadBar { height: 100%; width: 0; background: var(--weapon-color, var(--warn)); box-shadow: 0 0 8px var(--weapon-color, var(--warn)); }
+
+/* Slots de armas (centro inferior) */
+#slots { left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; }
+.slot {
+  width: 66px; padding: 6px 0; text-align: center; border-radius: 8px;
+  border: 1px solid var(--line); color: var(--muted); font-size: 11px; transition: .15s;
+}
+.slot b { display: block; font-size: 16px; color: var(--ui); }
+.slot.locked { opacity: .38; }
+.slot.active { border-color: var(--warn); color: var(--warn); background: rgba(255,200,87,.12); transform: translateY(-4px); }
+
+/* Mira fixa no centro */
+#crosshair { --gap: 16px; position: fixed; left: 50%; top: 50%; width: 0; height: 0; }
+#crosshair i { position: absolute; background: var(--weapon-color, #fff); box-shadow: 0 0 5px var(--weapon-color, #000); }
+#crosshair i:nth-child(1) { width: 2px; height: 9px; left: -1px; top: calc(var(--gap) * -1); }
+#crosshair i:nth-child(2) { width: 2px; height: 9px; left: -1px; top: var(--gap); }
+#crosshair i:nth-child(3) { width: 9px; height: 2px; left: calc(var(--gap) * -1); top: -1px; }
+#crosshair i:nth-child(4) { width: 9px; height: 2px; left: var(--gap); top: -1px; }
+#crosshair b { position: absolute; width: 3px; height: 3px; left: -1.5px; top: -1.5px; background: var(--weapon-color, var(--accent)); box-shadow: 0 0 7px var(--weapon-color, var(--accent)); }
+
+/* Hitmarker, vinheta de dano, luneta e banner */
+#hitmarker { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; opacity: 0; }
+#hitmarker::before, #hitmarker::after { content: ""; position: absolute; left: 12px; top: -2px; width: 2px; height: 30px; background: #fff; }
+#hitmarker::before { transform: rotate(45deg); } #hitmarker::after { transform: rotate(-45deg); }
+#hitmarker.head::before, #hitmarker.head::after { background: var(--accent); }
+#hitmarker.shield::before, #hitmarker.shield::after { background: #59e8ff; box-shadow: 0 0 8px #59e8ff; }
+#vignette { position: fixed; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(255,0,0,.65) 100%); }
+#scope { position: fixed; inset: 0; opacity: 0; background:
+  radial-gradient(circle at center, transparent 0 26vmin, #000 26.4vmin);
+}
+#scope::before, #scope::after { content: ""; position: absolute; background: #000; }
+#scope::before { left: 50%; top: calc(50% - 26vmin); width: 1px; height: 52vmin; }
+#scope::after  { top: 50%; left: calc(50% - 26vmin); height: 1px; width: 52vmin; }
+#banner {
+  position: fixed; top: 16%; left: 50%; transform: translateX(-50%); opacity: 0;
+  font-size: clamp(18px, 3.2vw, 34px); font-weight: bold; letter-spacing: .3em; text-shadow: 0 0 18px rgba(255,90,77,.7);
+  text-align: center; white-space: nowrap;
+}
+#banner small { display: inline-block; margin-top: 6px; font-size: .5em; letter-spacing: .18em; color: var(--warn); }
+
+/* ========== OVERLAY (menu / pausa / game over) ========== */
+#overlay {
+  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 18px; text-align: center; padding: 24px; z-index: 30;
+  overflow-y: auto; touch-action: pan-y;            /* telas baixas (celular deitado) rolam em vez de cortar */
+  background: radial-gradient(ellipse at center, rgba(11,13,18,.72), rgba(11,13,18,.95));
+}
+#overlay > :first-child { margin-top: auto; } #overlay > :last-child { margin-bottom: auto; }
+#ovTitle { font-size: clamp(32px, 7vw, 64px); letter-spacing: .22em; }
+#ovTitle span { color: var(--accent); }
+#ovText { max-width: 560px; line-height: 1.7; color: var(--muted); font-size: 14px; white-space: pre-line; }
+#ovText b { color: var(--ui); }
+#ovBtn {
+  pointer-events: auto; cursor: pointer; font: inherit; font-size: 16px; letter-spacing: .2em;
+  padding: 14px 38px; color: var(--ui); background: var(--accent); border: 0; border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(255,90,77,.35); transition: transform .15s, box-shadow .15s;
+}
+#ovBtn:hover { transform: translateY(-2px); box-shadow: 0 12px 34px rgba(255,90,77,.5); }
+.settings { position: relative; width: min(420px, 92vw); padding: 12px 16px; display: grid; gap: 8px; text-align: left; }
+.settings label { display: grid; grid-template-columns: 1fr 160px; gap: 10px; align-items: center; font-size: 12px; color: var(--muted); }
+.settings input, .settings select { width: 100%; accent-color: var(--accent); }
+.damage-float { position: fixed; transform: translate(-50%, 0); color: #fff; font-weight: bold; pointer-events: none; text-shadow: 0 2px 4px #000; animation: damageFloat .65s ease-out forwards; }
+#damageDirection { position: fixed; top: 50%; left: 50%; z-index: 5; color: var(--accent); font-size: 30px; line-height: 1; opacity: 0; transform-origin: 50% 50%; text-shadow: 0 0 8px #000; pointer-events: none; transition: opacity .12s; }
+.damage-float.head { color: var(--accent); }
+@keyframes damageFloat { to { opacity: 0; transform: translate(-50%, -36px); } }
+.hidden { display: none !important; }
+
+@media (max-width: 720px) {
+  #slots { display: none; } #health { width: 180px; } #ammoLine { font-size: 30px; }
+}
+@media (max-height: 480px) {                         /* menu compacto em celular deitado */
+  #overlay { gap: 8px; padding: 12px; } #ovText { font-size: 12px; line-height: 1.45; } #ovBtn { padding: 10px 30px; }
+  .settings { grid-template-columns: repeat(3, 1fr); width: min(780px, 96vw); gap: 4px 14px; padding: 6px 12px; }   /* 3 colunas: o botão JOGAR continua visível */
+  #ovBtn { position: sticky; bottom: 8px; z-index: 2; }                                                        /* e fica sempre ao alcance do dedo */
+  #ovTitle { font-size: clamp(26px, 9vh, 44px); }
+  .settings label { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* ========== MODO MOBILE (body.touch) ========== */
+#touch { position: fixed; inset: 0; z-index: 10; display: none; touch-action: none; }
+body.touch #touch { display: block; }
+#joyZone { position: absolute; left: 0; top: 0; width: 46%; height: 100%; touch-action: none; }
+#lookZone { position: absolute; right: 0; top: 0; width: 54%; height: 100%; touch-action: none; }
+#joyBase {
+  position: absolute; left: max(36px, env(safe-area-inset-left)); bottom: 36px; width: 124px; height: 124px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.06); pointer-events: none; transition: opacity .15s;
+}
+#joyBase.idle { opacity: .55; }
+#joyKnob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: rgba(255,255,255,.34); border: 2px solid rgba(255,255,255,.55); }
+.tbtn {
+  position: absolute; display: grid; place-items: center; border-radius: 50%; touch-action: none; cursor: pointer;
+  border: 2px solid rgba(255,255,255,.35); background: rgba(10,12,18,.5); color: var(--ui);
+  font: bold 10px/1 "Courier New", monospace; letter-spacing: .08em;
+}
+.tbtn.on { background: rgba(255,90,77,.6); border-color: #fff; }
+.tbtn.act { border-color: var(--warn); color: var(--warn); }
+#bFire   { right: max(24px, env(safe-area-inset-right)); bottom: 28px; width: 88px; height: 88px; background: rgba(255,90,77,.42); font-size: 13px; }
+#bAds    { right: calc(max(24px, env(safe-area-inset-right)) + 100px); bottom: 34px; width: 60px; height: 60px; }
+#bReload { right: calc(max(24px, env(safe-area-inset-right)) + 6px); bottom: 128px; width: 56px; height: 56px; }
+#bJump   { right: calc(max(24px, env(safe-area-inset-right)) + 72px); bottom: 124px; width: 56px; height: 56px; }
+#bDash   { right: calc(max(24px, env(safe-area-inset-right)) + 136px); bottom: 100px; width: 52px; height: 52px; }
+#bPause  { left: max(10px, env(safe-area-inset-left)); top: 82px; width: 38px; height: 38px; font-size: 14px; }
+#rotateMsg { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: var(--bg); text-align: center; padding: 24px; color: var(--ui); letter-spacing: .12em; }
+#rotateMsg span { font-size: 54px; }
+@media (orientation: portrait) { body.touch #rotateMsg { display: flex; } }
+
+body.touch #health { left: max(10px, env(safe-area-inset-left)); top: 10px; bottom: auto; width: 150px; padding: 6px 10px; }
+body.touch #hpTxt { font-size: 16px; margin-top: 2px; }
+body.touch #stats { right: max(10px, env(safe-area-inset-right)); top: 10px; min-width: 0; padding: 6px 10px; }
+body.touch #score { font-size: 18px; }
+body.touch #stats .row { font-size: 11px; gap: 10px; margin-top: 2px; }
+body.touch #stats .row:last-child { display: none; }
+body.touch #weapon { left: 50%; right: auto; bottom: 10px; transform: translateX(-50%); min-width: 0; padding: 6px 14px; text-align: center; pointer-events: auto; touch-action: none; }
+body.touch #wname { font-size: 12px; } body.touch #ammoLine { font-size: 26px; } body.touch #ammoLine small { font-size: 14px; }
+body.touch #slots { display: flex; top: 10px; bottom: auto; gap: 4px; padding: 5px; pointer-events: auto; touch-action: none; }
+body.touch .slot { width: 30px; padding: 5px 0; font-size: 0; }          /* só o número; o nome fica no painel da arma */
+body.touch .slot b { font-size: 14px; }
+body.touch .slot.active { transform: none; }
+body.touch #banner { top: 24%; }
+
+/* ========== RADAR (minimapa) ========== */
+#radar { position: absolute; left: 20px; top: 20px; width: 140px; height: 140px; border-radius: 50%; background: rgba(10,12,18,.55); border: 1px solid var(--line); }
+#radar.off { display: none; }
+body.touch #radar { left: calc(max(10px, env(safe-area-inset-left)) + 48px); top: 82px; width: 78px; height: 78px; }   /* ao lado do botão de pausa */
+.settings label.touch-only { display: none; } body.touch .settings label.touch-only { display: grid; }
+#cluster { position: absolute; right: 0; bottom: 0; width: 300px; height: 210px; pointer-events: none; transform: scale(var(--ts, 1)); transform-origin: right bottom; }
+#cluster .tbtn { pointer-events: auto; }
+body.touch:has(#overlay:not(.hidden)) :is(#touch, #crosshair, #hitmarker) { visibility: hidden; }   /* menu aberto: sem botões nem mira por trás */
+
+
+/* ========== CHEFE E UPGRADES ========== */
+#bossBar { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: min(420px, 60vw); text-align: center; letter-spacing: .18em; font-size: 12px; color: #ff9bbf; text-shadow: 0 0 6px #000; }
+#bossBar.hidden { display: none; }
+#bossBar div { height: 10px; margin-top: 4px; border: 1px solid var(--line); background: rgba(10,12,18,.75); }
+#bossFill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff3b82, #ff7a5c); transition: width .12s; }
+body.touch #bossBar { top: 58px; width: min(300px, 40vw); }
+#perks { position: fixed; inset: 0; z-index: 31; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 12px; padding: 20px 16px; overflow-y: auto; touch-action: pan-y;
+  background: radial-gradient(ellipse at center, rgba(11,13,18,.82), rgba(11,13,18,.97)); }
+#perks.hidden { display: none; }
+#perks > :first-child { margin-top: auto; } #perks > :last-child { margin-bottom: auto; }
+#perks h2 { margin: 0; letter-spacing: .3em; color: var(--warn); }
+#perks p { margin: 0; opacity: .8; font-size: 13px; text-align: center; }
+#perkCards { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.perk { width: 210px; min-height: 130px; padding: 14px; text-align: left; border: 1px solid var(--line); background: rgba(16,19,28,.92); color: var(--ui); font: inherit; font-size: 13px; line-height: 1.4; cursor: pointer; border-radius: 10px; transition: transform .12s, border-color .12s; }
+.perk:hover, .perk:focus-visible { border-color: var(--warn); transform: translateY(-3px); outline: none; }
+.perk b { display: block; color: var(--warn); font-size: 15px; margin-bottom: 6px; }
+.perk small { display: block; opacity: .7; margin-top: 8px; }
+@media (max-height: 480px) { .perk { width: 185px; min-height: 96px; padding: 10px; font-size: 12px; } #perks { padding: 10px; gap: 8px; } }
+body.touch:has(#perks:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar, #bossBar) { visibility: hidden; }
+
+
+/* ========== COMBO, FEED, GRANADA E LOJA (vindos da versão Neon Rebellion) ========== */
+#combo { position: fixed; left: 50%; top: 58%; transform: translate(-50%, 10px) scale(.9); opacity: 0; text-align: center; pointer-events: none; transition: opacity .2s, transform .2s; }
+#combo.on { opacity: 1; transform: translate(-50%, 0) scale(1); }
+#combo b { display: block; font-size: 30px; color: var(--warn); text-shadow: 0 0 14px rgba(255,200,87,.5); }
+#combo span { font-size: 10px; letter-spacing: .2em; color: var(--muted); }
+#combo div { width: 80px; height: 3px; margin: 4px auto 0; background: rgba(255,255,255,.15); border-radius: 2px; overflow: hidden; }
+#combo i { display: block; height: 100%; width: 0; background: var(--warn); }
+#feed { position: fixed; left: 20px; top: 196px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.feedItem { font-size: 12px; padding: 4px 10px; border-left: 2px solid var(--accent); background: rgba(11,13,18,.6); border-radius: 0 6px 6px 0; animation: feedIn .2s ease-out; transition: opacity .5s, transform .5s; }
+.feedItem.hot { border-color: var(--warn); color: var(--warn); }
+.feedItem.out { opacity: 0; transform: translateX(-12px); }
+@keyframes feedIn { from { opacity: 0; transform: translateX(-16px); } }
+.tagline { margin: -8px 0 0; font-size: 12px; text-transform: uppercase; color: var(--warn); text-align: center; }
+#grenadeInfo { margin-top: 6px; font-size: 11px; letter-spacing: .12em; color: var(--muted); }
+#grenadeInfo b { color: #35d6c8; }
+#grenadeInfo kbd { font: inherit; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; }
+body.touch #grenadeInfo kbd { display: none; }
+#bGrenade { right: calc(max(24px, env(safe-area-inset-right)) + 160px); bottom: 160px; width: 52px; height: 52px; font-size: 8.5px; letter-spacing: 0; color: #35d6c8; }
+.shop-panel { position: relative; width: min(560px, 92vw); padding: 12px 14px; border-color: rgba(77,231,255,.4); }
+.shop-title { margin-bottom: 10px; color: #4de7ff; font-size: 13px; letter-spacing: .16em; }
+.shop-title b { color: var(--warn); } .shop-title small { opacity: .6; letter-spacing: 0; }
+.shop-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.shop-item { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px; border: 1px solid rgba(77,231,255,.25); background: rgba(77,231,255,.06); color: #e8f8ff; font: inherit; font-size: 11px; letter-spacing: .08em; cursor: pointer; border-radius: 8px; }
+.shop-item:hover:not(:disabled) { border-color: #4de7ff; background: rgba(77,231,255,.14); }
+.shop-item:disabled { opacity: .45; cursor: not-allowed; }
+.shop-item b { color: var(--warn); white-space: nowrap; }
+@media (max-height: 500px) { #feed { top: 130px; } #combo b { font-size: 22px; } .tagline { display: none; } .shop-item { padding: 8px 10px; } .shop-panel { padding: 8px 12px; } }
+@media (max-width: 720px) { .shop-grid { grid-template-columns: 1fr; } }
+body.touch:has(#perks:not(.hidden)) :is(#combo, #feed) { visibility: hidden; }
+
+
+/* ===== TEMA NEON REBELLION (paleta, brilho e HUD de chefe — vindo da versão do aluno) ===== */
+:root { --accent: #ff4f7b; --cyan: #4de7ff; --violet: #9e7bff; --glass: rgba(7,12,24,.72); --line: rgba(77,231,255,.22); }
+body { background: #050812; }
+#game::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1; mix-blend-mode: screen;
+  background: linear-gradient(90deg, rgba(77,231,255,.035), transparent 35%, transparent 65%, rgba(255,79,123,.035)); }   /* ciano à esquerda, rosa à direita */
+.panel { border-color: rgba(77,231,255,.22); box-shadow: 0 0 24px rgba(0,0,0,.22), inset 0 0 18px rgba(77,231,255,.025); }
+#overlay { background: radial-gradient(ellipse at 50% 42%, rgba(10,23,43,.72), rgba(3,6,16,.97)); }
+#perks { background: radial-gradient(ellipse at 50% 42%, rgba(10,23,43,.84), rgba(3,6,16,.97)); }
+#ovTitle { color: #ecf7ff; letter-spacing: .28em; text-shadow: 0 0 28px rgba(77,231,255,.42), 8px 8px 0 rgba(255,79,123,.12); animation: titlePulse 3s ease-in-out infinite; }
+#ovTitle span { color: var(--cyan); }
+@keyframes titlePulse { 50% { text-shadow: 0 0 46px rgba(77,231,255,.6), 8px 8px 0 rgba(255,79,123,.12); } }
+#ovBtn { background: linear-gradient(100deg, #ff4f7b, #9e4dff); border: 1px solid rgba(255,255,255,.38); box-shadow: 0 0 26px rgba(255,79,123,.34); }
+#ovBtn:hover { transform: translateY(-2px); filter: brightness(1.12); }
+#crosshair b { background: var(--weapon-color, var(--cyan)); }
+#wname { color: var(--weapon-color, var(--cyan)); }
+#radar { border-color: rgba(77,231,255,.35); box-shadow: 0 0 20px rgba(77,231,255,.08); }
+#grenadeInfo .sep { opacity: .4; } #grenadeInfo b:last-of-type { color: var(--warn); }
+/* HUD do chefe: painel rosa com "alerta", nome e barra com brilho */
+#bossBar { top: 20px; padding: 8px 14px 10px; background: var(--glass); border: 1px solid rgba(255,79,123,.5); border-radius: 10px; box-shadow: 0 0 26px rgba(255,79,123,.16); }
+.boss-kicker { display: block; color: #ff4f7b; font-size: 9px; letter-spacing: .25em; }
+#bossName { display: block; margin: 3px 0 6px; color: #fff; font-size: 15px; letter-spacing: .18em; }
+#bossBar div { height: 8px; margin-top: 0; background: rgba(255,255,255,.1); border-color: rgba(255,79,123,.3); }
+#bossFill { background: linear-gradient(90deg, #ff4f7b, #ffb04d); box-shadow: 0 0 12px #ff4f7b; }
+/* telas baixas (481–600 px): menu compacto em 3 colunas e botão JOGAR sempre visível */
+@media (min-height: 481px) and (max-height: 600px) {
+  .settings { grid-template-columns: repeat(3, 1fr); width: min(780px, 96vw); gap: 4px 14px; padding: 6px 12px; }
+  .settings label { grid-template-columns: 1fr; gap: 2px; }
+  #ovBtn { position: sticky; bottom: 8px; z-index: 2; }
+  #ovTitle { font-size: clamp(28px, 8vh, 44px); } #ovText { font-size: 13px; line-height: 1.5; }
+}
+body.touch #bossBar { top: 52px; padding: 5px 10px 7px; } body.touch #bossName { font-size: 10px; letter-spacing: .08em; margin-bottom: 4px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ========== OPERAÇÕES, CARREIRA E ACABAMENTO DE INTERFACE ========== */
+#objectivePanel {
+  position: absolute; left: 50%; top: 20px; transform: translateX(-50%); width: min(360px, 42vw);
+  padding: 11px 14px; border-color: rgba(77,231,255,.48); background: rgba(5,13,25,.82);
+  box-shadow: 0 0 22px rgba(77,231,255,.12), inset 0 0 18px rgba(77,231,255,.035); text-align: left;
+}
+.objective-kicker { color: var(--cyan); font-size: 9px; letter-spacing: .22em; }
+#objectiveName { display: block; margin-top: 4px; color: var(--ui); font-size: 13px; letter-spacing: .12em; }
+#objectiveHint { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.objective-progress { height: 4px; margin-top: 8px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+#objectiveFill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), #9e7bff); box-shadow: 0 0 12px var(--cyan); transition: width .12s linear; }
+#objectiveStatus { margin-top: 5px; min-height: 12px; color: var(--warn); font-size: 9px; letter-spacing: .1em; }
+body.touch #objectivePanel { top: 10px; left: 50%; width: min(260px, 42vw); padding: 7px 9px; }
+body.touch #bossBar { top: 70px; }
+.settings { max-height: min(38vh, 360px); overflow-y: auto; scrollbar-color: var(--cyan) transparent; }
+.settings label { color: #aab6cc; }
+.settings select { min-height: 30px; padding: 4px 7px; background: #0c1422; color: var(--ui); border: 1px solid rgba(77,231,255,.24); border-radius: 5px; font: inherit; font-size: 11px; }
+.settings select:focus-visible, .settings input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.career-panel { position: relative; width: min(620px, 94vw); max-height: 30vh; padding: 10px 14px; overflow: auto; text-align: left; pointer-events: auto; border-color: rgba(158,123,255,.38); background: rgba(5,10,21,.88); }
+.career-panel summary { cursor: pointer; color: var(--cyan); font-size: 11px; letter-spacing: .16em; text-align: center; }
+#careerContent { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; padding-top: 12px; font-size: 10px; }
+.career-stats { color: var(--muted); line-height: 1.8; }
+.career-stats b { color: var(--ui); }
+.career-section h3 { margin: 0 0 6px; color: var(--warn); font-size: 10px; letter-spacing: .14em; }
+.career-list { display: grid; gap: 5px; color: var(--muted); }
+.career-row { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px solid rgba(255,255,255,.06); padding-bottom: 3px; }
+.career-row.done { color: var(--ok); }
+.career-row.locked { opacity: .58; }
+.career-row small { color: var(--cyan); white-space: nowrap; }
+.skin-select-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--muted); }
+.skin-select-row select { min-width: 150px; padding: 5px 7px; background: #0c1422; color: var(--ui); border: 1px solid rgba(77,231,255,.25); border-radius: 5px; font: inherit; }
+body[data-skin="violet"] { --accent: #b18cff; --cyan: #c3adff; --warn: #f1c7ff; }
+body[data-skin="gold"] { --accent: #ffc857; --cyan: #ffe28a; --warn: #ff9f43; }
+body[data-skin="mint"] { --accent: #51e5b0; --cyan: #63fff0; --warn: #befc90; }
+body[data-skin="aurora"] { --accent: #72d8ff; --cyan: #a5ffe8; --warn: #d7a8ff; }
+#ovBtn, .shop-item, .perk { outline-offset: 3px; }
+#ovBtn:focus-visible, .shop-item:focus-visible, .perk:focus-visible, .career-panel summary:focus-visible { outline: 2px solid var(--cyan); }
+#bInteract { right: calc(max(24px, env(safe-area-inset-right)) + 214px); bottom: 26px; width: 56px; height: 56px; color: var(--cyan); border-color: rgba(77,231,255,.7); }
+@media (max-width: 720px) {
+  #objectivePanel { width: min(310px, 46vw); }
+  #careerContent { grid-template-columns: 1fr; }
+  .career-panel { max-height: 26vh; }
+}
+@media (max-height: 600px) {
+  #objectivePanel { top: 8px; padding: 6px 9px; }
+  #objectiveHint { display: none; }
+  .settings { max-height: 34vh; }
+  .career-panel { max-height: 20vh; }
+}
+@media (prefers-reduced-motion: reduce) { #objectiveFill { transition: none; } }
