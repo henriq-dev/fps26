@@ -74,11 +74,26 @@ assert.equal(A.mapForWave(6), 1);
 assert.equal(A.mapForWave(11), 2);
 assert.equal(A.mapForWave(16), 0);
 assert.equal(typeof A.createIndustrialMaterialLibrary, 'function');
+assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS.map(m => m.theme))), ['HANGAR // SETOR DE CARGA', 'DOCA // CHUVA ÂMBAR', 'PLANTA // NÚCLEO CIANO']);
 assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS.map(m => m.look ?? null))), ['industrial', null, null]);
 assert.ok(A.MAPS[0].blocks.every(block => block[5] !== 0x6b4a2b));
+assert.match(gameSource, /const pbrColor = new THREE\.Color\(color\)\.multiplyScalar\(1\.16\)\.getHex\(\);/);
+assert.match(gameSource, /const material = pbrMaterials\.material\(kind, pbrColor\)/);
+assert.match(gameSource, /floor\.material = floorMaterial\(floorTint\)/);
+assert.match(gameSource, /cachedIndustrialDressing = group/);
+assert.match(gameSource, /perfScenarioActive && locked && alive && !portrait && document\.visibilityState === 'visible'/);
+assert.match(gameSource, /O primeiro frame após iniciar\/retomar cruza uma transição/);
 assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS[0].blocks.map(([x,z,w,h,d]) => [x,z,w,h,d]))), [
   [-8,-6,3,2,3],[9,-9,2,2,2],[-14,10,4,1.5,2],[12,8,3,3,3],[-4,14,2,2,2],
   [17,-2,2,2.5,5],[0,-16,6,1.5,1.5],[-19,-14,2,3,2],[6.5,4,1.6,4,1.6],[-10,2,1.6,4,1.6]
+]);
+assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS[1].blocks.map(([x,z,w,h,d]) => [x,z,w,h,d]))), [
+  [-11,-9,14,2.5,1.2],[11,9,14,2.5,1.2],[-18,17,2,4,2],[18,-17,2,4,2],[-18,-17,2,4,2],
+  [18,17,2,4,2],[0,-20,5,2,3],[0,20,5,2,3],[-21,0,1.5,1.5,6],[21,0,1.5,1.5,6]
+]);
+assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS[2].blocks.map(([x,z,w,h,d]) => [x,z,w,h,d]))), [
+  [-13,-9,1.2,3,26],[13,9,1.2,3,26],[0,-21,16,3,1.2],[0,21,16,3,1.2],[-21,13,8,3,1.2],
+  [21,-13,8,3,1.2],[-6,-7,2,4,2],[6,7,2,4,2],[-20,-4,3,2,3],[20,4,3,2,3]
 ]);
 assert.equal(A.waveProfile(1).id, 'swarm');
 assert.equal(A.waveProfile(2).id, 'crossfire');

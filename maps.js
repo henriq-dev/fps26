@@ -7,9 +7,9 @@
 window.Arena = window.Arena || {};
 
 Arena.MAPS = [
-  { name: 'Arena', theme: 'CONCRETO // SETOR 07', strip: 0xff5a4d, sky: 0x10131c, floorA: '#1b202b', floorB: '#242b3a', wall: 0x2a3142,
-    blocks: [[-8,-6,3,2,3,0x6b4a2b],[9,-9,2,2,2,0x6b4a2b],[-14,10,4,1.5,2,0x56606f],[12,8,3,3,3,0x56606f],
-             [-4,14,2,2,2,0x6b4a2b],[17,-2,2,2.5,5,0x56606f],[0,-16,6,1.5,1.5,0x56606f],[-19,-14,2,3,2,0x6b4a2b],
+  { name: 'Hangar', theme: 'HANGAR // SETOR DE CARGA', look: 'industrial', strip: 0xd9aa58, sky: 0x151b20, floorA: '#43484a', floorB: '#343a3c', wall: 0x59656a,
+    blocks: [[-8,-6,3,2,3,0x68736c],[9,-9,2,2,2,0x68736c],[-14,10,4,1.5,2,0x56606f],[12,8,3,3,3,0x56606f],
+             [-4,14,2,2,2,0x68736c],[17,-2,2,2.5,5,0x56606f],[0,-16,6,1.5,1.5,0x56606f],[-19,-14,2,3,2,0x68736c],
              [6.5,4,1.6,4,1.6,0x3b4558],[-10,2,1.6,4,1.6,0x3b4558]] },
   { name: 'Pátio', theme: 'DOCA // CHUVA ÂMBAR', strip: 0xffb04d, sky: 0x1c1710, floorA: '#2b2620', floorB: '#3a3329', wall: 0x4a3f33,
     blocks: [[-11,-9,14,2.5,1.2,0x8a7355],[11,9,14,2.5,1.2,0x8a7355],            // dois muros longos que obrigam a contornar

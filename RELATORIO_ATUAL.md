@@ -1,13 +1,13 @@
-# Relatório atual — Arena FPS v8 · Pacote 13
+# Relatório atual — Arena FPS v8 · Pacote 16 unificado
 
 **Data:** 17/11/2026  
 **Projeto:** Arena FPS — jogo web 3D com Three.js r128, scripts JavaScript clássicos e namespace `Arena`.
 
 ## Resumo executivo
 
-Esta continuação preserva a estrutura original Three.js + scripts clássicos e avança o polimento visual/sonoro do arsenal sobre a atualização p12 recebida. O Pacote 13 acrescenta calor cosmético à Metralhadora, um clique metálico espacializado nos estojos e explosões em camadas; não publica o jogo nem habilita serviços externos.
+Esta continuação preserva a estrutura original Three.js + scripts clássicos. O Pacote 16 consolida o melhor dos ZIPs P14/P15: biblioteca procedural PBR com identidade visual própria para as três arenas, o piloto detalhado do Fuzil/mãos no Hangar e a telemetria local opt-in, agora sem quadros pausados nas amostras. Os arquivos enviados foram mantidos intactos; não houve publicação nem habilitação de serviços externos.
 
-O Pacote 6 aprimorou os modelos das armas; o 7 acrescentou clarões específicos, rastros, faíscas, estojos e auras; o 8 adicionou marcas de impacto e respostas por superfície; o 9 trouxe luvas, acabamentos e fumaça; o 10 articulou dedos e recargas; o 11 aprofundou detalhes próximos e a assinatura visual por arma. O p12 recebido trouxe inércia do viewmodel, acabamento das luvas e clarão radial/lateral. O p13 acrescenta calor no cano da Metralhadora, som de estojo e camadas de explosão, todos visuais/sonoros.
+O Pacote 6 aprimorou os modelos das armas; o 7 acrescentou clarões específicos, rastros, faíscas, estojos e auras; o 8 adicionou marcas de impacto e respostas por superfície; o 9 trouxe luvas, acabamentos e fumaça; o 10 articulou dedos e recargas; o 11 aprofundou detalhes próximos e a assinatura visual por arma. O p12 recebido trouxe inércia do viewmodel, acabamento das luvas e clarão radial/lateral; o p13 adicionou calor, som de estojo e explosões em camadas. O p14 inicia a transição visual industrial controlada; o p15 cria instrumentos para localizar gargalos e orientar a próxima otimização.
 
 O modo Sobrevivência mantém a limpeza de onda. Operações alterna três objetivos (invadir terminal, ativar três relés, controlar zona) e permite concluir a onda sem eliminar todos os inimigos. A carreira e os recordes são armazenados apenas no navegador.
 
@@ -47,7 +47,7 @@ O modo Sobrevivência mantém a limpeza de onda. Operações alterna três objet
 - `progression.js`: carreira local, desafios diários, conquistas, skins e recordes por par modo/dificuldade.
 - `audio.js`: criação do áudio, espacialização e efeitos sonoros.
 
-`script.js` integra essas APIs ao runtime, ao combate, aos menus, à loja, à renderização e aos pools de efeitos. `style.css` contém a apresentação e o layout da interface.
+`script.js` integra essas APIs ao runtime, ao combate, aos menus, à loja, à renderização e aos pools de efeitos; também constrói o Fuzil em componentes reutilizáveis e escolhe o perfil PBR do Hangar. `industrial-materials.js` gera e armazena mapas Canvas locais de cor, rugosidade e relevo. `style.css` contém a apresentação e o layout da interface.
 
 ## Comportamento do chefe
 
@@ -61,13 +61,13 @@ Os limiares, avisos, ataques, dano, velocidades e intervalos estão implementado
 
 ## Testes realizados nesta continuação
 
-- `./test.sh`: aprovado (`core tests: OK` e `syntax checks: OK`). Foram adicionadas verificações de calendário de objetivos, multiplicadores de dificuldade, atribuição alternada de flanco e cadência de disparo, cobertura que bloqueia linha de visão, desafios/conquistas/skins e separação de recordes.
-- `node --check` em todos os scripts JavaScript: aprovado.
-- Teste de geometria de pontos candidatos: os pontos de Operações ficaram livres em 9/10 posições na Arena, 10/10 no Pátio e 10/10 na Fábrica; o gerador ignora posições obstruídas.
-- Preview HTTP privado: menu renderizado, valores Operações/Pesadelo persistidos localmente e partida iniciada no navegador com HUD/canvas funcionando.
-- Não foi feito playtest manual até onda 2+ nesta verificação; portanto, a apresentação e o balanceamento das missões em combate não são declarados como aprovados. Também não houve teste em dispositivo físico de touch/gamepad nem reexecução das medições de performance do pacote anterior.
+- `./test.sh`: aprovado (`core tests: OK` e `syntax checks: OK`), incluindo snapshots dos atributos de combate, seleção de perfil industrial somente no mapa 0 e preservação das coordenadas/dimensões dos obstáculos.
+- Chromium headless via HTTP (1280 × 720): menu fechado, canvas renderizado, Fuzil selecionado pelo fluxo normal de teclado e captura salva em `p14-rifle-playtest.png`; sem erros de console/JavaScript.
+- Viewport móvel simulado em paisagem (844 × 390): HUD, controles de toque, retícula e Fuzil renderizados sem erros. Isso verifica layout, não mede FPS de hardware móvel.
+- O service worker está em `arena-fps-v8-p14` e inclui `industrial-materials.js`; o servidor HTTP usado foi temporário, sem publicação.
+- A captura confirma a composição do Hangar, contraste da retícula e leitura do Fuzil. Não foi executado playtest humano de disparo/recarga nem benchmark de FPS em aparelho móvel; essas medições permanecem pendentes.
 
-## Performance observada no pacote anterior (não reavaliada no pacote 5)
+## Performance histórica (medições do pacote 5; não reavaliadas no p14)
 
 Medições curtas no navegador de teste, com viewport de 1280 × 1100, DPR 1 e uma cena carregada com 12 inimigos (incluindo o chefe), poeira e projéteis. WebGL2 permaneceu ativo sem perda de contexto.
 
@@ -81,11 +81,11 @@ Na amostra da cena carregada, o renderer indicou 43 chamadas de desenho, 484 tri
 
 ## Alterações e limitações
 
-- `script.js`, `index.html`, `style.css`, `enemies.js`, `audio.js` e `sw.js` foram atualizados; `tactics.js` e `progression.js` foram acrescentados.
-- `tests/core.test.js`, `TODO.md`, `plan.md` e este relatório documentam as regras e os testes do pacote.
+- No p14, `script.js`, `maps.js`, `index.html`, `sw.js`, `industrial-materials.js`, `tests/core.test.js`, `TODO.md`, `plan.md` e este relatório registram o piloto; `weapons.js` não foi alterado.
+- Os detalhes históricos dos pacotes 1–13 permanecem nas seções abaixo; este topo resume somente a entrega p14.
 - Recordes, desafios e cosméticos persistem no `localStorage` do navegador; não são sincronizados entre dispositivos nem enviados a servidor.
 - A rotação e os parâmetros de missão foram testados como funções puras; a execução completa da vitória alternativa e a retirada de hostis não tiveram playtest manual nesta sessão.
-- A tabela de desempenho abaixo registra a amostra do pacote anterior e não deve ser interpretada como benchmark desta continuação.
+- A tabela de desempenho abaixo registra uma amostra antiga do pacote 5 e não deve ser interpretada como benchmark do p14.
 
 ## Pacote 1 — Fundação de release (16/11/2026)
 
@@ -273,16 +273,53 @@ Explosões de dano recebem uma camada esférica curta de fogo no pool de blast a
 - Chromium headless capturou o menu inicial em 1280×720, e a prévia p13 respondeu HTTP 200. Recomenda-se testar no navegador o brilho térmico em rajada longa, o volume do clique e a leitura da explosão; a captura inicial não substitui esse playtest subjetivo.
 - Cache offline versionado como `arena-fps-v8-p13`.
 
-## Pacote 14 — Gráficos industriais detalhados (17/11/2026)
+## Pacote 14 — Piloto industrial semi-realista (17/11/2026)
 
-O p13 foi mantido como base e recebeu a primeira camada de implementação da concept art aprovada. Os materiais dos obstáculos deixaram de ser cores lisas: agora são `MeshStandardMaterial` locais com `CanvasTexture` procedural, ruído, juntas, fissuras/veios, relevo por bump, roughness e metalness diferentes para metal, madeira e pedra/concreto. Nenhuma textura externa foi adicionada.
+O escopo visual foi deliberadamente restrito ao Fuzil (índice 1), ao par de mãos associado e ao mapa inicial. `industrial-materials.js` cria uma biblioteca determinística de Canvas para mapas de cor, rugosidade e relevo, com perfis reutilizados e sem imagens remotas. O material PBR foi calibrado para o renderer atual sem HDRI: metalness reduzida e preenchimento quente/frio maior somente no Fuzil.
 
-O piso das arenas recebeu juntas, manchas e desgaste procedurais, com bump mínimo sincronizado à troca de mapa. Cada obstáculo mantém exatamente a mesma caixa de colisão e o mesmo mesh de raycast principal, mas ganha bordas estruturais, painel frontal e barra emissiva visual; esses detalhes são removidos junto com o mapa e não entram em `solids`.
+O modelo do Fuzil agora tem receptor sobreposto, coronha/soleira, cobertura, trilhos, ranhuras, mira compacta, ferragens, magazine em grupo móvel e caixas com bordas chanfradas. As peças repetidas de ventilação, trilho e magazine usam `InstancedMesh` para limitar draw calls. As luvas recebem tecido, borracha, costura e pequenos reforços procedurais; o movimento continua ligado aos grupos/animações existentes. As outras sete armas mantêm o caminho de materiais original.
 
-As três arenas agora exibem identidade temática na transição: `CONCRETO // SETOR 07`, `DOCA // CHUVA ÂMBAR` e `PLANTA // NÚCLEO CIANO`. O cache foi versionado para `arena-fps-v8-p14`.
+O Hangar usa piso com placas e sinalização de segurança, superfícies de concreto e contêineres de metal pintado. As cores e os materiais mudam, mas os dez conjuntos de coordenadas e dimensões dos obstáculos permanecem idênticos, conforme as asserções de regressão. A ativação industrial depende de `look: 'industrial'`, presente apenas no mapa 0. Nenhuma regra, atributo em `weapons.js`, controle, HUD, câmera, colisão, navegação ou linha de tiro foi alterada.
 
 ### Validação do pacote 14
 
-- A implementação preserva armas, inimigos, objetivos, cobertura, carreira e regras de combate do p13.
-- A próxima validação deve confirmar `./test.sh`, sintaxe JavaScript, carregamento HTTP e renderização no navegador.
-- O impacto de FPS em baixa/média/alta ainda não foi medido após a adição de detalhes; props maiores, tubulações, cabos, inimigos e materiais de armas ficam para etapas seguintes.
+- `./test.sh`: aprovado (`core tests: OK`; `syntax checks: OK`), com snapshots de combate e verificação do tema do mapa/obstáculos.
+- Playtest Chromium headless por HTTP: partida iniciada, HUD/canvas ativos, Fuzil selecionado e sem erros de console/JavaScript; captura `p14-rifle-playtest.png` incluída no pacote.
+- O cache offline foi versionado para `arena-fps-v8-p14` e a nova biblioteca Canvas foi incluída.
+- O playtest foi visual e curto. Não houve teste humano de tiro/recarga, benchmark comparativo de FPS nem verificação em dispositivo móvel físico; o uso de geometrias compartilhadas e `InstancedMesh` reduz custo repetitivo, mas não substitui essas medições.
+
+
+## Pacote 15 — Telemetria e cenário para reduzir travamentos (17/11/2026)
+
+`perf-telemetry.js` adiciona um buffer circular local para até 3.600 quadros, resumos p50/p95/p99/máximo e exportação CSV. O painel só é criado quando a URL inclui `?perf=1`; fora desse modo não há buffer de amostras, wrappers de IA ou painel. A coleta registra intervalo entre `requestAnimationFrame`, CPU de `update` e tempo síncrono da chamada `renderer.render`, recursos/draw calls/triângulos, qualidade/pixel ratio e contadores de colisão, visibilidade e A*. O tempo de `render` é submissão CPU e não representa o tempo concluído da GPU.
+
+O modo de diagnóstico inicia uma situação fixa no Hangar: Sobrevivência/Normal, Fuzil selecionado e 12 inimigos de tipos/posições predefinidos. Durante essa sessão de teste, dano recebido é ignorado e inimigos não podem ser eliminados, mantendo uma carga estável; não há alteração de score/carreira/desafios/recordes. F8 mostra/oculta o painel, F9 reinicia o cenário e F10 exporta os últimos quadros a CSV. Essa exceção só existe com `?perf=1`; o fluxo e os atributos de combate da partida comum permanecem intactos. O cenário e a coleta não enviam dados à rede.
+
+### Validação do Pacote 15
+
+- `./test.sh`: aprovado (`core tests: OK`; `syntax checks: OK`), incluindo quantis, sobrescrita circular, reset e CSV.
+- Chromium headless com SwiftShader, 1280 × 720, cenário visível por 60 s: 426 amostras, 12 inimigos ativos e zero erros JavaScript. A captura é `p15-telemetry-playtest.png`; os dados brutos estão em `p15-headless-60s.csv`.
+- Nesse ambiente específico: frametime p50 133,4 ms, p95 166,7 ms, p99 483,4 ms, máximo 916,7 ms; CPU de `update` média 0,98 ms/p95 1,5 ms; submissão CPU de `render` média 8,45 ms/p95 31,4 ms; último quadro com 219 draw calls, 7.824 triângulos, 111 geometrias e 31 texturas. O perfil indica que a atualização de jogo não foi o custo dominante nesse teste, mas o resultado é fortemente condicionado ao Chromium headless/SwiftShader e à máquina sandbox.
+- Verificados também: F9 reinicia mantendo os 12 inimigos; F10 baixa CSV; painel presente no modo de diagnóstico e ausente em URL normal; viewport móvel simulado 844 × 390; `localStorage` permanece igual antes/depois de iniciar o cenário.
+- Limitação: não houve medição em celular/GPU física nem uso de timer de GPU WebGL. Os números headless servem como referência de instrumentação, não como FPS esperado para o jogador. A próxima rodada deve coletar o CSV no dispositivo/browser-alvo e priorizar a investigação do caminho de renderização se o frametime alto se repetir.
+- Cache offline versionado como `arena-fps-v8-p15`, com `perf-telemetry.js` incluído.
+
+
+## Pacote 16 — Consolidação P14 + P15 (17/11/2026)
+
+O P16 parte do ZIP P15 e incorpora os aspectos visuais úteis do P14 sem trazer seu custo de painéis separados por obstáculo. `industrial-materials.js` agora alimenta blocos e piso de Hangar, Pátio e Fábrica com materiais Canvas PBR compartilhados; os nomes/temas locais voltaram aos anúncios de mudança de mapa. O Fuzil, as mãos e a decoração industrial instanciada do Hangar preservam o detalhamento P15/P14. O Pátio recupera leitura de madeira procedural para os muros de carga em tom amadeirado; concreto e metais continuam determinados pela paleta dos outros blocos.
+
+Os mapas têm temas próprios: “HANGAR // SETOR DE CARGA”, “DOCA // CHUVA ÂMBAR” e “PLANTA // NÚCLEO CIANO”. As coordenadas e dimensões de todos os 30 obstáculos — dez por arena — são agora fixadas em testes de regressão. Colisão, caixas, raycast, grade A*, navegação e layout não foram alterados. Não foram adicionados painéis por bloco: as geometrias já usadas para o Hangar ficam no grupo cacheado e são reutilizadas quando o jogador retorna àquela arena. Os arquivos de armas/dados de combate não foram editados e os snapshots de dano, cadência, munição, recarga, precisão, alcance e demais campos continuam passando.
+
+A telemetria `?perf=1` agora só registra quando o cenário está ativo, a aba visível e o Pointer Lock adquirido. Pausa, menu e perda de foco interrompem o CSV/quantis; o primeiro quadro ao começar/retomar é descartado para não atravessar a fronteira entre estados. O painel informa quando a coleta está pausada. No jogo normal, o painel e os wrappers de diagnóstico continuam ausentes.
+
+### Validação P16
+
+- `bash test.sh`: aprovado (`core tests: OK`; `syntax checks: OK`), incluindo snapshots de combate, temas e dimensões/posições dos três mapas.
+- Chromium/SwiftShader: jogo normal e `?perf=1` abrem sem erros JavaScript observados; Fuzil selecionado, 12 inimigos no cenário e painel ausente na URL normal.
+- Ciclo de troca Hangar → Pátio → Fábrica → Hangar repetido duas vezes no cenário ativo: a contagem de geometrias ficou em 106. Texturas começaram em 30, subiram uma vez para 33 na primeira visita à Fábrica e permaneceram em 33 durante os quatro estados aquecidos seguintes. Não houve crescimento repetido após o primeiro carregamento; isto não certifica memória de sessão longa.
+- Teste de pause/resume: CSV manteve 29 linhas amostradas após 1,3 s pausado e voltou a crescer (32 após retomada). O painel mostrou “Medição pausada”; nenhum erro de runtime foi capturado.
+- Capturas por arena estão incluídas: `p16-hangar-playtest.png`, `p16-patio-playtest.png` e `p16-fabrica-playtest.png`. São registros visuais do Chromium, não medições de FPS.
+- Cache offline versionado como `arena-fps-v8-p16`.
+
+**Limite:** o teste foi headless em ambiente de software (SwiftShader), com o Pointer Lock simulado para automatização. Não foi medido FPS em celular/GPU física nem realizado playtest humano. Os efeitos do PBR em consumo de GPU devem ser conferidos no aparelho-alvo, pois materiais PBR nas três arenas podem custar mais que o Lambert clássico, ainda que não aumentem a geometria/draw calls e as texturas sejam compartilhadas.

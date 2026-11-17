@@ -1,8 +1,8 @@
-# Plano de evolução — Arena FPS v8 · Pacote 15
+# Plano de evolução — Arena FPS v8 · Pacote 16 unificado
 
 ## Direção
 
-Preservar o motor Three.js clássico, o HUD Neon Rebellion, o loop de arena e a distribuição offline. O piloto p14 introduz um acabamento sci-fi industrial semi-realista apenas no Fuzil, nas mãos ligadas a ele e na primeira arena; as outras sete armas e demais arenas permanecem como comparação. Materiais e texturas são gerados proceduralmente em Canvas, sem baixar assets; a simulação continua autoritativa no `script.js` e regras de combate não mudam.
+Preservar o motor Three.js clássico, o HUD Neon Rebellion, o loop de arena e a distribuição offline. Unificar a biblioteca procedural/material visual do P14 com o Fuzil, mãos e Hangar detalhados e a telemetria do P15. Reaproveitar os mapas Canvas PBR em todas as arenas com paletas próprias, mas restringir a geometria adicional detalhada ao Hangar e manter a densidade de draw calls baixa. Não criar adereços individuais por obstáculo; cachear geometrias de decoração. Excluir quadros pausados das métricas. Materiais são locais, sem dependências externas; colisão, raycast, navegação, HUD, controle e regras de combate permanecem inalterados.
 
 ### Extensão visual do piloto
 
@@ -25,6 +25,7 @@ Usar superfícies metálicas escovadas, polímero fosco, tecido técnico e concr
 - **Pacote 13 — Calor, estojos e explosões:** aquecimento emissivo cosmético da Metralhadora durante rajadas e resfriamento em repouso; som metálico procedural, baixo e espacializado no contato de estojos com o piso; explosões com núcleo/fogo, anel, fumaça e um clarão de luz compartilhado. Efeitos limitados/reutilizados, sem alterar combate.
 - **Pacote 14 — Piloto industrial semi-realista:** Fuzil e mãos com superfícies PBR procedurais e detalhes de fabricação, mais uma arena inicial com materiais industriais; HUD, silhuetas/posições de combate e valores do jogo preservados. Escopo experimental localizado para comparar com o restante do estilo atual.
 - **Pacote 15 — Telemetria e cenário anti-travamento:** modo de diagnóstico opt-in por `?perf=1`, com buffer circular pré-alocado e atualização visual limitada; registra frametime, custo CPU de `update`/submissão de `render`, draw calls, triângulos, contagens de entidades, qualidade/resolução e chamadas/duração de A*. Um cenário de estresse reproduzível no Hangar usa composição e posições fixas, sem registrar progresso nem alterar regras fora do modo de diagnóstico. Nenhuma telemetria é enviada pela rede.
+- **Pacote 16 — Unificação P14 + P15:** mantém o Fuzil/mãos e Hangar industriais, aplica os materiais procedurais cacheados às três arenas com temas preservados, reutiliza decoração instanciada e corrige o registro de amostras em pausa/perda de foco.
 
 ## Comportamento das Operações
 
@@ -42,14 +43,14 @@ A Sobrevivência mantém a condição normal de limpar a onda. Em Operações, o
 
 - `index.html`: ordem dos módulos, acessibilidade do HUD, escolhas de partida e painel da carreira.
 - `script.js`: simulação, interação com objetivos, HUD, preferências e aplicação dos eventos de carreira.
-- `script.js` também constrói o arsenal de câmera em componentes geométricos reutilizáveis: corpo, cano, mira, coronha, carregador, luneta, tambor, janela de ejeção, mãos, ferragens e peças móveis de recarga. A resposta visual ao tiro move somente o `holder` das armas/mãos e não substitui o recuo/espalhamento de combate. Pools limitados apresentam clarões, fumaça, rastros, marcas de bala, poeira, faíscas, estojos, projéteis e explosões em camadas; o calor da Metralhadora só altera material emissivo. No p14, `script.js` ativa mapas PBR procedurais apenas para o Fuzil, suas mãos e superfícies da arena com perfil industrial.
+- `script.js` também constrói o arsenal de câmera em componentes geométricos reutilizáveis: corpo, cano, mira, coronha, carregador, luneta, tambor, janela de ejeção, mãos, ferragens e peças móveis de recarga. A resposta visual ao tiro move somente o `holder` das armas/mãos e não substitui o recuo/espalhamento de combate. Pools limitados apresentam clarões, fumaça, rastros, marcas de bala, poeira, faíscas, estojos, projéteis e explosões em camadas; o calor da Metralhadora só altera material emissivo. No P16, mapas PBR procedurais são compartilhados pelas três arenas, enquanto o modelo industrial do Fuzil/mãos e a decoração instanciada permanecem no Hangar.
 - `industrial-materials.js`: biblioteca de mapas Canvas de cor, rugosidade e relevo, gerados uma vez por perfil de material, seed estável e sem assets/dependências externos.
 - `perf-telemetry.js`: buffer circular fixo, quantis de frametime e exportação CSV; só é instanciado quando a URL contém `?perf=1`.
 - `weapons.js` mantém os mesmos parâmetros de combate e declara `visual` para clarão, material, pose de mãos, estágios de recarga, tipo/ponto de saída dos estojos e perfil de resposta visual ao disparo; essas propriedades são cosméticas.
 - `tactics.js`: funções puras para dificuldade, calendário de objetivos, flancos, atribuições de esquadrão e escolha de cobertura.
 - `progression.js`: persistência local e regras de desafios, conquistas, recordes e cosméticos.
 - `enemies.js`: papéis declarativos, aptidão para cobertura e prioridades.
-- `maps.js`: arenas, blocos, paletas e o marcador visual que ativa o perfil industrial somente no mapa piloto.
+- `maps.js`: arenas, blocos, posições/dimensões, paletas e temas de Hangar, Pátio e Fábrica; o marcador industrial seleciona a decoração adicional do Hangar.
 - `audio.js`: eventos sonoros procedurais de missão/conquista e cliques de estojo espacializados, mantendo o áudio procedural existente.
 - `style.css`: UI responsiva, carreira, objetivos e temas cosméticos.
 - `tests/core.test.js`: testes puros determinísticos; `sw.js` versiona os novos módulos para uso offline.
@@ -105,3 +106,9 @@ Playtest humano em dificuldade Recruta/Veterano/Pesadelo para calibrar cadência
 ## Validação P15 — diagnóstico (17/11/2026)
 
 A suíte de núcleo/sintaxe passou. Em Chromium headless com SwiftShader, 1280 × 720 e 60 s de cenário, foram capturados 426 frames: p50/p95/p99 do intervalo 133,4/166,7/483,4 ms; `update` média/p95 0,98/1,5 ms; `render-submit` média/p95 8,45/31,4 ms. O último frame tinha 219 draw calls, 7.824 triângulos e 12 inimigos. Isso é uma medição de sandbox/software renderer, não um benchmark de celular; como próximo passo, coletar `?perf=1` no aparelho/browser-alvo e só então priorizar otimizações de renderização.
+
+## Pacote 16 — Consolidação visual e telemetria confiável
+
+Unificar o acabamento procedural de concreto, metal pintado, aço escovado e madeira das três arenas usando a biblioteca Canvas reutilizável do P15. Conservar paleta e identidade por mapa, os detalhes industriais do Fuzil/mãos e Hangar e o perfil visual próprio dos outros sete modelos. Não copiar as malhas de painel individuais do P14: geometrias, texturas e materiais devem ser compartilhados/cacheados, sem alterar dimensões, colisões, raycast, navegação, limite de resolução ou efeitos de combate. A decoração do Hangar deve ser criada uma vez e reutilizada ao alternar mapas.
+
+No modo `?perf=1`, gravar amostras apenas enquanto a partida do cenário estiver efetivamente rodando em aba visível e Pointer Lock ativo; ao pausar/retomar, descartar a borda entre estados para não contaminar frametime/CPU/IA. Atualizar a indicação de estado, preservar o buffer/CSV e manter o fluxo normal sem mudanças de combate ou persistência. Versionar o cache como P16 e registrar evidências locais; headless continua sendo apenas diagnóstico do sandbox, não benchmark físico.

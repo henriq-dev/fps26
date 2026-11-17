@@ -19,7 +19,7 @@ const perfTelemetry = perfMode ? Arena.createPerfTelemetry(3600) : null;
 const perfSample = {};
 const perfCounters = { blockedCalls: 0, lineCalls: 0, pathCalls: 0, pathMs: 0 };
 const perfWindow = { blockedCalls: 0, lineCalls: 0, pathCalls: 0, pathMs: 0, durationMs: 0 };
-let perfScenarioActive = false, perfLastUi = 0;
+let perfScenarioActive = false, perfLastUi = 0, perfWasRunning = false;
 if (perfMode) {
   const lineClear = Arena.lineClear, findPath = Arena.findPath;
   Arena.lineClear = function (grid, ax, az, bx, bz) {
@@ -50,7 +50,7 @@ let perfPanel = null, perfReadout = null, perfHint = null, perfToggle = null;
 if (perfMode) {
   perfPanel = document.createElement('section'); perfPanel.id = 'perfPanel';
   perfPanel.setAttribute('aria-label', 'Telemetria local do jogo');
-  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO P15</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
+  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO P16</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
   document.body.appendChild(perfPanel);
   perfReadout = perfPanel.querySelector('#perfReadout'); perfHint = perfPanel.querySelector('#perfHint');
   perfToggle = document.createElement('button'); perfToggle.id = 'perfToggle'; perfToggle.type = 'button'; perfToggle.textContent = 'PERF';
@@ -108,41 +108,27 @@ let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
 const blockMats = new Map();
 function blockMat(color) {
-  const key = `${activeMapLook}:${color}`;
+  const key = `surface:${color}`;
   if (blockMats.has(key)) return blockMats.get(key);
   const surface = surfaceForColor(color);
   const kind = surface === 'wood' ? 'wood' : surface === 'metal' ? 'paintedMetal' : 'concrete';
-  const material = activeMapLook === 'industrial'
-    ? pbrMaterials.material(kind, color)
-    : new THREE.MeshLambertMaterial({ color });
+  const pbrColor = new THREE.Color(color).multiplyScalar(1.16).getHex();
+  const material = pbrMaterials.material(kind, pbrColor);
   blockMats.set(key, material);
   return material;
 }
 function surfaceForColor(color) {
-  if (color === 0x6b4a2b) return 'wood';
+  if ([0x6b4a2b,0x8a7355].includes(color)) return 'wood';
   if ([0x2a3142,0x56606f,0x3b4558,0x3f7a6d,0x56a090,0x2f5a50,0x24413b,0x68736c].includes(color)) return 'metal';
   return 'stone';
 }
 
-// Piso xadrez gerado em canvas (sem arquivos externos)
-function checkerTexture(a, b) {
-  const c = document.createElement('canvas'); c.width = c.height = 64;
-  const g = c.getContext('2d');
-  g.fillStyle = a; g.fillRect(0, 0, 64, 64);
-  g.fillStyle = b; g.fillRect(0, 0, 32, 32); g.fillRect(32, 32, 32, 32);
-  for (let i = 0; i < 90; i++) {                    // ruído = piso gasto (pontinhos claros espalhados)
-    g.fillStyle = `rgba(255,255,255,${Math.random() * 0.035})`; g.fillRect((Math.random() * 64) | 0, (Math.random() * 64) | 0, 2, 2);
-  }
-  g.fillStyle = 'rgba(255,200,87,.10)'; g.fillRect(0, 0, 64, 1); g.fillRect(0, 0, 1, 64);   // linhas de grade quentes
-  const t = new THREE.CanvasTexture(c);
-  t.magFilter = THREE.NearestFilter;               // pixels nítidos (retro)
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(ARENA, ARENA);
-  return t;
+const floorMats = new Map();
+function floorMaterial(color) {
+  if (!floorMats.has(color)) floorMats.set(color, pbrMaterials.material('floor', color));
+  return floorMats.get(color);
 }
-const floorClassicMat = new THREE.MeshLambertMaterial();
-const floorIndustrialMat = pbrMaterials.material('floor', 0x959994);
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2, ARENA * 2), floorClassicMat);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2, ARENA * 2), floorMaterial(0x959994));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
@@ -171,7 +157,11 @@ function setSky(hex) {
   if (scene.background && scene.background.isTexture) scene.background.dispose();
   scene.background = skyTexture(hex) || new THREE.Color(hex); scene.fog.color.setHex(hex);
 }
+let cachedIndustrialDressing = null;
 function addIndustrialSetDressing() {
+  if (cachedIndustrialDressing) {
+    scene.add(cachedIndustrialDressing); mapMeshes.push(cachedIndustrialDressing); return;
+  }
   const group = new THREE.Group();
   const stripeMat = pbrMaterials.material('paintedMetal', 0xc6a04f, { roughness: 0.76, metalness: 0.16 });
   const panelMat = pbrMaterials.material('paintedMetal', 0x596267, { repeat: 2 });
@@ -208,6 +198,7 @@ function addIndustrialSetDressing() {
   }
   panels.count = panelIndex; panels.instanceMatrix.needsUpdate = true; group.add(panels);
   group.userData.decorativeOnly = true;
+  cachedIndustrialDressing = group;
   scene.add(group); mapMeshes.push(group);
 }
 // Monta uma arena: troca cores, apaga a anterior e recria a grade do A*
@@ -216,12 +207,8 @@ function loadMap(index) {
   mapMeshes.forEach(m => scene.remove(m)); mapMeshes = []; solids.length = 0; boxes.length = 0;   // length = 0 mantém a MESMA lista (outras funções a usam)
   activeMapLook = M.look || 'classic';
   setSky(M.sky);
-  if (activeMapLook === 'industrial') floor.material = floorIndustrialMat;
-  else {
-    if (floorClassicMat.map) floorClassicMat.map.dispose();
-    floorClassicMat.map = checkerTexture(M.floorA, M.floorB); floorClassicMat.needsUpdate = true;
-    floor.material = floorClassicMat;
-  }
+  const floorTint = new THREE.Color(M.floorA).lerp(new THREE.Color(M.floorB), 0.5).getHex();
+  floor.material = floorMaterial(floorTint);
   // Paredes externas (a colisão delas é feita pelo limite ARENA em blocked())
   const W = ARENA * 2 + 2;
   addBlock(0, -ARENA - 0.5, W, 6, 1, M.wall, false); addBlock(0, ARENA + 0.5, W, 6, 1, M.wall, false);
@@ -1202,7 +1189,7 @@ function startPerfScenario() {
   perfTelemetry.reset();
   perfCounters.blockedCalls = perfCounters.lineCalls = perfCounters.pathCalls = perfCounters.pathMs = 0;
   perfWindow.blockedCalls = perfWindow.lineCalls = perfWindow.pathCalls = perfWindow.pathMs = perfWindow.durationMs = 0;
-  perfLastUi = performance.now();
+  perfWasRunning = false; perfLastUi = performance.now();
   if (perfHint) perfHint.textContent = 'Cenário fixo ativo: 12 inimigos, Hangar, invulnerável e sem persistência.';
 }
 function restartPerfScenario() {
@@ -1219,6 +1206,12 @@ function refreshPerfPanel() {
   const blockedCalls = perfWindow.blockedCalls, lineCalls = perfWindow.lineCalls;
   const pathCalls = perfWindow.pathCalls, pathMs = perfWindow.pathMs;
   perfWindow.blockedCalls = perfWindow.lineCalls = perfWindow.pathCalls = perfWindow.pathMs = perfWindow.durationMs = 0;
+  const paused = perfScenarioActive && (!locked || !alive || document.visibilityState !== 'visible' || (useTouch && innerHeight > innerWidth));
+  if (perfHint) perfHint.textContent = !perfScenarioActive
+    ? 'Clique em JOGAR para iniciar o cenário fixo de 12 inimigos.'
+    : paused
+      ? 'Medição pausada · retome a partida para continuar; quadros pausados não entram no CSV.'
+      : 'Cenário fixo ativo · 12 inimigos · dano/abates ignorados · sem persistência local. Render-submit não é tempo de GPU.';
   if (!perfPanel || perfPanel.hidden) return;
   const data = perfTelemetry.summary(), sample = data.latest;
   if (!sample) { perfReadout.textContent = 'Aguardando amostras…'; return; }
@@ -1234,15 +1227,12 @@ function refreshPerfPanel() {
     `IA/${duration.toFixed(1)}s blocked ${blockedCalls} · lineClear ${lineCalls} · A* ${pathCalls} (${pathMs.toFixed(2)} ms)`,
     `Qualidade ${quality} · PR ${sample.pixelRatio.toFixed(2)} · canvas ${renderer.domElement.width}×${renderer.domElement.height}`
   ].join('\n');
-  if (perfHint) perfHint.textContent = perfScenarioActive
-    ? 'Cenário fixo ativo · dano/abates ignorados · sem persistência local. Render-submit não é tempo de GPU.'
-    : 'Clique em JOGAR para iniciar o cenário fixo de 12 inimigos.';
 }
 function downloadPerfCsv() {
   if (!perfTelemetry) return;
   const blob = new Blob([perfTelemetry.toCSV()], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = `arena-fps-p15-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  link.href = url; link.download = `arena-fps-p16-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
   document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function pickType() { return Arena.pickType(wave); }
@@ -1785,7 +1775,7 @@ function startWave() {
   const mi = Arena.mapForWave(wave);
   if (mi !== curMap) {                                  // a cada 5 ondas: arena nova (jogador volta ao centro)
     const M = loadMap(mi); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
-    news.push(`NOVA ARENA: ${M.name.toUpperCase()}`);
+    news.push(`NOVA ARENA: ${(M.theme || M.name).toUpperCase()}`);
   }
   WEAPONS.forEach((w, i) => { if (wave > 1 && (w.unlock || 1) === wave) news.push(`NOVA ARMA: ${w.name.toUpperCase()} [${i + 1}]`); });
   setupObjective();
@@ -2201,8 +2191,12 @@ const perkSummary = () => Arena.PERKS.filter(p => perks[p.id]).map(p => `${p.nam
 const canvas = renderer.domElement;
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
+  if (!locked) perfWasRunning = false;
   if (locked) el.overlay.classList.add('hidden');
   else { mouseHeld = false; scoped = false; if (alive && !perkOpen) showOverlay('pause'); }
+});
+if (perfMode) document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') perfWasRunning = false;
 });
 document.addEventListener('pointerlockerror', () => {
   el.text.textContent = 'O navegador bloqueou o controle do mouse.\nAbra o arquivo diretamente em uma aba própria (não em um preview incorporado) e tente de novo.';
@@ -2446,7 +2440,7 @@ function showOverlay(mode, keepHidden = false) {
   if (!keepHidden) el.overlay.classList.remove('hidden');
   if (mode === 'menu') {
     el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
-    if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P15:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
+    if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P16:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
   } else if (mode === 'pause') {
     el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = helpText() + (perkSummary() ? `\n<b>Upgrades:</b> ${perkSummary()}` : ''); el.btn.textContent = 'CONTINUAR';
   } else {
@@ -2482,7 +2476,7 @@ function loop(now) {
   last = now;
   const portrait = useTouch && innerHeight > innerWidth;   // celular em pé: o jogo espera (mostra "gire o celular")
   let updateMs = 0;
-  if (locked && alive && !portrait) {
+  if (locked && alive && !portrait && (!perfMode || document.visibilityState === 'visible')) {
     const updateStart = perfMode ? performance.now() : 0;
     time += dt; update(dt);
     if (perfMode) updateMs = performance.now() - updateStart;
@@ -2500,22 +2494,32 @@ function loop(now) {
   const renderStart = perfMode ? performance.now() : 0;
   renderer.render(scene, camera);
   if (perfMode) {
-    const renderMs = performance.now() - renderStart;
-    let aliveEnemies = 0; for (const enemy of enemies) if (!enemy.dead) aliveEnemies++;
-    const workBlocked = perfCounters.blockedCalls, workLine = perfCounters.lineCalls;
-    const workPath = perfCounters.pathCalls, workPathMs = perfCounters.pathMs;
-    perfSample.frameMs = frameMs; perfSample.updateMs = updateMs; perfSample.renderMs = renderMs;
-    perfSample.drawCalls = renderer.info.render.calls; perfSample.triangles = renderer.info.render.triangles;
-    perfSample.geometries = renderer.info.memory.geometries; perfSample.textures = renderer.info.memory.textures;
-    perfSample.enemies = aliveEnemies; perfSample.projectiles = projectiles.length; perfSample.effects = fx.length;
-    perfSample.marks = surfaceMarks.length; perfSample.dust = dustPuffs.length;
-    perfSample.blockedCalls = workBlocked; perfSample.lineCalls = workLine;
-    perfSample.pathCalls = workPath; perfSample.pathMs = workPathMs; perfSample.pixelRatio = curPR;
-    perfSample.quality = appliedQuality === 'low' ? 0 : appliedQuality === 'high' ? 2 : 1;
-    perfTelemetry.record(perfSample);
-    perfWindow.blockedCalls += workBlocked; perfWindow.lineCalls += workLine;
-    perfWindow.pathCalls += workPath; perfWindow.pathMs += workPathMs; perfWindow.durationMs += frameMs;
-    perfCounters.blockedCalls = perfCounters.lineCalls = perfCounters.pathCalls = perfCounters.pathMs = 0;
+    const perfRunning = perfScenarioActive && locked && alive && !portrait && document.visibilityState === 'visible';
+    if (!perfRunning) {
+      perfWasRunning = false;
+      perfCounters.blockedCalls = perfCounters.lineCalls = perfCounters.pathCalls = perfCounters.pathMs = 0;
+    } else if (!perfWasRunning) {
+      // O primeiro frame após iniciar/retomar cruza uma transição e não entra na distribuição.
+      perfWasRunning = true; perfLastUi = now;
+      perfCounters.blockedCalls = perfCounters.lineCalls = perfCounters.pathCalls = perfCounters.pathMs = 0;
+    } else {
+      const renderMs = performance.now() - renderStart;
+      let aliveEnemies = 0; for (const enemy of enemies) if (!enemy.dead) aliveEnemies++;
+      const workBlocked = perfCounters.blockedCalls, workLine = perfCounters.lineCalls;
+      const workPath = perfCounters.pathCalls, workPathMs = perfCounters.pathMs;
+      perfSample.frameMs = frameMs; perfSample.updateMs = updateMs; perfSample.renderMs = renderMs;
+      perfSample.drawCalls = renderer.info.render.calls; perfSample.triangles = renderer.info.render.triangles;
+      perfSample.geometries = renderer.info.memory.geometries; perfSample.textures = renderer.info.memory.textures;
+      perfSample.enemies = aliveEnemies; perfSample.projectiles = projectiles.length; perfSample.effects = fx.length;
+      perfSample.marks = surfaceMarks.length; perfSample.dust = dustPuffs.length;
+      perfSample.blockedCalls = workBlocked; perfSample.lineCalls = workLine;
+      perfSample.pathCalls = workPath; perfSample.pathMs = workPathMs; perfSample.pixelRatio = curPR;
+      perfSample.quality = appliedQuality === 'low' ? 0 : appliedQuality === 'high' ? 2 : 1;
+      perfTelemetry.record(perfSample);
+      perfWindow.blockedCalls += workBlocked; perfWindow.lineCalls += workLine;
+      perfWindow.pathCalls += workPath; perfWindow.pathMs += workPathMs; perfWindow.durationMs += frameMs;
+      perfCounters.blockedCalls = perfCounters.lineCalls = perfCounters.pathCalls = perfCounters.pathMs = 0;
+    }
     if (now - perfLastUi >= 500) { refreshPerfPanel(); perfLastUi = now; }
   }
 }

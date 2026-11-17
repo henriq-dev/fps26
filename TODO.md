@@ -1,4 +1,4 @@
-# TODO — Arena FPS v8 · Pacote 14
+# TODO — Arena FPS v8 · Pacote 16 unificado
 
 ## Pacote 1 — Fundação de release
 
@@ -121,12 +121,33 @@
 - [x] Reutilizar pools/geometrias/materiais, limpar estados temporários no reset e manter o áudio novo dentro do Web Audio existente, sem dependências ou arquivos externos.
 - [x] Confirmar que os atributos de combate seguem inalterados e versionar o cache para `arena-fps-v8-p13`.
 
-## Pacote 14 — Gráficos industriais detalhados
+## Pacote 14 — Piloto industrial semi-realista
 
-- [x] Substituir materiais lisos dos obstáculos por materiais procedurais locais com ruído, juntas, fissuras/veios, bump sutil, roughness e metalness por superfície.
-- [x] Enriquecer o piso de cada arena com juntas, manchas e desgaste, mantendo textura local e compatibilidade offline.
-- [x] Adicionar bordas estruturais, painéis frontais e barras emissivas aos obstáculos sem alterar colisão, raycast ou navegação.
-- [x] Dar identidade temática às três arenas: concreto/setor 07, doca/chuva âmbar e planta/núcleo ciano.
-- [ ] Adicionar props maiores, tubulações, cabos e módulos arquitetônicos específicos por mapa após validar o custo de renderização.
-- [ ] Substituir progressivamente silhuetas de inimigos por modelos detalhados mantendo hitboxes e fallback procedural.
-- [ ] Reavaliar FPS em qualidade baixa, média e alta depois da próxima camada de props.
+- [x] O Fuzil existente (índice 1) recebe receptor em camadas, guarda-mão/cano, trilho, mira, coronha, soleira, carregador e ferragens com materiais metálicos/poliméricos diferenciados e cantos chanfrados; mantém posicionamento, pontos de recarga e boca do cano.
+- [x] As mãos acopladas ao Fuzil recebem acabamento de tecido técnico, borracha, costuras e reforços; as malhas acompanham os grupos existentes de repouso/arma/recarga e não cobrem a retícula.
+- [x] A arena inicial recebe materiais procedurais de concreto/metal pintado e piso industrial; as posições/dimensões dos obstáculos são fixadas pelos testes de regressão.
+- [x] O tratamento visual está restrito ao Fuzil, suas mãos e mapa 0; armas e mapas restantes conservam seu caminho de materiais anterior. Não foram alterados HUD, controles, física ou atributos de combate; texturas são locais/reutilizadas, sem sombras dinâmicas, pós-processamento ou aumento do limite de resolução.
+- [x] Cache offline versionado para p14; prévia HTTP temporária iniciada, captura Chromium salva e relatório atualizado.
+
+**Limitação de validação:** o playtest foi headless em Chromium (1280 × 720); não houve teste manual de tiro/recarga em dispositivo físico nem benchmark de FPS em celular.
+
+## Pacote 15 — Telemetria e cenário para reduzir travamentos
+
+- [x] A telemetria só é ativada com `?perf=1`; mede intervalo entre quadros (p50/p95/p99/máximo), CPU de `update` e submissão de `render`, chamadas/triângulos, geometrias/texturas, qualidade/pixel ratio, entidades ativas, chamadas de `blocked`/`lineClear` e quantidade/tempo de A*. O painel informa que `render` não mede tempo concluído de GPU.
+- [x] Guardar amostras em buffer circular pré-alocado de 3.600 frames; atualizar o painel a cada 0,5 s e não adicionar coleta ao caminho normal sem o parâmetro de diagnóstico. Exportar as amostras para CSV.
+- [x] Cenário repetível do Hangar com exatamente 12 inimigos em composição/posições fixas, Sobrevivência/Normal e Fuzil; a sessão permanece ativa e não persiste score, carreira, desafios ou recordes. Exceções de dano/abate existem somente na sessão `?perf=1`; o jogo normal preserva as regras de combate.
+- [x] Documentar como iniciar, reiniciar e exportar; validar desktop/headless e layout móvel simulado, sem alegar benchmark físico ou FPS de GPU.
+- [x] `./test.sh` e sintaxe dos módulos aprovados; cache offline versionado para p15.
+
+**Validação P15:** 60 s em Chromium headless com SwiftShader, viewport 1280 × 720, 426 amostras e nenhum erro JavaScript. CSV: frametime p50 133,4 ms / p95 166,7 ms / p99 483,4 ms; `update` p95 1,5 ms; submissão CPU de `render` p95 31,4 ms; 219 draw calls e 7.824 triângulos no último quadro. No cenário permaneceram 12 inimigos. O painel não aparece na URL normal; a verificação móvel foi simulada em 844 × 390. Isso caracteriza somente este sandbox/software renderer e não é benchmark de celular ou GPU física; teste em dispositivo real continua pendente.
+
+## Pacote 16 — Unificação P14 + P15
+
+- [x] Unificar os mapas Canvas procedurais de concreto, metal/aço e madeira do P14 com a biblioteca modular/cacheada do P15, mantendo cores e identidade de cada arena e preservando o visual PBR detalhado do Fuzil, suas mãos e Hangar.
+- [x] Manter a geometria de jogo intacta: coordenadas/dimensões dos obstáculos, colisões, raycast, navegação, IA e linhas de tiro; não alterar armas, dano, munição, cadência, precisão, recarga, controles ou progressão.
+- [x] Evitar as malhas de painel individuais de P14; reutilizar texturas, materiais, geometrias e a decoração instanciada do Hangar entre as trocas de arena para limitar alocações e draw calls.
+- [x] Na URL `?perf=1`, registrar quadros e contadores somente com cenário ativo, aba visível e Pointer Lock; pausas/foco perdido não podem entrar nos quantis/CSV como amostras de gameplay; a interface deve indicar pausa e retomar sem incluir um quadro de intervalo contaminado.
+- [x] Preservar o isolamento local do cenário P15 (12 inimigos fixos, Fuzil, sem score/carreira/recordes persistidos), o modo normal sem painel/telemetria e exportação CSV; atualizar cache offline para P16.
+- [x] Validar testes de núcleo/sintaxe, três mapas, alternância de mapas sem crescimento de geometrias decorativas, fluxo normal e pausa/retomada do cenário; documentar que Chromium/SwiftShader não é benchmark de GPU/celular físico.
+
+**Validação P16:** `bash test.sh` e `node --check` em todos os JavaScript aprovados. Em Chromium/SwiftShader as geometrias permaneceram em 106 durante as trocas; a primeira visita à Fábrica aumentou o contador de texturas de 30 para 33, estável nos quatro estados aquecidos seguintes. No cenário `?perf=1`, o CSV manteve 29 amostras por 1,3 s de pausa e cresceu para 32 depois de retomar; o painel indicou a pausa. URL normal sem painel; Fuzil ativo e 12 inimigos. Sem erros JavaScript observados. Esta validação não substitui medição em GPU/celular físico.
