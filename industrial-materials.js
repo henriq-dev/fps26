@@ -26,14 +26,19 @@
     };
   }
 
-  function surfaceCanvases(type, size) {
+  const NOOP_CANVAS_CONTEXT = {
+    set fillStyle(value) {}, set strokeStyle(value) {}, set lineWidth(value) {},
+    fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, bezierCurveTo() {}
+  };
+
+  function surfaceCanvases(type, size, detailMaps = true) {
     const albedo = document.createElement('canvas');
-    const height = document.createElement('canvas');
-    const roughness = document.createElement('canvas');
-    for (const canvas of [albedo, height, roughness]) canvas.width = canvas.height = size;
+    const height = detailMaps ? document.createElement('canvas') : null;
+    const roughness = detailMaps ? document.createElement('canvas') : null;
+    for (const canvas of [albedo, height, roughness]) if (canvas) canvas.width = canvas.height = size;
     const colorCtx = albedo.getContext('2d');
-    const heightCtx = height.getContext('2d');
-    const roughCtx = roughness.getContext('2d');
+    const heightCtx = height ? height.getContext('2d') : NOOP_CANVAS_CONTEXT;
+    const roughCtx = roughness ? roughness.getContext('2d') : NOOP_CANVAS_CONTEXT;
     if (!colorCtx || !heightCtx || !roughCtx) return null;
 
     const random = seededRandom(type.split('').reduce((sum, ch) => sum + ch.charCodeAt(0), size));
@@ -117,7 +122,7 @@
       for (let i = 1; i < 4; i++) { colorCtx.beginPath(); colorCtx.moveTo(size * i / 4, 0); colorCtx.lineTo(size * i / 4, size); colorCtx.stroke(); }
     }
 
-    for (let i = 0; i < size * 0.3; i++) {
+    if (detailMaps) for (let i = 0; i < size * 0.3; i++) {
       const x = random() * size, y = random() * size, gray = 90 + Math.floor(random() * 100);
       roughCtx.fillStyle = `rgb(${gray},${gray},${gray})`; roughCtx.fillRect(x, y, 1 + random() * 2, 1 + random() * 2);
     }
@@ -138,14 +143,14 @@
       return texture;
     }
 
-    function mapsFor(type, size, repeat) {
-      const key = `${type}:${size}:${repeat}`;
+    function mapsFor(type, size, repeat, detailMaps) {
+      const key = `${type}:${size}:${repeat}:${detailMaps ? 'full' : 'albedo'}`;
       if (mapCache.has(key)) return mapCache.get(key);
-      const canvases = surfaceCanvases(type, size);
+      const canvases = surfaceCanvases(type, size, detailMaps);
       const maps = canvases ? {
         map: makeTexture(canvases.albedo, repeat, true),
-        bumpMap: makeTexture(canvases.height, repeat),
-        roughnessMap: makeTexture(canvases.roughness, repeat)
+        bumpMap: detailMaps ? makeTexture(canvases.height, repeat) : null,
+        roughnessMap: detailMaps ? makeTexture(canvases.roughness, repeat) : null
       } : { map: null, bumpMap: null, roughnessMap: null };
       mapCache.set(key, maps);
       return maps;
@@ -157,14 +162,15 @@
         roughness: options.roughness ?? profile.roughness,
         metalness: options.metalness ?? profile.metalness,
         bumpScale: options.bumpScale ?? profile.bump,
+        detailMaps: options.detailMaps !== false,
         repeat: options.repeat ?? profile.repeat,
         size: options.size ?? profile.size,
         emissive: options.emissive ?? 0,
         emissiveIntensity: options.emissiveIntensity ?? 0
       };
-      const key = `${type}:${color}:${values.roughness}:${values.metalness}:${values.bumpScale}:${values.repeat}:${values.size}:${values.emissive}:${values.emissiveIntensity}`;
+      const key = `${type}:${color}:${values.roughness}:${values.metalness}:${values.bumpScale}:${values.detailMaps}:${values.repeat}:${values.size}:${values.emissive}:${values.emissiveIntensity}`;
       if (materialCache.has(key)) return materialCache.get(key);
-      const maps = mapsFor(type, values.size, values.repeat);
+      const maps = mapsFor(type, values.size, values.repeat, values.detailMaps);
       const mat = new THREE.MeshStandardMaterial({
         color, map: maps.map, bumpMap: maps.bumpMap, roughnessMap: maps.roughnessMap,
         roughness: values.roughness, metalness: values.metalness, bumpScale: values.bumpScale,

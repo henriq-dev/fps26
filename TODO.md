@@ -1,4 +1,86 @@
-# TODO — Arena FPS v8 · Pacote 16 unificado
+# TODO — Arena FPS v8 · Pacote 23
+
+## Pacote 23 — Interface hacker NEXUS `[~]`
+
+- [x] Definir identidade visual local `NEXUS // OPERATIONS CONSOLE`.
+- [x] Criar estação visual com perfil de nó, integridade, risco, link e modo offline.
+- [x] Criar topologia de rede animada em Canvas com grade, links, pulsos, núcleo e fluxo de pacote.
+- [x] Criar cartões de operações e manter seleção por mouse, toque, teclado e Enter.
+- [x] Adicionar console de logs fictícios com sequência de conexão e resultado.
+- [x] Adicionar scanline, glitch/grade sutil, pulsos e barras de estado.
+- [x] Reforçar visualmente que não há rede externa, comando real ou sistema operacional acessado.
+- [x] Preservar acessibilidade, contraste, responsividade mobile e `prefers-reduced-motion`.
+- [ ] Integrar uma tela NEXUS menor diretamente aos monitores físicos dos consoles.
+- [ ] Criar vocabulário visual específico por tipo de terminal (`LINK_NODE`, `TRACE_ROUTE`, etc.).
+- [ ] Fazer playtest humano do fluxo completo nos três prédios.
+
+## Pacote 22 — Interação física em primeira pessoa
+
+- [x] Prompt contextual por proximidade e linha de visão: `E · OPERAR TERMINAL`.
+- [x] Operação contínua segurando E/USAR, preservando a regra fictícia existente.
+- [x] Aproximação suave da câmera, centralização no monitor e redução de movimento durante a operação.
+- [x] Estados do terminal reagem ao início da operação e ao progresso.
+- [x] Cancelamento por dano, afastamento, perda de linha de visão, morte e terminal indisponível.
+- [x] Inimigos continuam ativos e podem contestar a posição durante a invasão.
+- [x] Feedback de cancelamento e bloqueio até soltar E antes de tentar novamente.
+- [x] Cache offline versionado para `arena-fps-v8-p22-buildings`.
+- [ ] Fazer playtest humano completo em desktop e toque.
+- [ ] Validar operação nos três terminais em Baixa, Média e Alta.
+
+## Mescla seletiva p21 — três prédios na Incursão
+
+- [x] Incorporar Complexo, Refinaria e Laboratório ao seletor da Incursão.
+- [x] Adaptar terminais, saídas, dicas, spawns e temas por prédio.
+- [x] Preservar terminais físicos p22 e remover telas simples duplicadas da p21.
+- [x] Preservar prompt, câmera, cancelamento, combate, IA e colisões p22.
+- [x] Expandir testes de caminhos, centro livre e spawns para os três prédios.
+- [ ] Validar playtest humano e legibilidade dos consoles nos três prédios.
+
+## Pacote 21 — Terminais físicos detalhados
+
+- [x] Criar gerador compartilhado de gabinetes, racks, monitores, LEDs, cabos e detalhes.
+- [x] Criar Console KVM físico.
+- [x] Criar Console de Rede físico.
+- [x] Criar Console Central do Datacenter físico.
+- [x] Integrar props em `mapMeshes` sem alterar colisão, A* ou combate.
+- [x] Ligar estados visuais de espera, detecção, invasão, comprometimento e alarme.
+- [x] Adicionar `terminal-props.js` ao HTML, testes e cache offline p21.
+- [ ] Validar legibilidade dos três terminais nas qualidades Baixa, Média e Alta.
+- [ ] Iniciar Pacote 22: interação física em primeira pessoa.
+
+## Pacote 20
+
+- [x] Modo Incursão: mapa Complexo, terminais, 4 setores, escolhas, alarme, fuga, vitória
+- [x] Drone (F)
+- [ ] Testar no aparelho: `index.html?perf=1` e jogar a Incursão
+- [ ] Próximo: portas animadas, torretas/câmeras como objetos, segundo bloco (mapa A–E), drone em 3D
+
+
+## Pacote 19
+
+- [x] floorTint por mapa
+- [x] Modo Baixo leve (Lambert, sem PBR, sem luzes extras)
+- [x] Resolução adaptativa no PC (desce rápido, sobe devagar)
+- [x] GPU/canvas/flags no painel e CSV
+- [x] Interruptores por URL
+- [x] Documentação P1–P19
+- [ ] Rodar 6 testes de 15 s no aparelho real e enviar os CSV
+- [ ] Ideia futura (P20+): terminais/invasão fictícia — ver IDEIAS-FUTURAS.md
+
+
+
+## Pacote 18 — Híbrido de fluidez
+
+- [x] Preservar materiais ambientais albedo-only do P17, PBR completo do Fuzil/mãos e cache de céu por cor/paleta; não incluir texturas externas.
+- [x] Restaurar pré-aquecimento de shaders, geometrias e texturas antes do menu/partida e após cada troca de arena, executando a troca enquanto a transição/banner está ativo.
+- [x] Manter a luz de explosão na contagem de luzes desde o começo; animar apenas intensidade/posição e não alterar sua visibilidade no pulso/expiração, para evitar recompilações de shader.
+- [x] Compartilhar geometria da antena e materiais básicos de badge/beacon entre rigs; manter pooling e estados individuais necessários.
+- [x] Não mudar balanceamento, conteúdo de combate, IA, movimento, colisões, layout, limite de efeitos nem a resolução adaptativa do P17; recuperação gradual de resolução fica para etapa posterior.
+- [x] Versionar service worker, painel e CSV para P18; manter `?perf=1` opt-in e fluxo normal sem painel.
+- [x] Validar testes de núcleo/sintaxe, inicialização, pré-aquecimento, pulso de explosão e repetição de troca entre as três arenas sem crescimento repetido de geometria/texturas.
+
+**Validação P18:** testes passaram. No Chromium/SwiftShader, um pré-aquecimento inicial e um por troca foram observados; a tabela do renderer reportou 11 programas após o warm-up e permaneceu em 11 após pulso de explosão. Ao visitar seis vezes as três arenas, a contagem de geometrias ficou em 62; após a primeira alocação de sky/material por paleta, texturas estabilizaram em 9 no menu do ensaio. Cenário `?perf=1`: 12 inimigos, sem erros JS. Teste transitório expôs referências para telemetria de execução, mas essa instrumentação não foi incorporada aos arquivos entregues. Não houve benchmark P18 de frametime comparável nem medição em GPU/celular físico; o custo inicial/transição do warm-up ainda deve ser aferido no aparelho-alvo.
+
 
 ## Pacote 1 — Fundação de release
 
@@ -141,13 +223,13 @@
 
 **Validação P15:** 60 s em Chromium headless com SwiftShader, viewport 1280 × 720, 426 amostras e nenhum erro JavaScript. CSV: frametime p50 133,4 ms / p95 166,7 ms / p99 483,4 ms; `update` p95 1,5 ms; submissão CPU de `render` p95 31,4 ms; 219 draw calls e 7.824 triângulos no último quadro. No cenário permaneceram 12 inimigos. O painel não aparece na URL normal; a verificação móvel foi simulada em 844 × 390. Isso caracteriza somente este sandbox/software renderer e não é benchmark de celular ou GPU física; teste em dispositivo real continua pendente.
 
-## Pacote 16 — Unificação P14 + P15
+## Pacote 16 — Mescla e anti-travamento
 
-- [x] Unificar os mapas Canvas procedurais de concreto, metal/aço e madeira do P14 com a biblioteca modular/cacheada do P15, mantendo cores e identidade de cada arena e preservando o visual PBR detalhado do Fuzil, suas mãos e Hangar.
-- [x] Manter a geometria de jogo intacta: coordenadas/dimensões dos obstáculos, colisões, raycast, navegação, IA e linhas de tiro; não alterar armas, dano, munição, cadência, precisão, recarga, controles ou progressão.
-- [x] Evitar as malhas de painel individuais de P14; reutilizar texturas, materiais, geometrias e a decoração instanciada do Hangar entre as trocas de arena para limitar alocações e draw calls.
-- [x] Na URL `?perf=1`, registrar quadros e contadores somente com cenário ativo, aba visível e Pointer Lock; pausas/foco perdido não podem entrar nos quantis/CSV como amostras de gameplay; a interface deve indicar pausa e retomar sem incluir um quadro de intervalo contaminado.
-- [x] Preservar o isolamento local do cenário P15 (12 inimigos fixos, Fuzil, sem score/carreira/recordes persistidos), o modo normal sem painel/telemetria e exportação CSV; atualizar cache offline para P16.
-- [x] Validar testes de núcleo/sintaxe, três mapas, alternância de mapas sem crescimento de geometrias decorativas, fluxo normal e pausa/retomada do cenário; documentar que Chromium/SwiftShader não é benchmark de GPU/celular físico.
-
-**Validação P16:** `bash test.sh` e `node --check` em todos os JavaScript aprovados. Em Chromium/SwiftShader as geometrias permaneceram em 106 durante as trocas; a primeira visita à Fábrica aumentou o contador de texturas de 30 para 33, estável nos quatro estados aquecidos seguintes. No cenário `?perf=1`, o CSV manteve 29 amostras por 1,3 s de pausa e cresceu para 32 depois de retomar; o painel indicou a pausa. URL normal sem painel; Fuzil ativo e 12 inimigos. Sem erros JavaScript observados. Esta validação não substitui medição em GPU/celular físico.
+- [x] Base p15; nomes de setor do p14 de mapas; look industrial nos 3 mapas com as mesmas texturas (`floorTint` por mapa).
+- [x] Luz de explosão sem alternar visibilidade em jogo; geometria/materiais compartilhados nos rigs.
+- [x] Aquecimento de shaders/geometrias/texturas no menu e a cada troca de mapa.
+- [x] Resolução adaptativa em desktop e celular (desce rápido, sobe devagar; desligada em `?perf=1`).
+- [x] `./test.sh` aprovado, Chromium sem erros; cache `arena-fps-v8-p16`.
+- [ ] Pendente: medir `?perf=1` em celular/GPU física e comparar o CSV com o p15.
+- [ ] Pendente: fundir as peças dos inimigos para reduzir chamadas de desenho.
+- [ ] Pendente: HUD enxuto, céu em gradiente avermelhado, luzes ciano e letreiros (referência visual).

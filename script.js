@@ -14,7 +14,12 @@ const MAX_ALIVE = 12;      // limite de inimigos simultâneos (desempenho)
 const { WEAPONS, TYPES } = Arena;
 const career = Arena.createCareerStore();
 let currentMode = 'survival', currentDifficulty = 'normal';
-const perfMode = new URLSearchParams(window.location.search).get('perf') === '1';
+const urlParams = new URLSearchParams(window.location.search);
+const perfMode = urlParams.get('perf') === '1';
+// Interruptores de diagnóstico (funcionam em qualquer link): ?semluzes=1 &simples=1 &escala=0.5 &semneblina=1 &sempoeira=1
+const FLAG = { noLights: urlParams.get('semluzes') === '1', simple: urlParams.get('simples') === '1', noFog: urlParams.get('semneblina') === '1', noDust: urlParams.get('sempoeira') === '1', scale: (v => v > 0 ? Math.min(2, Math.max(0.3, v)) : 0)(parseFloat(urlParams.get('escala'))) };
+let appliedQuality = null;   // declarado cedo: loadMap(0) já consulta o modo gráfico
+const simpleGfx = () => FLAG.simple || appliedQuality === 'low';   // modo leve: materiais Lambert, sem decoração PBR, sem luzes extras
 const perfTelemetry = perfMode ? Arena.createPerfTelemetry(3600) : null;
 const perfSample = {};
 const perfCounters = { blockedCalls: 0, lineCalls: 0, pathCalls: 0, pathMs: 0 };
@@ -40,7 +45,7 @@ const $ = id => document.getElementById(id);
 const el = {
   hp: $('hpFill'), hpTxt: $('hpTxt'), score: $('score'), wave: $('wave'), kills: $('kills'), remaining: $('remaining'), best: $('best'),
   wname: $('wname'), wrole: $('wrole'), ammo: $('ammo'), reserve: $('reserve'), slots: $('slots'),
-  vignette: $('vignette'), hit: $('hitmarker'), banner: $('banner'), damageDirection: $('damageDirection'), scope: $('scope'), cross: $('crosshair'),
+  vignette: $('vignette'), hit: $('hitmarker'), banner: $('banner'), damageDirection: $('damageDirection'), scope: $('scope'), cross: $('crosshair'), terminalPrompt: $('terminalPrompt'),
   overlay: $('overlay'), title: $('ovTitle'), text: $('ovText'), btn: $('ovBtn'),
   objectivePanel: $('objectivePanel'), objectiveWave: $('objectiveWave'), objectiveName: $('objectiveName'), objectiveHint: $('objectiveHint'), objectiveFill: $('objectiveFill'), objectiveStatus: $('objectiveStatus'),
   reloadWrap: $('reloadWrap'), reloadBar: $('reloadBar'), reloadLabel: $('reloadLabel'),
@@ -50,7 +55,7 @@ let perfPanel = null, perfReadout = null, perfHint = null, perfToggle = null;
 if (perfMode) {
   perfPanel = document.createElement('section'); perfPanel.id = 'perfPanel';
   perfPanel.setAttribute('aria-label', 'Telemetria local do jogo');
-  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO P16</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
+  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO P19</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
   document.body.appendChild(perfPanel);
   perfReadout = perfPanel.querySelector('#perfReadout'); perfHint = perfPanel.querySelector('#perfHint');
   perfToggle = document.createElement('button'); perfToggle.id = 'perfToggle'; perfToggle.type = 'button'; perfToggle.textContent = 'PERF';
@@ -72,15 +77,25 @@ scene.background = new THREE.Color(0x10131c);
 scene.fog = new THREE.Fog(0x10131c, 12, 62);
 
 const camera = new THREE.PerspectiveCamera(baseFov, innerWidth / innerHeight, 0.05, 120);
-camera.rotation.order = 'YXZ';   // yaw (Y) primeiro, depois pitch (X)
+camera.rotation.order = 'YXZ';   // yaw (Y) primeiro, depois pitch
 scene.add(camera);               // a câmera na cena permite anexar a arma nela
+const terminalRay = new THREE.Raycaster();
+const terminalRayDir = new THREE.Vector3();
 
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
 let prCap = Math.min(devicePixelRatio, 1.25), curPR = prCap;   // prCap = teto escolhido; curPR = valor atual (cai sozinho se o celular engasgar)
 renderer.setPixelRatio(curPR);                                  // resolução reduzida = leve + retro
 renderer.setSize(innerWidth, innerHeight);
 $('game').appendChild(renderer.domElement);
+const gpuInfo = (() => {   // qual GPU o navegador realmente usa? (software = SwiftShader/llvmpipe = sem aceleração)
+  try {
+    const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    return { name: String(name), software: /swiftshader|llvmpipe|software|basic render|softpipe/i.test(name) };
+  } catch (e) { return { name: 'indisponível', software: false }; }
+})();
 const pbrMaterials = Arena.createIndustrialMaterialLibrary(THREE, renderer);
+if (FLAG.noFog) scene.fog = null;
 
 // Luzes simples e baratas
 scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x20242c, 0.95));
@@ -105,15 +120,18 @@ function setViewModelLights(index) {
 const solids = [];   // meshes que bloqueiam tiros (raycast)
 const boxes = [];    // caixas de colisão AABB (movimento)
 let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     // navGrid = grade do A* (recriada a cada mapa)
+let incTerminalViews = Object.create(null);                                     // terminais visuais, sem colisão extra
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
 const blockMats = new Map();
 function blockMat(color) {
-  const key = `surface:${color}`;
+  const simple = simpleGfx();
+  const key = `${simple ? 'simple' : 'surface'}:${color}`;
   if (blockMats.has(key)) return blockMats.get(key);
+  if (simple) { const lite = new THREE.MeshLambertMaterial({ color }); blockMats.set(key, lite); return lite; }   // leve: 1 cor, sem textura
   const surface = surfaceForColor(color);
   const kind = surface === 'wood' ? 'wood' : surface === 'metal' ? 'paintedMetal' : 'concrete';
   const pbrColor = new THREE.Color(color).multiplyScalar(1.16).getHex();
-  const material = pbrMaterials.material(kind, pbrColor);
+  const material = pbrMaterials.material(kind, pbrColor, { detailMaps: false });
   blockMats.set(key, material);
   return material;
 }
@@ -125,13 +143,18 @@ function surfaceForColor(color) {
 
 const floorMats = new Map();
 function floorMaterial(color) {
-  if (!floorMats.has(color)) floorMats.set(color, pbrMaterials.material('floor', color));
-  return floorMats.get(color);
+  const key = `${simpleGfx() ? 'simple' : 'pbr'}:${color}`;
+  if (!floorMats.has(key)) floorMats.set(key, simpleGfx() ? new THREE.MeshLambertMaterial({ color }) : pbrMaterials.material('floor', color, { detailMaps: false }));
+  return floorMats.get(key);
 }
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2, ARENA * 2), floorMaterial(0x959994));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
+const glowMats = new Map();
+const glowMat = c => glowMats.get(c) || (glowMats.set(c, new THREE.MeshBasicMaterial({ color: c })), glowMats.get(c));
+const ceilingMesh = new THREE.Mesh(new THREE.PlaneGeometry(ARENA * 2, ARENA * 2), new THREE.MeshLambertMaterial({ color: 0x3a444c }));
+ceilingMesh.rotation.x = Math.PI / 2; ceilingMesh.visible = false; scene.add(ceilingMesh);   // virada para baixo
 function addBlock(x, z, w, h, d, color, collide = true) {
   const m = new THREE.Mesh(blockGeo, blockMat(color));
   m.scale.set(w, h, d); m.position.set(x, h / 2, z); m.userData.surface = surfaceForColor(color);
@@ -144,18 +167,21 @@ const cornerLights = [[-ARENA + 3, -ARENA + 3, 0xff6a3d], [ARENA - 3, ARENA - 3,
   const l = new THREE.PointLight(c, 1.1, 22); l.userData.baseIntensity = 1.1; l.position.set(x, 3, z); scene.add(l); return l;
 });
 // Céu em gradiente (canvas 1×256 esticado): topo escuro, meio na cor do mapa, horizonte mais claro e arroxeado
+const skyTextureCache = new Map();
 function skyTexture(hex) {
+  if (skyTextureCache.has(hex)) return skyTextureCache.get(hex);
   const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256;
   const g = cv.getContext('2d'); if (!g || typeof g.createLinearGradient !== 'function') return null;   // sem canvas 2D: cor lisa
   const c = new THREE.Color(hex), top = c.clone().multiplyScalar(0.35), bot = c.clone().multiplyScalar(1.9).lerp(new THREE.Color(0x2a1f2e), 0.35);
   const gr = g.createLinearGradient(0, 0, 0, 256);
   gr.addColorStop(0, '#' + top.getHexString()); gr.addColorStop(0.55, '#' + c.getHexString()); gr.addColorStop(1, '#' + bot.getHexString());
   g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
-  return new THREE.CanvasTexture(cv);
+  const texture = new THREE.CanvasTexture(cv);
+  skyTextureCache.set(hex, texture);
+  return texture;
 }
 function setSky(hex) {
-  if (scene.background && scene.background.isTexture) scene.background.dispose();
-  scene.background = skyTexture(hex) || new THREE.Color(hex); scene.fog.color.setHex(hex);
+  scene.background = skyTexture(hex) || new THREE.Color(hex); if (scene.fog) scene.fog.color.setHex(hex);
 }
 let cachedIndustrialDressing = null;
 function addIndustrialSetDressing() {
@@ -163,9 +189,9 @@ function addIndustrialSetDressing() {
     scene.add(cachedIndustrialDressing); mapMeshes.push(cachedIndustrialDressing); return;
   }
   const group = new THREE.Group();
-  const stripeMat = pbrMaterials.material('paintedMetal', 0xc6a04f, { roughness: 0.76, metalness: 0.16 });
-  const panelMat = pbrMaterials.material('paintedMetal', 0x596267, { repeat: 2 });
-  const railMat = pbrMaterials.material('steel', 0x59646a, { repeat: 2 });
+  const stripeMat = pbrMaterials.material('paintedMetal', 0xc6a04f, { roughness: 0.76, metalness: 0.16, detailMaps: false });
+  const panelMat = pbrMaterials.material('paintedMetal', 0x596267, { repeat: 2, detailMaps: false });
+  const railMat = pbrMaterials.material('steel', 0x59646a, { repeat: 2, detailMaps: false });
   const stripeGeo = new THREE.BoxGeometry(1.15, 0.014, 0.10);
   const stripes = new THREE.InstancedMesh(stripeGeo, stripeMat, 24);
   const dummy = new THREE.Object3D();
@@ -203,33 +229,44 @@ function addIndustrialSetDressing() {
 }
 // Monta uma arena: troca cores, apaga a anterior e recria a grade do A*
 function loadMap(index) {
-  const M = Arena.MAPS[index % Arena.MAPS.length]; curMap = index % Arena.MAPS.length;
+  const inc = index <= -2;                                  // -2/-3/-4 = prédios da Incursão
+  const M = inc ? Arena.INCURSION_LEVELS[-2 - index] : Arena.MAPS[index % Arena.MAPS.length]; curMap = inc ? index : index % Arena.MAPS.length;
   mapMeshes.forEach(m => scene.remove(m)); mapMeshes = []; solids.length = 0; boxes.length = 0;   // length = 0 mantém a MESMA lista (outras funções a usam)
   activeMapLook = M.look || 'classic';
   setSky(M.sky);
-  const floorTint = new THREE.Color(M.floorA).lerp(new THREE.Color(M.floorB), 0.5).getHex();
+  const floorTint = M.floorTint || new THREE.Color(M.floorA).lerp(new THREE.Color(M.floorB), 0.5).getHex();   // floorTint por mapa = piso legível
   floor.material = floorMaterial(floorTint);
   // Paredes externas (a colisão delas é feita pelo limite ARENA em blocked())
   const W = ARENA * 2 + 2;
   addBlock(0, -ARENA - 0.5, W, 6, 1, M.wall, false); addBlock(0, ARENA + 0.5, W, 6, 1, M.wall, false);
   addBlock(-ARENA - 0.5, 0, 1, 6, W, M.wall, false); addBlock(ARENA + 0.5, 0, 1, 6, W, M.wall, false);
   M.blocks.forEach(b => addBlock(...b));               // obstáculos / coberturas
+  (M.glows || []).forEach(([x, y, z, w, h, d, c]) => {  // detalhes luminosos (telas, LEDs): sem colisão, material compartilhado por cor
+    const g = new THREE.Mesh(blockGeo, glowMat(c)); g.scale.set(w, h, d); g.position.set(x, y, z); scene.add(g); mapMeshes.push(g);
+  });
+  incTerminalViews = Object.create(null);
+  if (inc && Arena.createIncursionTerminal) Object.entries(M.terminals || {}).forEach(([id, terminal]) => {
+    const view = Arena.createIncursionTerminal({ ...terminal, id }); scene.add(view); mapMeshes.push(view); incTerminalViews[id] = view;
+  });
+  ceilingMesh.visible = !!M.ceiling; if (M.ceiling) ceilingMesh.position.y = M.ceiling;   // teto só nos mapas internos
   stripMat.color.setHex(M.strip);                      // faixas luminosas (só visual: não entram em solids, não bloqueiam tiro)
   [[0, -ARENA, W, .08, .05], [0, ARENA, W, .08, .05], [-ARENA, 0, .05, .08, W], [ARENA, 0, .05, .08, W]].forEach(([x, z, w, h, d]) => {
     const m = new THREE.Mesh(blockGeo, stripMat); m.scale.set(w, h, d); m.position.set(x * 0.998, 2.2, z * 0.998);
     scene.add(m); mapMeshes.push(m);
   });
-  if (activeMapLook === 'industrial') addIndustrialSetDressing();
+  if (activeMapLook === 'industrial' && !simpleGfx()) addIndustrialSetDressing();
   navGrid = Arena.createGrid(ARENA, 1, boxes, 0.62);   // células de 1 m; 0,62 m = raio do corpo + folga
+  if (warmReady) warmScene();                          // compila/aquece a arena durante o banner de transição
   return M;
 }
+let warmReady = false;
 loadMap(0);
 // Poeira flutuando no ar (260 pontos num único objeto: barato para a GPU)
 const dustPos = new Float32Array(260 * 3);
 for (let i = 0; i < 260; i++) { dustPos[i * 3] = (Math.random() - .5) * ARENA * 2; dustPos[i * 3 + 1] = Math.random() * 6; dustPos[i * 3 + 2] = (Math.random() - .5) * ARENA * 2; }
 const dustGeo = new THREE.BufferGeometry(); dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
 const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0xffd9a8, size: 0.05, transparent: true, opacity: 0.5 }));
-scene.add(dust);
+scene.add(dust); dust.visible = !FLAG.noDust;
 
 // Colisão círculo (raio r) contra limites e caixas
 function blocked(x, z, r) {
@@ -317,6 +354,231 @@ function updateObjective(dt) {
     interactQueued = false;
   }
   updateObjectiveHud();
+}
+
+
+/* =====================================================================
+   4c. INCURSÃO — prédio em salas, terminais, escolhas e fuga (regras em incursion.js)
+   A invasão é FICTÍCIA: são escolhas de jogo e uma tela cenográfica, sem comando real.
+   ===================================================================== */
+let incLevel = 0;
+function incData() { return Arena.INCURSION_LEVELS[incLevel]; }
+function incStage() { return Arena.INCURSION_STAGES[inc.stage]; }
+function incTarget() { const st = incStage(), M = incData(); return st.exit ? M.exit : M.terminals[st.terminal]; }
+function incHint(st) { return (incData().hints && incData().hints[Arena.INCURSION_STAGES.indexOf(st)]) || st.hint; }
+function terminalHasLineOfSight(t, dist) {
+  const dx = t.x - px, dz = t.z - pz, desired = Math.atan2(-dx, -dz);
+  const angle = Math.abs(Math.atan2(Math.sin(desired - yaw), Math.cos(desired - yaw)));
+  if (angle > 0.95) return false;
+  terminalRayDir.set(dx, 1.48 - py, dz); const length = terminalRayDir.length(); terminalRayDir.normalize();
+  terminalRay.set(new THREE.Vector3(px, py, pz), terminalRayDir);
+  const hit = terminalRay.intersectObjects(solids, false)[0];
+  return !hit || hit.distance > Math.min(dist + 0.2, length - 0.18);
+}
+function cancelTerminalInteraction(reason = 'OPERAÇÃO INTERROMPIDA') {
+  if (!inc || (!terminalInteraction.active && !terminalInteraction.id && !inc.hold)) return;
+  const hadProgress = inc.hold > 0;
+  terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = true; terminalInteraction.focus = 0;
+  terminalInteraction.id = null; inc.hold = 0; interactHeld = false;
+  if (el.terminalPrompt) el.terminalPrompt.classList.add('hidden');
+  if (hadProgress && reason) { banner(reason, 1.25); addFeed(reason, false); }
+}
+function refreshTerminalInteraction() {
+  if (!el.terminalPrompt) return;
+  if (!inc || inc.done || inc.choiceOpen || incStage().exit) {
+    el.terminalPrompt.classList.add('hidden'); terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.focus = 0; terminalInteraction.id = null; return;
+  }
+  if (!keys.KeyE && !interactHeld) terminalInteraction.lockout = false;
+  const t = incTarget(), dist = Math.hypot(t.x - px, t.z - pz), near = dist < 3.1;
+  const canUse = near && terminalHasLineOfSight(t, dist);
+  terminalInteraction.canUse = canUse;
+  const held = (keys.KeyE || interactHeld) && canUse && !terminalInteraction.lockout;
+  if (terminalInteraction.active && !canUse) cancelTerminalInteraction('LINHA DE VISÃO PERDIDA');
+  terminalInteraction.active = held;
+  terminalInteraction.id = held ? incStage().terminal : null;
+  terminalInteraction.focus += ((held ? 1 : 0) - terminalInteraction.focus) * Math.min(1, .16);
+  el.terminalPrompt.classList.toggle('hidden', !near);
+  const title = el.terminalPrompt.querySelector('b'), hint = el.terminalPrompt.querySelector('small');
+  if (near && !canUse) { title.textContent = terminalInteraction.lockout ? 'SOLTE E PARA TENTAR NOVAMENTE' : 'OLHE PARA O TERMINAL'; hint.textContent = 'MANTENHA A MIRA NO CONSOLE'; }
+  else if (held) { title.textContent = `E · OPERANDO ${t.name}`; hint.textContent = `INVASÃO ${Math.floor((inc.hold / incStage().hold) * 100)}% · NÃO SE AFASTE`; }
+  else { title.textContent = `E · OPERAR ${t.name}`; hint.textContent = 'SEGURE PARA INVADIR'; }
+}
+function updateIncursionTerminalViews() {
+  if (!inc || !Arena.updateIncursionTerminal) return;
+  Object.entries(incTerminalViews).forEach(([id, view]) => {
+    const stageIndex = Arena.INCURSION_STAGES.findIndex(st => st.terminal === id);
+    let state = stageIndex >= 0 && stageIndex < inc.stage ? 'committed' : 'standby';
+    if (!inc.done && stageIndex === inc.stage && incStage().terminal === id) state = inc.hold > 0 ? 'intrusion' : inc.inRange ? 'detected' : 'standby';
+    if (inc.alarmT > 0 && state === 'standby') state = 'locked';
+    Arena.updateIncursionTerminal(view, state, inc.time);
+  });
+}
+function startIncursion() {
+  incLevel = Math.min(Arena.INCURSION_LEVELS.length - 1, Math.max(0, parseInt($('incLevelSelect').value, 10) || 0));
+  loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
+  terminalInteraction.id = null; terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = false; terminalInteraction.focus = 0;
+  inc = { stage: 0, hold: 0, inRange: false, security: null, targets: [], fx: Arena.incursionEffects(null, []), spawned: 0, spawnT: 2, alarmT: 0, overrun: false,
+          marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0 };
+  toSpawn = 0; bossPending = false; introQueue = []; waveDelay = 1e9;
+  enterIncStage(0);
+}
+function enterIncStage(i) {
+  const prevWave = wave; inc.stage = i; inc.hold = 0; inc.spawned = 0; inc.spawnT = 2.2; wave = 2 + 2 * i;
+  if (i > 0) { health = Math.min(maxHealth, health + 30); ammoState.forEach((s, k) => { s.reserve += Math.ceil(WEAPONS[k].reserve * 0.3); }); addFeed('SETOR LIMPO · +30 VIDA · MUNIÇÃO', false); }
+  WEAPONS.forEach((w, k) => { const u = w.unlock || 1; if (u > prevWave && u <= wave) addFeed(`NOVA ARMA: ${w.name.toUpperCase()} [${k + 1}]`, false); });
+  const st = incStage(), t = incTarget();
+  if (inc.marker) scene.remove(inc.marker);
+  const marker = new THREE.Group(); marker.position.set(t.x, 0, t.z);
+  const base = new THREE.Mesh(objectiveBaseGeo, objectiveMat); base.position.y = 0.14;
+  const core = new THREE.Mesh(objectiveCoreGeo, st.exit ? new THREE.MeshBasicMaterial({ color: 0x3ddc84 }) : objectiveCoreMat); core.position.y = 1.1;
+  const ring = new THREE.Mesh(objectiveRingGeo, objectiveRingMat); ring.position.y = 0.64; ring.rotation.x = Math.PI / 2;
+  marker.add(base, core, ring); marker.userData = { core, ring }; scene.add(marker); inc.marker = marker;
+  banner(`${incData().name.toUpperCase()} // ${st.title}\n${incHint(st)}`, 4.4); updateObjectiveHud(); updateHUD();
+}
+function updateIncursionHud() {
+  const active = inc && !inc.done;
+  el.objectivePanel.classList.toggle('hidden', !inc);
+  if (!inc) return;
+  const st = incStage();
+  el.objectiveWave.textContent = `INCURSÃO · SETOR ${inc.stage + 1}/${Arena.INCURSION_STAGES.length}`;
+  el.objectiveName.textContent = `${incData().name.toUpperCase()} · ${st.title}`; el.objectiveHint.textContent = incHint(st);
+  let ratio = 0, status = 'MISSÃO CUMPRIDA';
+  if (active && st.exit) { const t = incTarget(); status = `SAÍDA A ${Math.round(Math.hypot(t.x - px, t.z - pz))} m`; ratio = 1; }
+  else if (active) { ratio = inc.hold / st.hold; status = inc.inRange ? `INVASÃO ${Math.floor(ratio * 100)}% · SEGURE E` : 'APROXIME-SE DO CONSOLE E SEGURE E'; }
+  if (inc.alarmT > 0) status += ` · ALARME ${Math.ceil(inc.alarmT)}s`; else if (inc.overrun && active) status += ' · RESPOSTA TOTAL';
+  status += inc.droneT > 0 ? ` · DRONE ${Math.ceil(inc.droneT)}s` : inc.droneCd > 0 ? ` · DRONE ${Math.ceil(inc.droneCd)}s` : ' · DRONE [F]';
+  el.objectiveFill.style.width = `${clamp(ratio, 0, 1) * 100}%`; el.objectiveStatus.textContent = status;
+}
+function useDrone() {
+  if (!inc || inc.done) return;
+  if (inc.droneT > 0 || inc.droneCd > 0) { addFeed('DRONE EM RECARGA', false); return; }
+  inc.droneT = inc.fx.droneTime; inc.droneCd = inc.fx.droneTime + inc.fx.droneCooldown;
+  banner('DRONE EM VOO\nINIMIGOS MARCADOS NO RADAR', 1.6); sfx.objective();
+}
+function updateIncursion(dt) {
+  inc.time += dt;
+  updateIncursionTerminalViews();
+  const st = incStage();
+  if (inc.marker) { inc.marker.userData.ring.rotation.z += dt * 1.5; inc.marker.userData.core.rotation.y += dt * 1.8; }
+  inc.droneT = Math.max(0, inc.droneT - dt); inc.droneCd = Math.max(0, inc.droneCd - dt);
+  if (inc.alarmT > 0) {                                                        // alarme: só troca cores (não mexe em luzes = sem recompilar shader)
+    inc.alarmT -= dt; const f = (Math.sin(inc.time * 7) + 1) / 2;
+    stripMat.color.setRGB(0.6 + 0.4 * f, 0.1, 0.08); if (scene.fog) scene.fog.color.setRGB(0.12 + 0.1 * f, 0.02, 0.02);
+    if (inc.alarmT <= 0) { inc.overrun = true; banner('RESPOSTA TOTAL\nREFORÇOS ACELERADOS', 2.6); }
+  }
+  if (inc.done) return;
+  const budget = Arena.incursionBudget(st, inc.fx);                            // reforços contínuos até o limite do setor
+  inc.spawnT -= dt;
+  if (inc.spawnT <= 0 && (budget < 0 || inc.spawned < budget) && enemies.filter(e => !e.dead).length < Math.min(MAX_ALIVE, st.spawn.max + inc.fx.risk)) {
+    spawnEnemy(pickType()); inc.spawned++; inc.spawnT = Arena.incursionInterval(st, inc.fx, inc.overrun); updateHUD();
+  }
+  if (inc.choiceOpen) return;
+  const t = incTarget(), dist = Math.hypot(t.x - px, t.z - pz);
+  if (st.exit) { if (dist < 2.6) finishIncursion(); }
+  else {
+    inc.inRange = terminalInteraction.canUse;
+    const contested = enemies.some(e => !e.dead && Math.hypot(e.g.position.x - t.x, e.g.position.z - t.z) < 4);   // inimigo perto atrasa a invasão
+    if (inc.inRange && (keys.KeyE || interactHeld)) inc.hold = Math.min(st.hold, inc.hold + dt * (contested ? 0.55 : 1));
+    else inc.hold = Math.max(0, inc.hold - dt * 0.25);
+    if (inc.hold >= st.hold) { if (st.choose) openIncChoice(st); else { banner('ACESSO CONCEDIDO\nPRÓXIMO SETOR', 2); sfx.objective(); enterIncStage(inc.stage + 1); } }
+  }
+  updateIncursionHud();
+}
+function finishIncursion() {
+  inc.done = true; incVictory = true;
+  const bonus = 2000 + Math.max(0, Math.round(600 - inc.time)) * 2;
+  score += bonus; addFeed(`FUGA CONCLUÍDA  +${bonus}`, false);
+  gameOver();
+}
+
+/* ---- Terminal de invasão (tela cenográfica): escolha, rede em 3D falsa e registro fictício ---- */
+const incTermEl = $('incTerm'), incOptionsEl = $('incOptions'), incLogEl = $('incLog'), incConfirmEl = $('incConfirm'), incNetEl = $('incNet');
+let incSel = new Set(), incPhase = 'choose', incNetRaf = 0, incLogTimers = [];
+function openIncChoice(st) {
+  inc.choiceOpen = true; locked = false; mouseHeld = false; scoped = false; interactHeld = false; keys.KeyE = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  const multi = st.choose === 'target', list = multi ? Arena.INCURSION_TARGETS : Arena.INCURSION_SECURITY;
+  incPhase = 'choose'; incSel.clear(); incLogEl.textContent = ''; incOptionsEl.innerHTML = '';
+  $('incTitle').textContent = multi ? 'DATACENTER // OBJETIVO FINAL' : 'REDE DE SEGURANÇA // ESCOLHA UM SISTEMA';
+  $('incInfo').textContent = (multi ? 'Escolha um ou mais objetivos (teclas 1–4). Combinar rende bônus, mas aumenta o risco na fuga.' : 'Escolha um sistema (teclas 1–3).') + ' Tela cenográfica: nada aqui é real.';
+  $('incNodeId').textContent = String(7 + inc.stage).padStart(2, '0');
+  $('incStatus').innerHTML = `<span></span>${multi ? 'DATACENTER · ROOT ACCESS' : 'SECURITY · PERIMETER LINK'}`;
+  list.forEach((o, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'perk'; b.dataset.id = o.id;
+    b.innerHTML = `<b>${i + 1} · ${o.name}</b>${o.desc}${multi ? `<small>risco ${'▮'.repeat(o.risk)}${'▯'.repeat(3 - o.risk)}</small>` : ''}`;
+    b.addEventListener('click', () => toggleIncOption(o.id, multi)); incOptionsEl.appendChild(b);
+  });
+  incConfirmEl.textContent = 'CONFIRMAR'; incConfirmEl.disabled = true; incTermEl.classList.remove('hidden'); startIncNet();
+}
+function toggleIncOption(id, multi) {
+  if (incPhase !== 'choose') return;
+  if (multi) { incSel.has(id) ? incSel.delete(id) : incSel.add(id); } else { incSel.clear(); incSel.add(id); }
+  [...incOptionsEl.children].forEach(b => b.classList.toggle('on', incSel.has(b.dataset.id))); incConfirmEl.disabled = incSel.size === 0;
+}
+function runIncSequence() {                                                    // texto cenográfico "digitando": conexão, bloqueio, avanço, resultado
+  incPhase = 'run'; incConfirmEl.disabled = true;
+  $('incStatus').innerHTML = '<span></span>EXECUTING · SIMULATION LOCK';
+  const names = { cameras: 'sensores-cam: desligando', reforcos: 'fila-reforço: pausando', drone: 'canal-drone: ampliando', derrubar: 'nó-central: derrubando', virus: 'nós: corrompendo (fictício)', dados: 'pacote-dados: copiando', destruir: 'núcleo: sobrecarga simulada' };
+  const lines = ['[SIM] conectando à rede fictícia …  OK', '[SIM] contornando firewall-ficção …  OK', ...[...incSel].map(id => `[SIM] ${names[id]} …  OK`), '[SIM] resultado: SUCESSO  — pressione CONTINUAR'];
+  incLogEl.textContent = ''; incLogTimers.forEach(clearTimeout); incLogTimers = [];
+  lines.forEach((l, i) => incLogTimers.push(setTimeout(() => {
+    incLogEl.textContent += l + '\n';
+    if (i === lines.length - 1) { incPhase = 'done'; incConfirmEl.textContent = 'CONTINUAR'; incConfirmEl.disabled = false; incConfirmEl.focus(); }
+  }, 420 * (i + 1))));
+}
+function applyIncChoice() {
+  const st = incStage(), sel = [...incSel];
+  if (st.choose === 'security') { inc.security = sel[0]; inc.fx = Arena.incursionEffects(inc.security, inc.targets); }
+  else {
+    inc.targets = sel; inc.fx = Arena.incursionEffects(inc.security, sel);
+    score += inc.fx.score; credits += inc.fx.credits; inc.alarmT = inc.fx.alarmSeconds;
+    if (inc.fx.speedMul < 1) enemies.forEach(e => { if (!e.dead) e.speed *= inc.fx.speedMul; });
+    if (sel.includes('destruir')) { [[20, 1.6, 18], [14, 1.6, 24], [24, 1.6, 12]].forEach(([x, y, z]) => blastFx(x, y, z, 3.2, 0xff6a3d, 0.7)); shake = Math.max(shake, 0.7); }
+    if (inc.fx.score) addFeed(`OBJETIVO FINAL  +${inc.fx.score}${inc.fx.credits ? ' · +' + inc.fx.credits + '¢' : ''}`, false);
+  }
+  closeIncTerm(); inc.choiceOpen = false; inc.hold = 0; sfx.objective(); enterIncStage(inc.stage + 1);
+  if (useTouch) locked = true;
+  else { canvas.requestPointerLock(); setTimeout(() => { if (!locked && alive && !(inc && inc.choiceOpen)) showOverlay('pause'); }, 400); }
+}
+incConfirmEl.addEventListener('click', () => { if (incPhase === 'choose' && incSel.size) runIncSequence(); else if (incPhase === 'done') applyIncChoice(); });
+function incTermKey(e) {
+  const k = parseInt(e.key, 10), multi = incStage().choose === 'target', list = multi ? Arena.INCURSION_TARGETS : Arena.INCURSION_SECURITY;
+  if (k >= 1 && k <= list.length) toggleIncOption(list[k - 1].id, multi);
+  else if (e.code === 'Enter') incConfirmEl.click();
+}
+function closeIncTerm() { incTermEl.classList.add('hidden'); cancelAnimationFrame(incNetRaf); incLogTimers.forEach(clearTimeout); incLogTimers = []; incPhase = 'choose'; }
+// Rede "em 3D": pontos giram e são projetados em 2D no canvas (perspectiva simples). Não usa WebGL.
+const incNodes = (() => { const n = [{ x: 0, y: 0, z: 0, k: 'core' }, { x: -1.6, y: 0.2, z: 0, k: 'gate' }];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) n.push({ x: 0.5 + c * 0.45, y: -0.7 + r * 0.7, z: -0.9 + (c % 2) * 1.8, k: 'rack' });
+  return n; })();
+function startIncNet() {
+  const g = incNetEl.getContext && incNetEl.getContext('2d'); if (!g) return;
+  const W = incNetEl.width, Hh = incNetEl.height;
+  const frame = now => {
+    const t = now / 1000, a = t * 0.5, ca = Math.cos(a), sa = Math.sin(a);
+    g.clearRect(0, 0, W, Hh); g.fillStyle = 'rgba(4,10,16,.92)'; g.fillRect(0, 0, W, Hh);
+    g.strokeStyle = 'rgba(77,231,255,.10)'; g.lineWidth = 1;
+    for (let x = 0; x <= W; x += 36) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, Hh); g.stroke(); }
+    for (let y = 0; y <= Hh; y += 28) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    g.fillStyle = 'rgba(151,204,218,.55)'; g.font = '9px ui-monospace, monospace'; g.fillText('NEXUS / ROUTE GRAPH', 14, 19); g.fillText(`FRAME ${String(Math.floor(t * 24) % 9999).padStart(4, '0')}`, W - 86, 19);
+    const dead = incSel.has('derrubar'), vir = incSel.has('virus'), boom = incSel.has('destruir'), steal = incSel.has('dados');
+    const P = incNodes.map(n => { const x = n.x * ca - n.z * sa, z = n.x * sa + n.z * ca, s = 260 / (260 + z * 90); return { x: W / 2 + x * 90 * s, y: Hh / 2 + n.y * 70 * s, s, k: n.k }; });
+    g.lineWidth = 1;
+    for (let i = 1; i < P.length; i++) {
+      g.strokeStyle = dead ? 'rgba(80,90,100,.4)' : boom ? 'rgba(255,106,61,.5)' : 'rgba(77,231,255,.35)';
+      g.beginPath(); g.moveTo(P[0].x, P[0].y); g.lineTo(P[i].x, P[i].y); g.stroke();
+      if (!dead && !boom) { const f = (t * (.16 + (i % 3) * .07) + i * .11) % 1; g.fillStyle = steal && i === 1 ? '#3ddc84' : '#ffc857'; g.fillRect(P[0].x + (P[i].x - P[0].x) * f - 1.5, P[0].y + (P[i].y - P[0].y) * f - 1.5, 3, 3); }
+    }
+    P.forEach((p, i) => {
+      const flick = vir && Math.sin(t * 9 + i * 2.1) > 0.2;
+      g.fillStyle = dead ? '#46505a' : boom ? (Math.sin(t * 8 + i) > 0 ? '#ff6a3d' : '#ffb04d') : flick ? '#9e7bff' : p.k === 'core' ? '#ffc857' : '#4de7ff';
+      g.beginPath(); g.arc(p.x, p.y, (p.k === 'core' ? 6 + Math.sin(t * 5) * 1.2 : 3.4) * p.s, 0, 7); g.fill();
+      if (p.k === 'core' && !dead) { g.strokeStyle = boom ? '#ff6a3d' : '#4de7ff'; g.globalAlpha = .4; g.beginPath(); g.arc(p.x, p.y, 14 * p.s, 0, 7); g.stroke(); g.globalAlpha = 1; }
+    });
+    if (steal) { const f = (t * 0.8) % 1; g.fillStyle = '#3ddc84'; g.fillRect(P[0].x + (P[1].x - P[0].x) * f - 3, P[0].y + (P[1].y - P[0].y) * f - 3, 6, 6); }   // "pacote de dados" indo ao portão
+    incNetRaf = requestAnimationFrame(frame);
+  };
+  cancelAnimationFrame(incNetRaf); incNetRaf = requestAnimationFrame(frame);
 }
 
 /* =====================================================================
@@ -764,12 +1026,15 @@ const magOf = w => Math.ceil(w.mag * stats.mag);       // tamanho do pente com o
 const ammoState = WEAPONS.map(w => ({ ammo: w.mag, reserve: w.reserve }));
 let enemies = [], pickups = [], fx = [], projectiles = [], grenades = [];
 let objective = null, objectiveMarkers = [], interactQueued = false, interactHeld = false;
+let inc = null, incVictory = false;   // estado do modo Incursão (null nos outros modos)
+const terminalInteraction = { id: null, active: false, canUse: false, lockout: false, focus: 0 };
 let enemySerial = 0, squadRefreshT = 0;
 const cur = () => WEAPONS[curW];
 const isUnlocked = i => (WEAPONS[i].unlock || 1) <= Math.max(wave, 1);   // arma liberada pela onda atual?
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 function updateObjectiveHud() {
   if (!el.objectivePanel) return;
+  if (inc) { updateIncursionHud(); return; }
   const active = objective && !objective.complete;
   el.objectivePanel.classList.toggle('hidden', !objective);
   if (!objective) return;
@@ -856,11 +1121,12 @@ const blastPool = makePool(() => {
   const flame = new THREE.Mesh(blastGeo, new THREE.MeshBasicMaterial({ color: 0xff812c, transparent: true, opacity: 0.58, depthWrite: false, blending: THREE.AdditiveBlending })); flame.visible = false;
   ring.rotation.x = Math.PI / 2; group.add(core, flame, ring); group.userData = { core, ring, flame }; return addHidden(group);
 });
-const explosionLight = new THREE.PointLight(0xff973f, 0, 8, 2); explosionLight.visible = false; scene.add(explosionLight);
+// Mantida na contagem de luzes desde o início: alternar visible altera variantes de shader no Three.js r128.
+const explosionLight = new THREE.PointLight(0xff973f, 0, 8, 2); explosionLight.visible = true; scene.add(explosionLight);
 let explosionLightT = 0, explosionLightPower = 0;
 function pulseExplosionLight(x,y,z,R) {
   if (appliedQuality === 'low') return;
-  explosionLight.position.set(x,y,z); explosionLightPower = Math.min(3.6,1.5+R*.32); explosionLightT = .22; explosionLight.visible = true;
+  explosionLight.position.set(x,y,z); explosionLightPower = Math.min(3.6,1.5+R*.32); explosionLightT = .22;
 }
 const fxPools = { line: tracerPool, chunk: chunkPool, blast: blastPool };
 const muzzleSmokeGeo = new THREE.SphereGeometry(1,6,5), muzzleSmokeDir = new THREE.Vector3(), muzzleSmokeTint = new THREE.Color(), muzzleSmokeSource = new THREE.Color();
@@ -955,11 +1221,11 @@ function updateFx(dt) {
     }
     if (f.life <= 0) { fxPools[f.kind].put(f.obj); fx.splice(i, 1); }       // devolve ao pool em vez de descartar
   }
-  if (appliedQuality === 'low') { explosionLightT = 0; explosionLight.intensity = 0; explosionLight.visible = false; }
-  else if (explosionLightT > 0) { explosionLightT = Math.max(0,explosionLightT-dt); explosionLight.intensity = explosionLightPower * (explosionLightT/.22) ** 2; explosionLight.visible = explosionLightT > 0; }
-  else { explosionLight.intensity = 0; explosionLight.visible = false; }
+  if (appliedQuality === 'low') { explosionLightT = 0; explosionLight.intensity = 0; }
+  else if (explosionLightT > 0) { explosionLightT = Math.max(0,explosionLightT-dt); explosionLight.intensity = explosionLightPower * (explosionLightT/.22) ** 2; }
+  else { explosionLight.intensity = 0; }
 }
-function clearFx() { fx.forEach(f => fxPools[f.kind].put(f.obj)); fx.length = 0; explosionLightT = explosionLightPower = 0; explosionLight.intensity = 0; explosionLight.visible = false; }
+function clearFx() { fx.forEach(f => fxPools[f.kind].put(f.obj)); fx.length = 0; explosionLightT = explosionLightPower = 0; explosionLight.intensity = 0; }
 
 // Marcas de impacto rasas, com limite temporal e geometrias reutilizadas.
 const markCircleGeo = new THREE.CircleGeometry(0.5, 9), markRingGeo = new THREE.RingGeometry(0.20, 0.48, 9);
@@ -1028,7 +1294,7 @@ function updateArenaAtmosphere(dt) {
     const p = new THREE.Vector3(side === 0 ? -d : side === 1 ? d : (Math.random()-.5)*ARENA,
       0.7 + Math.random() * 2.1, side === 2 ? -d : side === 3 ? d : (Math.random()-.5)*ARENA);
     const n = new THREE.Vector3(side === 0 ? 1 : side === 1 ? -1 : 0, 0, side === 2 ? 1 : side === 3 ? -1 : 0);
-    sparkBurst(p, Arena.MAPS[curMap].strip, 2, n); ambientSparkT = 5.5 + Math.random() * 5.5;
+    sparkBurst(p, (curMap <= -2 ? Arena.INCURSION_LEVELS[-2 - curMap] : Arena.MAPS[curMap]).strip, 2, n); ambientSparkT = 5.5 + Math.random() * 5.5;
   }
 }
 
@@ -1090,6 +1356,9 @@ const orbGeo = new THREE.BoxGeometry(0.22, 0.22, 0.22), orbMat = new THREE.MeshB
 
 // "Rig" = o modelo 3D de um inimigo (grupo + peças). Montado uma vez por tipo e reutilizado depois da morte.
 const rigPool = {};
+const antennaGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.38, 5);   // compartilhada entre todos os rigs
+const rigBasicMats = {};
+const rigBasic = color => rigBasicMats[color] || (rigBasicMats[color] = new THREE.MeshBasicMaterial({ color }));
 function buildRig(key) {
   const T = TYPES[key], g = new THREE.Group();
   const mBody = new THREE.MeshLambertMaterial({ color: T.color });
@@ -1110,9 +1379,9 @@ function buildRig(key) {
   const armorMat = new THREE.MeshLambertMaterial({ color: T.color, emissive: T.color, emissiveIntensity: 0.08 });
   const armorL = new THREE.Mesh(eGeo.armor, armorMat), armorR = new THREE.Mesh(eGeo.armor, armorMat);
   armorL.position.set(-0.45, 1.53, 0.03); armorR.position.set(0.45, 1.53, 0.03);
-  const badge = new THREE.Mesh(eGeo.badge, new THREE.MeshBasicMaterial({ color: T.boss ? 0xff4f7b : T.healer ? 0x3ddc84 : 0x4de7ff })); badge.position.set(0, 1.15, 0.245);
-  const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 0.38, 5), armorMat); antenna.position.set(0.27, 2.13, -0.08);
-  const beacon = new THREE.Mesh(eGeo.badge, new THREE.MeshBasicMaterial({ color: T.color })); beacon.scale.setScalar(0.48); beacon.position.set(0.27, 2.35, -0.08);
+  const badge = new THREE.Mesh(eGeo.badge, rigBasic(T.boss ? 0xff4f7b : T.healer ? 0x3ddc84 : 0x4de7ff)); badge.position.set(0, 1.15, 0.245);
+  const antenna = new THREE.Mesh(antennaGeo, armorMat); antenna.position.set(0.27, 2.13, -0.08);
+  const beacon = new THREE.Mesh(eGeo.badge, rigBasic(T.color)); beacon.scale.setScalar(0.48); beacon.position.set(0.27, 2.35, -0.08);
   g.add(body, head, eye, legL, legR, armL, armR, hpBg, hpBar, armorL, armorR, badge, antenna, beacon);
   // Visual dos especiais: bomba no peito (kamikaze), escudo na frente (escudeiro), orbe flutuante (curandeiro)
   let shield = null, orb = null;
@@ -1140,7 +1409,8 @@ function spawnEnemy(key) {
 
   // Ponto de spawn nas bordas, longe do jogador
   let x = 0, z = 0;
-  for (let i = 0; i < 12; i++) {
+  if (inc) [x, z] = Arena.pickIncursionSpawn(px, pz, (a, b) => blocked(a, b, .6), Math.random, incData().spawns);   // Incursão: nasce dentro das salas/corredores
+  else for (let i = 0; i < 12; i++) {
     const side = Math.random() < .5 ? 1 : -1;
     if (Math.random() < .5) { x = side * (ARENA - 2); z = (Math.random() * 2 - 1) * (ARENA - 2); }
     else { z = side * (ARENA - 2); x = (Math.random() * 2 - 1) * (ARENA - 2); }
@@ -1152,7 +1422,7 @@ function spawnEnemy(key) {
   const hp0 = Arena.enemyHp(T, wave);
   const e = {
     ...rig, key, T,
-    id: ++enemySerial, hp: hp0 * Arena.difficultyConfig(currentDifficulty).hp, maxHp: hp0 * Arena.difficultyConfig(currentDifficulty).hp, speed: Arena.enemySpeed(T, wave) * Arena.difficultyConfig(currentDifficulty).speed,
+    id: ++enemySerial, hp: hp0 * Arena.difficultyConfig(currentDifficulty).hp, maxHp: hp0 * Arena.difficultyConfig(currentDifficulty).hp, speed: Arena.enemySpeed(T, wave) * Arena.difficultyConfig(currentDifficulty).speed * (inc ? inc.fx.speedMul : 1),
     attackDamage: T.dmg * Arena.difficultyConfig(currentDifficulty).damage,
     nextAtk: time + Math.random() * 0.35, nextHeal: 1, detonated: false, flash: 0, shieldHit: 0, hitReact: 0, hitHeadReact: false, hitSide: 1, deathT: 0, deathDur: 0, recycled: false, flankT: 1.5 + Math.random() * 1.5, phase: Math.random() * 6, side: Math.random() < .5 ? 1 : -1, dead: false,
     path: null, pathI: 0, pathT: Math.random() * 0.4, pathGX: 0, pathGZ: 0, squad: null, coverPoint: null, coverUntil: 0, nextCoverSearch: time + 1 + Math.random() * 1.4,           // estado do A*
@@ -1225,14 +1495,16 @@ function refreshPerfPanel() {
     `Recursos ${Math.round(sample.geometries)} geometrias · ${Math.round(sample.textures)} texturas`,
     `Ativos ${Math.round(sample.enemies)} inimigos · ${Math.round(sample.projectiles)} projéteis · ${Math.round(sample.effects)} FX · ${Math.round(sample.marks)} marcas · ${Math.round(sample.dust)} poeira`,
     `IA/${duration.toFixed(1)}s blocked ${blockedCalls} · lineClear ${lineCalls} · A* ${pathCalls} (${pathMs.toFixed(2)} ms)`,
+    `GPU ${gpuInfo.name}${gpuInfo.software ? '  ⚠ SOFTWARE (sem aceleração)' : ''}`,
+    `Flags ${Object.entries(FLAG).filter(([, v]) => v).map(([k, v]) => k + '=' + v).join(' ') || 'nenhuma'}`,
     `Qualidade ${quality} · PR ${sample.pixelRatio.toFixed(2)} · canvas ${renderer.domElement.width}×${renderer.domElement.height}`
   ].join('\n');
 }
 function downloadPerfCsv() {
   if (!perfTelemetry) return;
-  const blob = new Blob([perfTelemetry.toCSV()], { type: 'text/csv;charset=utf-8' });
+  const blob = new Blob([`# gpu=${gpuInfo.name}\n# software=${gpuInfo.software}\n# dpr=${devicePixelRatio}\n# canvas=${renderer.domElement.width}x${renderer.domElement.height}\n# flags=${JSON.stringify(FLAG)}\n# ua=${navigator.userAgent}\n`+perfTelemetry.toCSV()], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = `arena-fps-p16-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
+  link.href = url; link.download = `arena-fps-p19-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`;
   document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function pickType() { return Arena.pickType(wave); }
@@ -1386,7 +1658,7 @@ function killEnemy(e, head, silent = false) {           // silent = morte por su
     sfx.kill();
     if (Math.random() < 0.3) dropPickup(p.x, p.z);
   }
-  if (toSpawn === 0 && enemies.every(x => x.dead)) { banner('ONDA LIMPA'); waveDelay = 3; }
+  if (!inc && toSpawn === 0 && enemies.every(x => x.dead)) { banner('ONDA LIMPA'); waveDelay = 3; }
   updateHUD();
 }
 function updateDeathAnimations(dt) {
@@ -1734,6 +2006,7 @@ function animateReloadParts(dt) {
 function hurtPlayer(d, sourceX = px, sourceZ = pz) {
   if (!alive) return;
   if (perfScenarioActive) return;
+  if (terminalInteraction.active) cancelTerminalInteraction('DANO RECEBIDO · OPERAÇÃO CANCELADA');
   health = Math.max(0, health - d); vig = 0.9;
   shake = Math.max(shake, Math.min(0.5, d / 40)); lastHurt = time; combo = 1; comboT = 0;        // levar dano: treme a tela, para a regeneração e quebra o combo
   const incoming = Math.PI - (Math.atan2(sourceX - px, sourceZ - pz) - yaw);   // 0 = fonte à frente, sentido horário
@@ -1743,12 +2016,13 @@ function hurtPlayer(d, sourceX = px, sourceZ = pz) {
 }
 function gameOver() {
   if (!alive) return;
-  alive = false; mouseHeld = false; scoped = false; locked = false; sfx.over();
+  if (terminalInteraction.active) cancelTerminalInteraction('OPERADOR INCAPACITADO');
+  alive = false; mouseHeld = false; scoped = false; locked = false; if (incVictory) sfx.objective(); else sfx.over();
   const result = career.finishRun({ score, wave, kills, mode: currentMode, difficulty: currentDifficulty });
   best = Math.max(result.best, currentMode === 'survival' && currentDifficulty === 'normal' ? best : 0);
   if (currentMode === 'survival' && currentDifficulty === 'normal' && score > best) { best = score; try { localStorage.setItem('arenaFpsBest', best); } catch (_) {} }
   notifyAchievements(result.earned); refreshCareerUI();
-  document.exitPointerLock();
+  closeIncTerm(); document.exitPointerLock();
   showOverlay('over');
 }
 function resetGame() {
@@ -1757,6 +2031,7 @@ function resetGame() {
   clearPickups(); clearFx(); clearCasings(); clearSurfaceImpacts();
   projectiles.forEach(p => projPool.put(p.m)); grenades.forEach(g => grenadePool.put(g.m));
   grenades = []; introQueue = []; projectiles = []; enemies = [];
+  if (inc && inc.marker) scene.remove(inc.marker); inc = null; incVictory = false; closeIncTerm(); 
   clearObjectiveMarkers(); interactQueued = interactHeld = false;
   currentMode = $('modeSelect').value || 'survival'; currentDifficulty = $('difficultySelect').value || 'normal'; refreshRecord(); if (!perfMode) career.beginDay(); enemySerial = 0;
   perks = {}; shop = { dmg: 0, hp: 0, dash: 0 }; shopBought.buyAmmo = 0; credits = 0; combo = 1; comboT = 0; maxCombo = 1; shake = 0; lastHurt = 0; beatT = 0; aliveTime = 0; handGrenades = 3; machineGunHeat = 0; el.feed.innerHTML = '';
@@ -1765,7 +2040,8 @@ function resetGame() {
   px = 0; pz = 0; py = EYE; vx = vz = vy = 0; yaw = 0; pitch = 0; dashQueued = false; dashTime = 0; dashCooldown = 0; adsT = 0;
   health = maxHealth; score = 0; kills = 0; wave = 0; reloading = false; scoped = false; kick = 0;
   curW = -1; selectWeapon(0);
-  alive = true; startWave();
+  alive = true;
+  if (currentMode === 'incursion') startIncursion(); else startWave();
 }
 function startWave() {
   wave++; const profile = Arena.waveProfile(wave); bossPending = wave % 5 === 0; toSpawn = Math.max(3, Math.ceil(Arena.waveCount(wave) * Arena.difficultyConfig(currentDifficulty).count)); spawnT = bossPending ? 2.2 : 1; waveDelay = 3;
@@ -1803,6 +2079,7 @@ function assistAim(dt) {
 }
 function update(dt) {
   pollGamepad(dt);
+  refreshTerminalInteraction();
   /* --- Movimento do jogador (WASD) --- */
   let f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);        // let: o joystick soma depois
   let r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -1818,7 +2095,8 @@ function update(dt) {
   dashTime = Math.max(0, dashTime - dt);
   if (dashTime > 0 && len === 0) { mx = -Math.sin(yaw); mz = -Math.cos(yaw); }
   const sprint = keys.ShiftLeft || (useTouch && inMag > 0.96);   // joystick até o limite = correr
-  const spd = dashTime > 0 ? 22 : (sprint ? 10 : 6.5) * (scoped ? 0.45 : 1) * (len > 0 ? inMag : 1) * stats.speed;
+  const operationSlow = terminalInteraction.active ? 0.18 : 1;
+  const spd = dashTime > 0 ? 22 * operationSlow : (sprint ? 10 : 6.5) * (scoped ? 0.45 : 1) * (len > 0 ? inMag : 1) * stats.speed * operationSlow;
   const k = Math.min(1, dt * 12);                 // suavização da aceleração
   vx += (mx * spd - vx) * k; vz += (mz * spd - vz) * k;
   // Eixos separados = "deslizar" nas paredes em vez de travar
@@ -1832,15 +2110,22 @@ function update(dt) {
   if (useTouch && assistOn && mouseHeld) assistAim(dt);            // mira assistida leve só no toque
   if (gamepadConnected && !useTouch) setAds(gamepadAdsHeld);
   /* --- Câmera (ordem YXZ: yaw e pitch independentes) --- */
+  if (terminalInteraction.active && inc) {
+    const t = incTarget(), dx = t.x - px, dz = t.z - pz, dist = Math.max(.1, Math.hypot(dx, dz));
+    const targetYaw = Math.atan2(-dx, -dz), targetPitch = Math.atan2(1.48 - py, dist);
+    yaw += Math.atan2(Math.sin(targetYaw - yaw), Math.cos(targetYaw - yaw)) * Math.min(1, dt * 7);
+    pitch += (targetPitch - pitch) * Math.min(1, dt * 7);
+  }
   pitch = clamp(pitch, -1.5, 1.5);
   const sh = shake * shake;                                       // tremor de tela (explosões, dano): curva quadrática
   camera.rotation.set(pitch + (Math.random() - 0.5) * sh * 0.12, yaw + (Math.random() - 0.5) * sh * 0.12, (Math.random() - 0.5) * sh * 0.06);
-  camera.position.set(px, py, pz); shake = Math.max(0, shake - dt * 1.6);
+  const focusPush = terminalInteraction.focus * .12;
+  camera.position.set(px - Math.sin(yaw) * focusPush, py + terminalInteraction.focus * .035, pz - Math.cos(yaw) * focusPush); shake = Math.max(0, shake - dt * 1.6);
   audio.setListener(px, pz, yaw);
   camera.updateMatrixWorld(true);
 
   /* --- Zoom da sniper --- */
-  const wantFov = scoped ? baseFov / cur().zoom : baseFov;
+  const wantFov = scoped ? baseFov / cur().zoom : baseFov - terminalInteraction.focus * 6;
   if (Math.abs(camera.fov - wantFov) > 0.1) {
     camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 14); camera.updateProjectionMatrix();
   }
@@ -1923,6 +2208,8 @@ function update(dt) {
   radarT += dt; if (radarT > 0.05) { radarT = 0; drawRadar(); }
 
   /* --- Ondas e spawn --- */
+  if (inc) updateIncursion(dt);                                   // Incursão: reforços contínuos e terminais no lugar das ondas
+  else {
   if (bossPending && toSpawn === 0) { bossPending = false; spawnEnemy('boss'); }     // segurança: onda sem ninguém para nascer
   if (toSpawn > 0) {
     spawnT -= dt;
@@ -1935,7 +2222,9 @@ function update(dt) {
     if (waveDelay <= 0) { health = Math.min(maxHealth, health + 20); score += wave * 50; addFeed(`BÔNUS DE ONDA  +${wave * 50}`, false); openPerks(); }   // próxima onda só depois de escolher o upgrade
   }
 
-  updateObjective(dt);
+  }
+
+  if (!inc) updateObjective(dt);
   /* --- IA dos inimigos: A*, cobertura, flanqueamento de esquadrão e foco coordenado --- */
   pathBudget = 3;                                         // no máximo 3 buscas A* por quadro (reparte o custo)
   squadRefreshT -= dt;
@@ -2081,7 +2370,7 @@ let radarOn = true, radarT = 0;
 const RADAR_COLOR = e => e.T.boss ? '#ff3b82' : e.T.explodes ? '#ff8a1f' : e.T.shield ? '#59a7ff' : e.T.healer ? '#3ddc84' : e.T.ranged ? '#c77dff' : '#ff5a4d';
 function drawRadar() {
   if (!radarOn || !rctx || typeof rctx.arc !== 'function') return;
-  const S = radarEl.width, c = S / 2, edge = c - 6, k = edge / RADAR_RANGE;   // k = pixels por metro
+  const S = radarEl.width, c = S / 2, edge = c - 6, droneOn = !!(inc && inc.droneT > 0), k = edge / (droneOn ? ARENA * 1.25 : RADAR_RANGE);   // k = pixels por metro
   rctx.clearRect(0, 0, S, S);
   rctx.save(); rctx.beginPath(); rctx.arc(c, c, c - 1, 0, Math.PI * 2); rctx.clip();
   // Mundo → radar: gira tudo pelo yaw para que "frente" fique sempre para CIMA
@@ -2105,6 +2394,7 @@ function drawRadar() {
     if (d > edge) { x = c + dx / d * edge; y = c + dy / d * edge; far = true; }   // fora do alcance: ponto "colado" na borda
     rctx.globalAlpha = far ? 0.5 : 1; rctx.fillStyle = RADAR_COLOR(e);
     rctx.beginPath(); rctx.arc(x, y, e.T.boss ? 5 : 3, 0, Math.PI * 2); rctx.fill();
+    if (droneOn) { rctx.strokeStyle = '#fff'; rctx.lineWidth = 1; rctx.beginPath(); rctx.arc(x, y, 6, 0, Math.PI * 2); rctx.stroke(); }   // marcado pelo drone
   }
   rctx.globalAlpha = 1; rctx.fillStyle = '#fff';                                  // jogador (triângulo apontando para cima)
   rctx.beginPath(); rctx.moveTo(c, c - 6); rctx.lineTo(c - 4.5, c + 4.5); rctx.lineTo(c + 4.5, c + 4.5); rctx.closePath(); rctx.fill();
@@ -2193,7 +2483,7 @@ document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   if (!locked) perfWasRunning = false;
   if (locked) el.overlay.classList.add('hidden');
-  else { mouseHeld = false; scoped = false; if (alive && !perkOpen) showOverlay('pause'); }
+  else { mouseHeld = false; scoped = false; if (alive && !perkOpen && !(inc && inc.choiceOpen)) showOverlay('pause'); }
 });
 if (perfMode) document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') perfWasRunning = false;
@@ -2267,6 +2557,7 @@ document.addEventListener('keydown', e => {
   if (perfMode && e.code === 'F8') { e.preventDefault(); if (!e.repeat) perfPanel.hidden = !perfPanel.hidden; return; }
   if (perfMode && e.code === 'F9') { e.preventDefault(); if (!e.repeat) restartPerfScenario(); return; }
   if (perfMode && e.code === 'F10') { e.preventDefault(); if (!e.repeat) downloadPerfCsv(); return; }
+  if (inc && inc.choiceOpen) { incTermKey(e); return; }                          // terminal de invasão (fictício) aberto
   if (perkOpen) {                                                                // tela de upgrades: 1–3 escolhem o cartão, 4–7 compram na loja
     const k = parseInt(e.key, 10); if (k >= 1 && k <= 3) pickPerk(k - 1); else if (k >= 4 && k <= 7) buyShop(['buyDamage', 'buyAmmo', 'buyHealth', 'buyDash'][k - 4]); return;
   }   // tela de upgrades: teclas 1–3
@@ -2274,6 +2565,7 @@ document.addEventListener('keydown', e => {
   if (e.code === 'KeyR') startReload();
   if (e.code === 'KeyQ') dashQueued = true;
   if (e.code === 'KeyG') throwHandGrenade();
+  if (e.code === 'KeyF') useDrone();
   if (e.code === 'KeyE' && objective && objective.id === 'relay') interactObjective();
   const n = parseInt(e.key, 10);
   if (n >= 1 && n <= WEAPONS.length) {
@@ -2282,7 +2574,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.code === 'Space') e.preventDefault();
 });
-document.addEventListener('keyup', e => { keys[e.code] = false; });
+document.addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyE') terminalInteraction.lockout = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseHeld = false; });
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -2347,7 +2639,7 @@ bindButton('bReload', () => { if (locked && alive) startReload(); });
 bindButton('bJump', () => { if (locked && alive) keys.Space = true; }, () => { keys.Space = false; });
 bindButton('bDash', () => { if (locked && alive) dashQueued = true; });
 bindButton('bGrenade', throwHandGrenade);
-bindButton('bInteract', () => { interactObjective(); interactHeld = true; }, () => { interactHeld = false; });
+bindButton('bInteract', () => { interactObjective(); interactHeld = true; }, () => { interactHeld = false; terminalInteraction.lockout = false; });
 bindButton('bPause', () => pauseTouch());
 // Trocar de arma: tocar num slot, ou tocar no painel da arma (próxima liberada)
 el.slots.addEventListener('pointerdown', e => {
@@ -2394,15 +2686,18 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 /* ---- Preferências salvas no aparelho (localStorage, com try/catch: pode estar bloqueado) ---- */
 const PREF_KEY = 'arenaFpsPrefs';
 const prefEls = { sens: $('sensRange'), volume: $('volumeRange'), fov: $('fovRange'), quality: $('qualitySelect'), ctrl: ctrlSelect, radar: $('radarSelect'), assist: $('assistSelect'), touchSens: $('touchSens'), btnScale: $('btnScale'), mode: $('modeSelect'), difficulty: $('difficultySelect') };
-let appliedQuality = null;
 function applyPrefs() {                              // aplica o valor atual dos controles do menu ao jogo
   SENS = +prefEls.sens.value; audio.setVolume(+prefEls.volume.value);
   baseFov = +prefEls.fov.value; if (!scoped) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
   if (appliedQuality !== prefEls.quality.value) {      // qualidade = resolução (só refaz quando muda)
     appliedQuality = prefEls.quality.value; const q = appliedQuality;
-    prCap = curPR = q === 'low' ? .75 : q === 'high' ? Math.min(devicePixelRatio, 2) : Math.min(devicePixelRatio, 1.25);
+    prCap = curPR = FLAG.scale || (q === 'low' ? .75 : q === 'high' ? Math.min(devicePixelRatio, 2) : Math.min(devicePixelRatio, 1.25));
     renderer.setPixelRatio(curPR); renderer.setSize(innerWidth, innerHeight);
-    cornerLights.forEach(l => { l.userData.baseIntensity = q === 'low' ? 0 : 1.1; l.intensity = l.userData.baseIntensity; });   // qualidade baixa: sem luzes de canto (mais leve no celular)
+    const lite = q === 'low' || FLAG.noLights;           // modo leve: sem luzes de canto nem de explosão (menos cálculo por pixel)
+    cornerLights.forEach(l => { l.userData.baseIntensity = lite ? 0 : 1.1; l.intensity = l.userData.baseIntensity; l.visible = !lite; });
+    explosionLight.visible = !lite;
+    if (FLAG.noLights) [muzzleLight, vmKey, vmRim].forEach(l => { l.visible = false; });
+    if (curMap !== -1) loadMap(curMap);                  // refaz materiais da arena e reaquece (acontece no menu, nunca no combate)
   }
   TOUCH_LOOK = +prefEls.touchSens.value; assistOn = prefEls.assist.value === 'on';
   radarOn = prefEls.radar.value === 'on'; radarEl.classList.toggle('off', !radarOn);
@@ -2440,12 +2735,12 @@ function showOverlay(mode, keepHidden = false) {
   if (!keepHidden) el.overlay.classList.remove('hidden');
   if (mode === 'menu') {
     el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
-    if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P16:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
+    if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P19:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
   } else if (mode === 'pause') {
     el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = helpText() + (perkSummary() ? `\n<b>Upgrades:</b> ${perkSummary()}` : ''); el.btn.textContent = 'CONTINUAR';
   } else {
-    el.title.innerHTML = 'GAME <span>OVER</span>';
-    el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
+    el.title.innerHTML = incVictory ? 'MISSÃO <span>CUMPRIDA</span>' : 'GAME <span>OVER</span>';
+    el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão' : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
     el.btn.textContent = 'JOGAR NOVAMENTE';
   }
   el.btn.dataset.mode = mode;
@@ -2468,7 +2763,8 @@ el.btn.addEventListener('click', () => {
 /* =====================================================================
    17. LOOP PRINCIPAL
    ===================================================================== */
-let last = performance.now(), perfAcc = 0, perfN = 0;
+let last = performance.now(), perfAcc = 0, perfN = 0, calmWindows = 0;
+function setRes() { renderer.setPixelRatio(curPR); renderer.setSize(innerWidth, innerHeight); }
 function loop(now) {
   requestAnimationFrame(loop);
   const frameMs = Math.max(0, now - last);
@@ -2480,10 +2776,13 @@ function loop(now) {
     const updateStart = perfMode ? performance.now() : 0;
     time += dt; update(dt);
     if (perfMode) updateMs = performance.now() - updateStart;
-    if (useTouch) {                                 // resolução adaptativa: se a média passar de ~37 FPS ruins, reduz a nitidez
+    if (!perfMode && !FLAG.scale) {                 // resolução adaptativa (celular e PC): cai rápido, sobe devagar
       perfAcc += dt; perfN++;
-      if (perfN >= 90) {
-        if (perfAcc / perfN > 0.027 && curPR > 0.55) { curPR = Math.max(0.55, curPR * 0.85); renderer.setPixelRatio(curPR); renderer.setSize(innerWidth, innerHeight); }
+      if (perfN >= 60) {
+        const avg = perfAcc / perfN;
+        if (avg > 0.026 && curPR > 0.55) { curPR = Math.max(0.55, curPR * 0.85); calmWindows = 0; setRes(); }
+        else if (avg < 0.0185 && curPR < prCap) { if (++calmWindows >= 3) { curPR = Math.min(prCap, curPR * 1.1); calmWindows = 0; setRes(); } }
+        else calmWindows = 0;
         perfAcc = 0; perfN = 0;
       }
     }
@@ -2523,8 +2822,41 @@ function loop(now) {
     if (now - perfLastUi >= 500) { refreshPerfPanel(); perfLastUi = now; }
   }
 }
+
+/* Pré-aquece shaders, geometrias e texturas antes do combate e no banner após trocar arena. */
+function warmScene() {
+  const previous = [];
+  try {
+    scene.traverse(o => {
+      if (o.isMesh || o.isPoints || o.isLine || o.isSprite) {
+        previous.push([o, o.visible, o.frustumCulled]);
+        o.visible = true; o.frustumCulled = false;
+      }
+    });
+    renderer.compile(scene, camera);
+    renderer.render(scene, camera);
+  } catch (err) {
+    console.warn('aquecimento ignorado:', err);
+  } finally {
+    previous.forEach(([o, visible, frustumCulled]) => { o.visible = visible; o.frustumCulled = frustumCulled; });
+  }
+}
+function prewarmAll() {
+  Object.keys(TYPES).forEach(key => {
+    if (!(rigPool[key] && rigPool[key].length)) {
+      const rig = buildRig(key); scene.add(rig.g); rig.g.userData.warm = rig;
+      (rigPool[key] = rigPool[key] || []).push(rig);
+    }
+  });
+  warmScene();
+  Object.keys(rigPool).forEach(key => rigPool[key].forEach(rig => {
+    if (rig.g.userData.warm) { scene.remove(rig.g); rig.g.userData.warm = null; }
+  }));
+  warmReady = true;
+}
 guns[0].visible = true;
 updateHUD();
+prewarmAll();
 showOverlay('menu');
 loadPrefs(); applyPrefs();                          // restaura ajustes salvos (modo, dificuldade, controles e qualidade)
 applySkin(); if (!perfMode) career.beginDay(); refreshCareerUI(); syncRunSelection();

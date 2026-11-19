@@ -1,11 +1,159 @@
-# Relatório atual — Arena FPS v8 · Pacote 16 unificado
+# Relatório atual — Arena FPS v8 · Pacote 22
 
-**Data:** 17/11/2026  
-**Projeto:** Arena FPS — jogo web 3D com Three.js r128, scripts JavaScript clássicos e namespace `Arena`.
+**Data:** 18/11/2026 (p22) — inclui p21, p20, p19 e os pacotes anteriores.  
+**Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 20 — Modo Incursão: prédio em salas, terminais, escolhas e fuga (18/11/2026)
+
+Baseado no plano `IDEIAS-FUTURAS.md` e nas imagens de referência (mapa da estação em blocos, Hadley's Hope bloco C, corredor "SECURITY" e HUD tático).
+
+### Ordem das atividades (Fácil → Médio → Difícil)
+| # | Nível | Atividade | Conceito |
+|---|---|---|---|
+| 1 | Fácil | Opção "Incursão (prédio)" no menu e arquivo `incursion.js` (dados + regras puras) | separação dados/regra |
+| 2 | Fácil | Mapa "Complexo": corredores em cruz de 6 m, 4 salas com portas de 4 m (segurança, rede, datacenter, alojamento), teto e luzes de LED sem luz dinâmica | blocos AABB, material compartilhado |
+| 3 | Fácil | Terminais (mesa + tela) e marcador do objetivo atual | reuso de geometrias |
+| 4 | Médio | Invasão: segurar E perto do console enche a barra; inimigo perto atrasa (×0,55) | estado + `dt` |
+| 5 | Médio | 4 setores (infiltrar, rede, datacenter, fuga) com reforços contínuos e cura/munição ao avançar | máquina de estados |
+| 6 | Médio | Spawns dentro do prédio (15 pontos, longe do jogador e fora de paredes) | filtro por distância |
+| 7 | Médio | Drone (tecla F): marca todos os inimigos no radar por 10 s (16 s se liberado) | cooldown |
+| 8 | Difícil | Escolha de segurança (1 de 3) e objetivo final (1 ou mais de 4: derrubar, vírus, roubar dados, destruir) com efeitos somados em `Arena.incursionEffects` | função pura testável |
+| 9 | Difícil | Tela de invasão cenográfica: rede "3D" (pontos projetados em canvas 2D), registro `[SIM]` digitando, estados escolher → executar → continuar | projeção em perspectiva |
+| 10 | Difícil | Alarme (60–75 s) só com cores, depois "resposta total"; fuga até a saída de serviço; vitória "MISSÃO CUMPRIDA" | sem recompilar shaders |
+
+### Justificativa da lógica
+- **Regras puras em `incursion.js`**: os efeitos das escolhas ficam fora do DOM, então os testes rodam em Node.
+- **Sem luz dinâmica nova**: mudar luzes no Three.js r128 recompila shaders; o alarme troca só cor de faixa e de neblina.
+- **Fictício**: a tela de invasão é um texto e um desenho; nenhum comando ou rede real.
+- **Não mexe** em armas, dano, IA, colisão ou balanceamento. As armas liberam pelo "wave" interno (2, 4, 6, 8) como nas ondas.
+
+### Testes
+- `./test.sh`: caminho A* do centro até os 3 terminais e a saída; centro livre; efeitos somados; spawn longe; sintaxe.
+- Chromium (SwiftShader), fluxo completo automatizado: setor 1 → modal de segurança (3 opções) → modal de objetivo final (4 opções, combinando 3) → fuga com alarme → saída → "MISSÃO CUMPRIDA". 0 erros de JS.
+
+### Limites
+- Sem teste em GPU real; o desempenho do mapa novo no aparelho do usuário não foi medido (use `?perf=1`).
+- O drone marca no radar, não em 3D através das paredes.
+- Salas ainda simples (blocos); sem portas animadas, sem torretas nem câmeras como objetos.
+- Versão em um bloco só; o prédio em vários blocos (como o mapa A–E) fica para depois.
+
+---
+
+## Pacote 19 — Modo Baixo real, piso legível, resolução adaptativa no PC e diagnóstico de GPU (18/11/2026)
+
+### Ordem das atividades (Fácil → Médio → Difícil)
+| # | Nível | Atividade |
+|---|---|---|
+| 1 | Fácil | `floorTint` por mapa em `maps.js` (Hangar 0x959994, Pátio 0xa8916c, Fábrica 0x7fa89c): piso com cor própria e legível |
+| 2 | Fácil | Painel/CSV de diagnóstico renomeados para P19; cache do service worker `arena-fps-v8-p19` |
+| 3 | Fácil | Interruptores por URL: `?semluzes=1 &simples=1 &escala=0.5 &semneblina=1 &sempoeira=1` |
+| 4 | Médio | GPU (`WEBGL_debug_renderer_info`), devicePixelRatio, tamanho do canvas e flags no painel e no cabeçalho do CSV; aviso "SOFTWARE" se o renderer for SwiftShader/llvmpipe |
+| 5 | Médio | Modo Baixo leve de verdade: materiais Lambert sem textura, sem decoração PBR, sem luzes de canto e de explosão |
+| 6 | Difícil | Resolução adaptativa também no PC: cai rápido (média > 26 ms), sobe devagar (média < 18,5 ms por 3 janelas de 60 quadros); desligada com `?perf=1` ou `?escala=` |
+| 7 | Difícil | Documentação completa P1–P19 reunida num só relatório |
+
+### Conceitos praticados e justificativa
+- **Histerese**: descer a resolução rápido evita travada; subir devagar evita oscilar entre dois valores.
+- **Luzes e shaders no Three.js r128**: mudar o número de luzes visíveis recompila os shaders. Por isso o modo Baixo só altera luzes e materiais ao trocar a qualidade no menu, seguido de `loadMap` + `warmScene` (aquecimento), nunca durante o combate.
+- **Diagnóstico antes de otimizar**: os CSVs reais do P18 mostraram ~20 FPS com só 14–17% do quadro em JavaScript e sem relação com chamadas de desenho; logo o gargalo é GPU/navegador. Os interruptores e a GPU no CSV permitem descobrir qual recurso custa no aparelho dele, em vez de supor.
+- **TDZ (`let` antes da declaração)**: `appliedQuality` foi movido para o topo porque `loadMap(0)` já o consulta.
+
+### Testes e medições
+- `./test.sh`: testes de núcleo e `node --check` passam.
+- Chromium/SwiftShader, 0 erros JS em: normal, `?simples=1`, `?semluzes=1&semneblina=1&sempoeira=1&escala=0.5`, `?perf=1` e qualidade Baixa.
+- Cenário fixo (12 inimigos) por modo — chamadas de desenho / triângulos: Média 334 / 10 436; Baixa 246 / 7 760; `simples` 247 / 7 768; `semluzes` 253 / 8 224.
+- O detector de GPU marcou "SOFTWARE" no ambiente de teste (SwiftShader), como esperado.
+
+### Limites
+- O teste foi em renderização por software: **não há benchmark em GPU real**. Tempo por quadro só vale no aparelho dele (use `?perf=1` + F10).
+- Efeito real do modo Baixo sobre FPS no aparelho do usuário ainda não medido.
+- Não mexe em armas, dano, IA, colisão nem balanceamento.
+
+---
+
+
+
+## Pacote 18 — Híbrido de fluidez (18/11/2026)
+
+O P18 parte dos materiais leves e do cache de céu do P17 e restaura três proteções/otimizações presentes no P16:
+
+- `prewarmAll()` cria um rig reutilizável por tipo de inimigo e aquece shaders, buffers e texturas antes de exibir o menu; após cada `loadMap`, `warmScene()` executa na transição/banner para antecipar o custo da nova arena.
+- A luz de explosão fica visível e registrada na contagem de luzes desde o começo. Os pulsos mudam sua posição/intensidade, sem ligar/desligar `visible` durante o combate; isso evita alterar a quantidade de luzes e solicitar novas variantes de shader.
+- A geometria de antena e os materiais básicos de badge/beacon são compartilhados entre rigs; o pooling e os materiais com estado por inimigo continuam conforme necessário.
+
+O P18 mantém albedo-only em piso, blocos e decoração ambiental, PBR completo no Fuzil/mãos, cache de sky texture por paleta e o resto dos conteúdos. Armas, atributos, IA, movimento, colisão e layout dos mapas não mudaram. A política de resolução adaptativa permanece exatamente como no P17; o upscale/histerese do P16 ficou fora desta etapa.
+
+### Validação
+
+`./test.sh`, snapshots de combate/layout e `node --check` de todos os JavaScript passaram. Os módulos de armas, inimigos, pathfinding, táticas, progressão e upgrades são idênticos à base P16/P17.
+
+No Chromium headless com SwiftShader, a instrumentação transitória de teste observou um pré-aquecimento na inicialização e mais um por troca de arena. O renderer reportou 11 programas WebGL após o aquecimento e continuou em 11 após simular e renderizar o pulso de explosão. O cenário `?perf=1` mostrou P18 e 12 inimigos, sem erro JavaScript. Em seis carregamentos alternados de Hangar/Pátio/Fábrica, o contador de geometria permaneceu em 62; após alocar as paletas na primeira visita, as texturas ficaram estáveis em 9 no menu do ensaio. O teste usou uma exposição de APIs dentro da rota HTTP do Chromium; essa instrumentação temporária não foi salva no código final.
+
+### Limitações e próximo teste
+
+O pré-aquecimento desloca trabalho para a abertura e para as transições; ele não elimina esse trabalho. Os valores de renderer.info acima confirmam estabilidade de contagem, não tempo de GPU nem redução garantida de frametime. Não foi coletado nesta etapa um novo benchmark comparável de P16/P17/P18 e não houve teste em dispositivo físico. O custo de abertura/transição e o resultado perceptível devem ser medidos no aparelho-alvo, usando `?perf=1`. A resolução adaptativa e a recuperação de nitidez do P16 podem ser avaliadas em uma etapa separada.
+
+
+---
+
+## Pacote 17 — Menos travamentos (resumo)
+
+P17 parte do P16 unificado (visual PBR procedural nas três arenas, Fuzil e mãos industriais, telemetria local opcional) e faz uma otimização focada nas superfícies ambientais e nas trocas de mapa. O motor Three.js, HUD neon e conteúdo de combate continuam iguais.
+
+## O que mudou
+
+- Piso, obstáculos e decoração estática usam o albedo procedural compartilhado com roughness/metalness escalares. Os canvases e mapas de relevo/rugosidade não são criados para esses materiais ambientais.
+- O Fuzil e as mãos continuam com os mapas PBR completos para manter o acabamento de perto.
+- As texturas Canvas dos fundos são cacheadas por cor/arena; ao retornar a um mapa, o gradiente não é recriado.
+- O Hangar continua reaproveitando decoração instanciada. Os módulos de combate (`weapons.js`, `enemies.js`, IA, progressão e upgrades) permanecem idênticos ao P16; sem ajuste de dano, cadência, munição, recarga, movimentação, colisão ou dificuldade.
+- Sem dependências ou downloads externos. Cache offline avançado para P17.
+
+## Executar e testar
+
+Na pasta do projeto:
+
+```bash
+python3 -m http.server 8000 --bind 127.0.0.1
+```
+
+Abra `http://127.0.0.1:8000/`. Para iniciar o cenário fixo, abra `http://127.0.0.1:8000/?perf=1` e clique em **INICIAR CENÁRIO FIXO**. O modo de diagnóstico usa 12 inimigos, Hangar e Fuzil; não persiste score/carreira e não altera o jogo normal.
+
+- **F8:** mostrar/ocultar a telemetria.
+- **F9:** reiniciar o cenário e limpar a janela de coleta.
+- **F10:** exportar CSV.
+- Perda de foco/Pointer Lock pausa a medição; os quadros de pausa e a transição ao retomar não entram no CSV.
+
+Execute `./test.sh` (ou `bash test.sh`) para os testes do núcleo e checks de sintaxe.
+
+## Comparação local P16 → P17
+
+Três pares sequenciais, mesma janela Chromium headless/SwiftShader, 1280×720, cenário fixo, 10,5 s por versão e descarte das três primeiras amostras. Valores abaixo são medianas dos quantis de cada execução, não uma medição de GPU física.
+
+| Métrica | P16 | P17 | Variação |
+| --- | ---: | ---: | ---: |
+| Intervalo RAF p50 | 266,7 ms | 250,1 ms | −6,2% |
+| Intervalo RAF p95 | 641,7 ms | 439,9 ms | −31,4% |
+| CPU `update` p95 | 3,37 ms | 1,46 ms | −56,6% |
+| `render-submit` p50 | 4,75 ms | 6,10 ms | +28,4% |
+| `render-submit` p95 | 58,10 ms | 45,56 ms | −21,6% |
+| Texturas WebGL ativas p50 | 31 | 24 | −22,6% |
+| Draw calls p50 | 253 | 253 | sem mudança |
+
+O `render-submit` mede trabalho síncrono de submissão no CPU, não o tempo final de GPU. O resultado é variável entre execuções e o renderer de software é o gargalo do próprio sandbox; não interprete os tempos RAF como FPS do seu aparelho. O P17 reduz recursos e construção repetida, mas ainda é necessário testar em um dispositivo/browser real para confirmar o ganho perceptível e localizar travamentos específicos.
+
+## Evidências incluídas
+
+- `p17-hangar-playtest.png`, `p17-patio-playtest.png`, `p17-fabrica-playtest.png`: capturas em jogo das três arenas.
+- `p17-final-run1-p16.csv` a `p17-final-run3-p16.csv` e equivalentes `p17` : as três medições pareadas completas.
+- `RELATORIO_ATUAL.md`: histórico P14–P17, resultados e limitações.
+
+
+---
+
 
 ## Resumo executivo
 
-Esta continuação preserva a estrutura original Three.js + scripts clássicos. O Pacote 16 consolida o melhor dos ZIPs P14/P15: biblioteca procedural PBR com identidade visual própria para as três arenas, o piloto detalhado do Fuzil/mãos no Hangar e a telemetria local opt-in, agora sem quadros pausados nas amostras. Os arquivos enviados foram mantidos intactos; não houve publicação nem habilitação de serviços externos.
+Esta continuação preserva a estrutura original Three.js + scripts clássicos. O Pacote 14 modernizou somente o Fuzil existente, suas mãos e a arena inicial com materiais PBR procedurais; o Pacote 15 acrescenta telemetria local opt-in e um cenário fixo para medir travamentos sem persistir progresso nem alterar o jogo normal. Não houve publicação nem habilitação de serviços externos.
 
 O Pacote 6 aprimorou os modelos das armas; o 7 acrescentou clarões específicos, rastros, faíscas, estojos e auras; o 8 adicionou marcas de impacto e respostas por superfície; o 9 trouxe luvas, acabamentos e fumaça; o 10 articulou dedos e recargas; o 11 aprofundou detalhes próximos e a assinatura visual por arma. O p12 recebido trouxe inércia do viewmodel, acabamento das luvas e clarão radial/lateral; o p13 adicionou calor, som de estojo e explosões em camadas. O p14 inicia a transição visual industrial controlada; o p15 cria instrumentos para localizar gargalos e orientar a próxima otimização.
 
@@ -304,22 +452,143 @@ O modo de diagnóstico inicia uma situação fixa no Hangar: Sobrevivência/Norm
 - Limitação: não houve medição em celular/GPU física nem uso de timer de GPU WebGL. Os números headless servem como referência de instrumentação, não como FPS esperado para o jogador. A próxima rodada deve coletar o CSV no dispositivo/browser-alvo e priorizar a investigação do caminho de renderização se o frametime alto se repetir.
 - Cache offline versionado como `arena-fps-v8-p15`, com `perf-telemetry.js` incluído.
 
+## Pacote 16 — Mescla p15 + p14 de mapas e correções anti-travamento (17/11/2026)
 
-## Pacote 16 — Consolidação P14 + P15 (17/11/2026)
+### Ordem das atividades (Fácil → Médio → Difícil)
 
-O P16 parte do ZIP P15 e incorpora os aspectos visuais úteis do P14 sem trazer seu custo de painéis separados por obstáculo. `industrial-materials.js` agora alimenta blocos e piso de Hangar, Pátio e Fábrica com materiais Canvas PBR compartilhados; os nomes/temas locais voltaram aos anúncios de mudança de mapa. O Fuzil, as mãos e a decoração industrial instanciada do Hangar preservam o detalhamento P15/P14. O Pátio recupera leitura de madeira procedural para os muros de carga em tom amadeirado; concreto e metais continuam determinados pela paleta dos outros blocos.
+| # | Nível | Atividade | Arquivos |
+|---|---|---|---|
+| 1 | Fácil | Base = p15 (traz telemetria `?perf=1` e Fuzil/Hangar). Do p14 "gráficos industriais" entram os nomes de setor (`theme`) e a linha de banner da nova arena. | `maps.js`, `script.js` |
+| 2 | Fácil | Cache offline versionado para `arena-fps-v8-p16`. | `sw.js` |
+| 3 | Médio | Look industrial nos 3 mapas reutilizando as mesmas texturas do `industrial-materials.js` (cor do piso por mapa via `floorTint`); em qualidade Baixa os blocos voltam a materiais simples e o cenário decorativo não é criado. | `maps.js`, `script.js` |
+| 4 | Médio | Luz de explosão deixa de ser ligada/desligada durante o jogo. | `script.js` |
+| 5 | Médio | Geometria da antena e materiais de selo/farol dos inimigos compartilhados (antes: um novo por inimigo). | `script.js` |
+| 6 | Difícil | Aquecimento (`warmScene`/`prewarmAll`): compila shaders e sobe geometrias/texturas antes de jogar e a cada troca de mapa. | `script.js` |
+| 7 | Difícil | Resolução adaptativa em qualquer aparelho: desce rápido se o quadro passar de 26 ms, sobe devagar (3 janelas de 60 quadros abaixo de 18,5 ms) até o teto da qualidade. Desligada em `?perf=1`. | `script.js` |
 
-Os mapas têm temas próprios: “HANGAR // SETOR DE CARGA”, “DOCA // CHUVA ÂMBAR” e “PLANTA // NÚCLEO CIANO”. As coordenadas e dimensões de todos os 30 obstáculos — dez por arena — são agora fixadas em testes de regressão. Colisão, caixas, raycast, grade A*, navegação e layout não foram alterados. Não foram adicionados painéis por bloco: as geometrias já usadas para o Hangar ficam no grupo cacheado e são reutilizadas quando o jogador retorna àquela arena. Os arquivos de armas/dados de combate não foram editados e os snapshots de dano, cadência, munição, recarga, precisão, alcance e demais campos continuam passando.
+### Conceitos praticados e justificativa
 
-A telemetria `?perf=1` agora só registra quando o cenário está ativo, a aba visível e o Pointer Lock adquirido. Pausa, menu e perda de foco interrompem o CSV/quantis; o primeiro quadro ao começar/retomar é descartado para não atravessar a fronteira entre estados. O painel informa quando a coleta está pausada. No jogo normal, o painel e os wrappers de diagnóstico continuam ausentes.
+- **Recompilação de shader por contagem de luzes (Three.js r128):** luz com `visible = false` sai da contagem; mudar a contagem muda a chave dos programas e todos os materiais com luz são recompilados. Ligar a luz de explosão no primeiro estouro causava esse congelamento. Agora ela só muda de visibilidade quando a qualidade muda, no menu; em jogo só a intensidade varia.
+- **Primeiro uso na GPU:** shader, buffer de geometria e textura só são enviados na primeira vez que o objeto é desenhado. Um quadro de aquecimento com tudo visível, no menu, paga esse custo antes da partida. Na troca de mapa o aquecimento roda durante o banner.
+- **Reuso:** como as texturas PBR são por tipo de superfície, não por mapa, estender o look aos 3 mapas não aumentou o número de texturas (31 no p15 e no p16).
+- **Resolução adaptativa com histerese:** descer rápido evita travada sustentada; subir devagar evita oscilação.
 
-### Validação P16
+### Testes e medições
 
-- `bash test.sh`: aprovado (`core tests: OK`; `syntax checks: OK`), incluindo snapshots de combate, temas e dimensões/posições dos três mapas.
-- Chromium/SwiftShader: jogo normal e `?perf=1` abrem sem erros JavaScript observados; Fuzil selecionado, 12 inimigos no cenário e painel ausente na URL normal.
-- Ciclo de troca Hangar → Pátio → Fábrica → Hangar repetido duas vezes no cenário ativo: a contagem de geometrias ficou em 106. Texturas começaram em 30, subiram uma vez para 33 na primeira visita à Fábrica e permaneceram em 33 durante os quatro estados aquecidos seguintes. Não houve crescimento repetido após o primeiro carregamento; isto não certifica memória de sessão longa.
-- Teste de pause/resume: CSV manteve 29 linhas amostradas após 1,3 s pausado e voltou a crescer (32 após retomada). O painel mostrou “Medição pausada”; nenhum erro de runtime foi capturado.
-- Capturas por arena estão incluídas: `p16-hangar-playtest.png`, `p16-patio-playtest.png` e `p16-fabrica-playtest.png`. São registros visuais do Chromium, não medições de FPS.
-- Cache offline versionado como `arena-fps-v8-p16`.
+- `./test.sh`: aprovado. O teste de mapas foi atualizado: os 3 mapas têm `look` industrial, `theme` e `floorTint`; as coordenadas dos obstáculos do mapa 0 continuam fixadas por asserção.
+- Chromium via HTTP: sem erros de console/JavaScript em qualidade Baixa, Média e Alta, no modo `?perf=1` (painel presente, 12 inimigos) e nas trocas de mapa 0→1→2→0. O Fuzil dispara em qualidade Alta.
+- Programas de shader compilados (`renderer.info.programs`): p15 = 6 no menu e 7 depois da primeira explosão (compilou durante o jogo); p16 = 9 no menu e 9 depois da explosão (nada novo compila em combate). Capturas em `capturas/`.
+- Custo do aquecimento na abertura: 129 ms em renderizador por software.
+- Chamadas de desenho, triângulos e texturas ficaram iguais às do p15 (156 / 7 160 / 31), pois esta entrega não mudou o desenho em si.
 
-**Limite:** o teste foi headless em ambiente de software (SwiftShader), com o Pointer Lock simulado para automatização. Não foi medido FPS em celular/GPU física nem realizado playtest humano. Os efeitos do PBR em consumo de GPU devem ser conferidos no aparelho-alvo, pois materiais PBR nas três arenas podem custar mais que o Lambert clássico, ainda que não aumentem a geometria/draw calls e as texturas sejam compartilhadas.
+### Limitações
+
+- O frametime mediano no teste (~507 ms, SwiftShader) é idêntico ao do p15 (~509 ms): **não há ganho de FPS médio medido**. O ganho esperado é nas travadas pontuais (primeira explosão, primeira aparição de cada inimigo, troca de mapa), e isso foi verificado pela contagem de shaders, não por cronômetro de quadro. O SwiftShader é lento demais para medir travadas de milissegundos.
+- Resolução adaptativa, aquecimento e qualidade Baixa não foram testados em celular ou GPU física. Use `?perf=1` no aparelho-alvo e exporte o CSV (F10) para comparar com o p15.
+- Cada inimigo ainda usa cerca de 15 malhas (≈150 chamadas de desenho com 12 inimigos); fundir as peças é a próxima otimização provável, mas altera a estrutura dos rigs e exige playtest.
+- Não houve playtest humano.
+
+
+## Pacote 21 — Terminais físicos detalhados (18/11/2026)
+
+A antiga representação de mesa + tela foi substituída por um módulo visual reutilizável em `terminal-props.js`. O Console KVM agora tem gabinete/rack, monitor com moldura, teclado com teclas, trackball, leitor, LEDs, parafusos, cabos e painel de manutenção. O Console de Rede tem rack alto, patch panel, portas, indicadores de atividade e cinco cabos coloridos. O Console Central do Datacenter tem três monitores, rack central, teclado, módulos laterais, indicadores de temperatura/energia e cabeamento.
+
+Os três terminais receberam `kind` e orientação próprios em `incursion.js`. Os props são decorativos e entram em `mapMeshes`, portanto são removidos na troca de mapa sem adicionar caixas a `solids`/`boxes`; a mesa-base e os caminhos A* continuam iguais. O runtime atualiza estados `standby`, `detected`, `intrusion`, `committed` e `locked` conforme o setor, proximidade, progresso de invasão e alarme. A aproximação de câmera e a operação física segurando E continuam reservadas ao Pacote 22.
+
+### Validação p21
+
+- `./test.sh`: aprovado (`core tests: OK`; `incursão: OK`; `syntax checks: OK`), incluindo tipos dos três terminais, orientações, integração HTML e cache.
+- Todos os JavaScript e `sw.js`: `node --check` aprovado.
+- HTTP local: `index.html`, `script.js`, `incursion.js`, `terminal-props.js`, `sw.js` e `manifest.json` retornaram HTTP 200.
+- Boot no Chromium headless 1280×720: captura `arena-fps-p21-menu.png` gerada sem falha de inicialização.
+- Cache offline versionado para `arena-fps-v8-p21` e `terminal-props.js` incluído no núcleo.
+- Sem CDN externa adicionada; todas as geometrias e materiais dos terminais são locais.
+
+### Limites p21
+
+Ainda não houve playtest humano completo aproximando-se dos três terminais nem validação de legibilidade em Baixa/Média/Alta. A interação de câmera, cancelamento por dano e tela NEXUS integrada ao monitor ficam para os Pacotes 22 e 23. Não houve medição de FPS em aparelho móvel físico.
+
+
+## Pacote 22 — Interação física em primeira pessoa (18/11/2026)
+
+A incursão agora apresenta um prompt contextual de operação próximo ao terminal. O prompt só oferece a ação quando o jogador está dentro do raio e olhando para o console; se estiver próximo, mas fora do cone de visão, orienta `OLHE PARA O TERMINAL`. A linha de visão usa raycast contra os obstáculos sólidos existentes, sem adicionar colisões aos props decorativos.
+
+Ao segurar E, o jogador entra em um estado de operação: o movimento é reduzido para 18% para não congelar a partida, a câmera aproxima ligeiramente, reduz o campo de visão em até 6 graus e centraliza suavemente no monitor. Monitores e LEDs continuam reagindo ao estado de invasão. Inimigos permanecem ativos e podem contestar o terminal, reduzindo a velocidade do progresso pela regra já existente.
+
+A operação é cancelada quando o jogador recebe dano, morre, se afasta, perde a linha de visão ou o terminal deixa de ser o alvo atual. O progresso volta a zero, o prompt informa o motivo e o sistema exige que E seja solto antes de uma nova tentativa, evitando reinício acidental enquanto o botão permanece pressionado. O modo toque e o gamepad reaproveitam o mesmo estado de operação pelo botão USAR/ação correspondente.
+
+### Validação p22
+
+- `./test.sh`: aprovado (`core tests: OK`; `incursão: OK`; `syntax checks: OK`).
+- Todos os JavaScript e `sw.js`: `node --check` aprovado.
+- HTTP local e boot no Chromium headless 1280×720: aprovados; captura `arena-fps-p22-menu.png` gerada.
+- Cache offline versionado como `arena-fps-v8-p22`.
+- Não houve alteração em armas, dano, hitboxes, A*, IA, balanceamento ou regra abstrata de hacking.
+
+### Limites p22
+
+A validação automatizada confirma a integração e o boot, mas ainda falta um playtest humano aproximando-se de cada terminal em desktop e toque. Também falta comparar visualmente Baixa/Média/Alta e medir o custo em aparelho Android real. O Pacote 23 continua responsável pela interface NEXUS integrada ao monitor.
+
+
+## Mescla seletiva p21 — três prédios preservando p22 (19/11/2026)
+
+A versão p21 enviada pelo usuário foi auditada e trouxe três prédios jogáveis para a Incursão: Complexo, Refinaria e Laboratório. Esses dados foram incorporados seletivamente à base p22. O menu agora possui `Prédio (Incursão)`, o carregamento usa `INCURSION_LEVELS`, e cada prédio possui layout, terminais, saída, dicas, cor temática e pontos de spawn próprios.
+
+Os terminais simples de mesa + tela da p21 não foram incorporados. Cada terminal dos três prédios recebeu tipo e orientação para continuar usando `terminal-props.js` da p22. O prompt contextual, raycast de linha de visão, aproximação/foco de câmera, redução de movimento, cancelamento por dano/afastamento e interação por teclado/toque/gamepad foram preservados. Armas, dano, IA, colisões e regras de vitória permanecem inalterados.
+
+### Validação da mescla
+
+- `./test.sh`: aprovado (`core tests: OK`; `incursão: OK`; `syntax checks: OK`), agora cobrindo os três prédios, caminhos A*, centro livre, spawns livres, tipos/orientações dos terminais e integração do seletor.
+- Todos os JavaScript, `sw.js` e manifesto: sintaxe/estrutura aprovadas.
+- HTTP local: recursos principais retornaram HTTP 200.
+- Boot Chromium headless 1280×720: aprovado; captura `arena-fps-merge-menu.png` gerada.
+- Backup preservado em `/home/ubuntu/arena-fps-p22-before-p21-merge` para rollback.
+- Cache offline atualizado para `arena-fps-v8-p22-buildings`.
+
+### Limitações da mescla
+
+Ainda falta playtest humano nos três prédios e validação visual dos consoles físicos em Baixa/Média/Alta. A p21 foi testada isoladamente em boot e testes; a mescla foi testada em núcleo, HTTP e boot, mas não houve uma execução manual completa da campanha mesclada em aparelho físico. A interface NEXUS continua sendo a próxima camada visual planejada.
+
+
+## Pacote 23 — Interface hacker NEXUS (19/11/2026)
+
+### Pacote concluído
+
+A tela cenográfica de invasão foi transformada em uma estação operacional fictícia chamada **NEXUS // OPERATIONS CONSOLE**. A camada mantém as mesmas fases de gameplay (`choose → run → done`) e as mesmas opções/efeitos de incursão, mas apresenta o fluxo com uma linguagem visual de terminal físico avançado.
+
+### Alterações
+
+- Nova moldura NEXUS com barra de estado, link local, modo seguro e identificação de simulação.
+- Painel lateral de perfil de nó com `NX-07`, integridade, risco de rastreamento, sistema fictício `NX/ARCHIVE`, link `FIBER-07` e modo `OFFLINE SIM`.
+- Topologia de rede em Canvas ampliada, com grade, links, pulsos de conexão, núcleo destacado, fluxo de pacote, contador de frame e rótulos de rota.
+- Cartões de operação com estados de seleção, foco, risco e confirmação.
+- Console de logs com sequência de conexão, bloqueio e resultado fictício.
+- Scanline, grade holográfica, glow, pulsos de status e barras segmentadas implementados somente com CSS/Canvas local.
+- Aviso explícito de que nenhum comando real, rede externa ou sistema operacional é acessado.
+- Layout responsivo: painel lateral é ocultado em telas estreitas e opções passam para uma coluna.
+- Suporte a `prefers-reduced-motion`, contraste, foco de teclado e leitura em toque preservados.
+- Cache offline atualizado para `arena-fps-v8-p23-nexus`.
+
+### Preservado
+
+Não foram alterados dano, cadência, munição, IA, hitboxes, colisões, navegação A*, condições de vitória, escolhas de segurança, objetivos finais ou regras de alarme. A interface continua sendo apenas uma apresentação de jogo, sem executar comandos ou acessar sistemas reais.
+
+### Validação
+
+- `./test.sh`: aprovado.
+- Sintaxe de todos os JavaScript e `sw.js`: aprovada.
+- Manifesto: válido.
+- Ausência de CDN externa: confirmada.
+- HTTP local dos recursos principais: todos retornaram 200.
+- Boot Chromium headless em viewport desktop 1280×720: aprovado.
+- Boot Chromium headless em viewport mobile 390×844: aprovado.
+- Prévia visual estática do modal NEXUS em desktop: conferida.
+- Backup anterior preservado em `/home/ubuntu/arena-fps-p23-before-nexus`.
+
+### Limitações
+
+A validação visual do modal foi feita em prévia estática e a validação funcional em boot/testes; ainda falta playtest humano abrindo os três terminais nos três prédios. A interface NEXUS ainda não é desenhada diretamente dentro das telas dos consoles físicos; essa é a próxima camada planejada. Não houve medição de FPS em aparelho móvel real.
+
+### Próximo pacote
+
+Integrar uma versão compacta da identidade NEXUS aos monitores físicos KVM, Rede e Datacenter e fazer as escolhas alterarem LEDs, racks, portas, câmeras e iluminação dos prédios.

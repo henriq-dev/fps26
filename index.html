@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi</title>
+<title>Arena FPS — Industrial Sci-Fi · P22</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -28,6 +28,7 @@
   </section>
   <canvas id="radar" width="160" height="160" aria-label="Radar dos inimigos e itens" role="img"></canvas>
   <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+  <div id="terminalPrompt" class="hidden" aria-live="polite"><b> E · OPERAR TERMINAL </b><small>SEGURE PARA INVADIR</small></div>
   <div id="hitmarker"></div>
   <div id="banner"></div>
   <div id="damageDirection">▲</div>
@@ -72,6 +73,39 @@
   <button class="tbtn" id="bPause" type="button" aria-label="Pausar">II</button>
 </div>
 <div id="rotateMsg"><span>⟳</span>GIRE O CELULAR<br>PARA O MODO HORIZONTAL</div>
+<div id="incTerm" class="hidden" role="dialog" aria-label="Terminal NEXUS de invasão (cenográfico)">
+  <div class="nexus-shell">
+    <header class="nexus-topbar">
+      <div class="nexus-brand"><i></i><b>NEXUS</b><span>// OPERATIONS CONSOLE</span></div>
+      <div id="incStatus" class="nexus-status"><span></span>LINK LOCAL · SIMULAÇÃO</div>
+      <div class="nexus-clock">SECURE//SIM</div>
+    </header>
+    <div class="nexus-layout">
+      <aside class="nexus-sidebar" aria-label="Estado do terminal">
+        <div class="nexus-kicker">NODE PROFILE</div>
+        <div class="nexus-node-card"><strong>NX-<span id="incNodeId">07</span></strong><small>INCURSÃO / EDGE NODE</small><em>● ONLINE</em></div>
+        <div class="nexus-meter"><label>INTEGRITY <b>98%</b></label><i><span></span></i></div>
+        <div class="nexus-meter"><label>TRACE RISK <b>LOW</b></label><i class="amber"><span></span></i></div>
+        <div class="nexus-side-list"><div><span>OS</span><b>NX/ARCHIVE</b></div><div><span>LINK</span><b>FIBER-07</b></div><div><span>MODE</span><b>OFFLINE SIM</b></div></div>
+        <div class="nexus-ascii" aria-hidden="true">╭─ NEXUS SHELL ─╮<br>│ access: local │<br>│ crypto: demo   │<br>╰────────────────╯</div>
+      </aside>
+      <main class="nexus-main">
+        <div class="nexus-heading"><div><span class="nexus-kicker">INTRUSION WORKSPACE / FICTITIOUS</span><h2 id="incTitle">TERMINAL</h2></div><div class="nexus-chip">NO EXTERNAL LINK</div></div>
+        <p id="incInfo"></p>
+        <section class="nexus-network" aria-label="Topologia fictícia da rede">
+          <div class="nexus-grid"></div><div class="nexus-scanline"></div>
+          <canvas id="incNet" width="720" height="280" aria-label="Rede fictícia em 3D" role="img"></canvas>
+          <div class="nexus-overlay nexus-overlay-left">CORE / 01<br><span>ROUTE MAP</span></div><div class="nexus-overlay nexus-overlay-right">PACKET STREAM<br><span>LOCAL ONLY</span></div>
+        </section>
+        <div class="nexus-console-head"><span>AVAILABLE OPERATIONS</span><b>SELECT TARGET // ENTER TO CONFIRM</b></div>
+        <div id="incOptions"></div>
+        <div class="nexus-log-wrap"><div class="nexus-log-title"><span>LIVE CONSOLE</span><i>● RECORDING SIMULATION</i></div><pre id="incLog" aria-live="polite">[SIM] aguardando seleção…</pre></div>
+        <div class="nexus-disclaimer">[SIMULATION ONLY] Nenhum comando real, rede externa ou sistema operacional é acessado.</div>
+        <button id="incConfirm" class="perk-confirm" type="button">CONFIRMAR SELEÇÃO</button>
+      </main>
+    </div>
+  </div>
+</div>
 <div id="perks" class="hidden">
   <h2>INTERVALO TÁTICO</h2>
   <p id="perkInfo"></p>
@@ -91,7 +125,8 @@
   <p class="tagline">Sobreviva às ondas · complete operações · encadeie abates</p>
   <p id="ovText"></p>
   <div class="panel settings">
-    <label>Modo<select id="modeSelect"><option value="survival">Sobrevivência</option><option value="operations">Operações</option></select></label>
+    <label>Modo<select id="modeSelect"><option value="survival">Sobrevivência</option><option value="operations">Operações</option><option value="incursion">Incursão (prédio)</option></select></label>
+    <label>Prédio (Incursão)<select id="incLevelSelect"><option value="0">1 · Complexo</option><option value="1">2 · Refinaria</option><option value="2">3 · Laboratório</option></select></label>
     <label>Dificuldade<select id="difficultySelect"><option value="cadet">Recruta</option><option value="normal" selected>Veterano</option><option value="nightmare">Pesadelo</option></select></label>
     <label>Sensibilidade<input id="sensRange" type="range" min="0.0008" max="0.005" step="0.0001" value="0.0022"></label>
     <label>Campo de visão<input id="fovRange" type="range" min="60" max="100" step="1" value="75"></label>
@@ -115,6 +150,8 @@
 <script src="enemies.js"></script>
 <script src="upgrades.js"></script>
 <script src="maps.js"></script>
+<script src="incursion.js"></script>
+<script src="terminal-props.js"></script>
 <script src="pathfinding.js"></script>
 <script src="tactics.js"></script>
 <script src="progression.js"></script>

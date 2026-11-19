@@ -6,7 +6,7 @@ const context = { window: {}, Math, Uint8Array, Float32Array, Int32Array, Date }
 context.Arena = context.window.Arena = {};
 context.window.window = context.window;
 vm.createContext(context);
-for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
+for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'incursion.js', 'terminal-props.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
 }
 const A = context.Arena;
@@ -44,6 +44,7 @@ assert.deepEqual(combatSnapshot, [
   {name:'Lança-granadas',role:'ÁREA',unlock:6,auto:false,dmg:130,pellets:1,rate:1,mag:4,reserve:16,reload:2.6,spread:0,range:60,falloff:0,recoil:.25,zoom:null,pierce:null,knockback:null,launcher:true,radius:4.5,shell:null,shellTime:null}
 ]);
 const gameSource = fs.readFileSync('script.js', 'utf8');
+const materialsSource = fs.readFileSync('industrial-materials.js', 'utf8');
 const reloadStart = gameSource.slice(gameSource.indexOf('function startReload()'), gameSource.indexOf('\nfunction loadShell()'));
 assert.match(reloadStart, /viewKick\s*=\s*0\s*;\s*viewPitch\s*=\s*0\s*;\s*viewRoll\s*=\s*0\s*;/);
 assert.match(reloadStart, /shotPulseT\s*=\s*0/);
@@ -78,7 +79,32 @@ assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS.map(m => m.theme))), ['HANGAR 
 assert.deepEqual(JSON.parse(JSON.stringify(A.MAPS.map(m => m.look ?? null))), ['industrial', null, null]);
 assert.ok(A.MAPS[0].blocks.every(block => block[5] !== 0x6b4a2b));
 assert.match(gameSource, /const pbrColor = new THREE\.Color\(color\)\.multiplyScalar\(1\.16\)\.getHex\(\);/);
-assert.match(gameSource, /const material = pbrMaterials\.material\(kind, pbrColor\)/);
+assert.match(gameSource, /const material = pbrMaterials\.material\(kind, pbrColor, \{ detailMaps: false \}\)/);
+assert.match(gameSource, /pbrMaterials\.material\('floor', color, \{ detailMaps: false \}\)/);
+assert.match(gameSource, /const stripeMat = pbrMaterials\.material\('paintedMetal',[^\n]*detailMaps: false/);
+assert.match(gameSource, /const panelMat = pbrMaterials\.material\('paintedMetal',[^\n]*detailMaps: false/);
+assert.match(gameSource, /const railMat = pbrMaterials\.material\('steel',[^\n]*detailMaps: false/);
+assert.match(materialsSource, /detailMaps: options\.detailMaps !== false/);
+assert.match(materialsSource, /function surfaceCanvases\(type, size, detailMaps = true\)/);
+assert.match(materialsSource, /const height = detailMaps \? document\.createElement\('canvas'\) : null/);
+assert.match(materialsSource, /const roughness = detailMaps \? document\.createElement\('canvas'\) : null/);
+assert.match(materialsSource, /bumpMap: detailMaps \? makeTexture\(canvases\.height, repeat\) : null/);
+assert.match(materialsSource, /roughnessMap: detailMaps \? makeTexture\(canvases\.roughness, repeat\) : null/);
+assert.match(gameSource, /const skyTextureCache = new Map\(\)/);
+assert.match(gameSource, /if \(skyTextureCache\.has\(hex\)\) return skyTextureCache\.get\(hex\)/);
+assert.doesNotMatch(gameSource, /scene\.background\.dispose\(\)/);
+assert.match(gameSource, /const explosionLight = new THREE\.PointLight\([^\n]*explosionLight\.visible = true/);
+const explosionLogic = gameSource.slice(gameSource.indexOf('function pulseExplosionLight'), gameSource.indexOf('// Marcas de impacto'));
+assert.doesNotMatch(explosionLogic, /explosionLight\.visible\s*=/);
+assert.match(gameSource, /const antennaGeo = new THREE\.CylinderGeometry\(/);
+assert.match(gameSource, /const rigBasic = color => rigBasicMats\[color\]/);
+assert.match(gameSource, /const badge = new THREE\.Mesh\(eGeo\.badge, rigBasic\(/);
+assert.match(gameSource, /const beacon = new THREE\.Mesh\(eGeo\.badge, rigBasic\(/);
+assert.match(gameSource, /function warmScene\(\)/);
+assert.match(gameSource, /renderer\.compile\(scene, camera\)/);
+assert.match(gameSource, /if \(warmReady\) warmScene\(\)/);
+assert.match(gameSource, /function prewarmAll\(\)/);
+assert.match(gameSource, /prewarmAll\(\);/);
 assert.match(gameSource, /floor\.material = floorMaterial\(floorTint\)/);
 assert.match(gameSource, /cachedIndustrialDressing = group/);
 assert.match(gameSource, /perfScenarioActive && locked && alive && !portrait && document\.visibilityState === 'visible'/);
@@ -180,3 +206,46 @@ assert.equal(A.createCareerStore(storage).get().selectedSkin, 'gold');
 assert.equal(A.createCareerStore(storage).get().records['arenaFpsRecord:v2:operations:nightmare'], 900);
 
 console.log('core tests: OK');
+
+// ---- Incursão (p20) ----
+assert.equal(A.INCURSION_STAGES.length, 4);
+assert.equal(A.INCURSION.terminals.t3.x, 23);
+assert.equal(A.INCURSION_LEVELS.length, 3);
+assert.deepEqual(JSON.parse(JSON.stringify(Object.values(A.INCURSION.terminals).map(t => t.kind))), ['kvm', 'network', 'datacenter']);
+assert.ok(Object.values(A.INCURSION.terminals).every(t => Number.isFinite(t.rotation)));
+assert.match(fs.readFileSync('index.html', 'utf8'), /terminal-props\.js/);
+assert.match(fs.readFileSync('sw.js', 'utf8'), /terminal-props\.js/);
+assert.match(fs.readFileSync('index.html', 'utf8'), /incLevelSelect/);
+assert.match(fs.readFileSync('index.html', 'utf8'), /NEXUS/);
+assert.match(fs.readFileSync('index.html', 'utf8'), /nexus-network/);
+assert.match(fs.readFileSync('style.css', 'utf8'), /prefers-reduced-motion/);
+assert.match(fs.readFileSync('script.js', 'utf8'), /NEXUS \/ ROUTE GRAPH/);
+const solidAt = (x, z, r = 0.6) => A.INCURSION.blocks.some(([bx, bz, w, h, d]) => x + r > bx - w / 2 && x - r < bx + w / 2 && z + r > bz - d / 2 && z - r < bz + d / 2);
+assert.ok(!solidAt(0, 0, 4), 'centro (raio 4) livre');
+for (const t of Object.values(A.INCURSION.terminals)) { const near = A.INCURSION.blocks.filter(([bx, bz, w, h, d]) => Math.abs(bx - t.x) < w / 2 + 0.01 && Math.abs(bz - t.z) < d / 2 + 0.01); assert.equal(near.length, 1, 'terminal tem só a própria mesa'); }
+assert.ok(!solidAt(A.INCURSION.exit.x, A.INCURSION.exit.z, 0.6), 'saída livre');
+const g = A.createGrid(28, 1, A.INCURSION.blocks.map(([x, z, w, h, d]) => ({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h })), 0.62);
+for (const [name, to] of [['t1', A.INCURSION.terminals.t1], ['t2', A.INCURSION.terminals.t2], ['t3', A.INCURSION.terminals.t3], ['saída', A.INCURSION.exit]]) {
+  const path = A.findPath(g, 0, 0, to.x, to.z); assert.ok(path && path.length > 0, 'existe caminho até ' + name);
+}
+for (const [x, z] of A.INCURSION.terminals.t3 ? [[A.INCURSION.terminals.t3.x, A.INCURSION.terminals.t3.z]] : []) assert.ok(x && z);
+const none = A.incursionEffects(null, []); assert.equal(none.spawnMul, 1); assert.equal(none.alarmSeconds, 0);
+const all = A.incursionEffects('cameras', ['dados', 'destruir', 'virus', 'derrubar']);
+assert.equal(all.alarmSeconds, 75); assert.equal(all.risk, 6); assert.equal(all.score, 1000 + 1500 + 1500);
+assert.equal(A.incursionEffects('drone', []).droneTime, 16);
+assert.equal(A.incursionEffects(null, ['dados', 'dados']).credits, 400, 'objetivo repetido conta uma vez');
+for (const level of A.INCURSION_LEVELS) {
+  const blocks = level.blocks.map(([x, z, w, h, d]) => ({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h }));
+  const grid = A.createGrid(28, 1, blocks, 0.62);
+  assert.ok(!blocks.some(b => b.minX < 4 && b.maxX > -4 && b.minZ < 4 && b.maxZ > -4), 'centro livre em ' + level.id);
+  for (const [name, to] of [['t1', level.terminals.t1], ['t2', level.terminals.t2], ['t3', level.terminals.t3], ['saída', level.exit]]) {
+    const path = A.findPath(grid, 0, 0, to.x, to.z); assert.ok(path && path.length > 0, `${level.id}: caminho até ${name}`);
+  }
+  const freeSpawns = level.spawns.filter(([x, z]) => !blocks.some(b => x > b.minX - .6 && x < b.maxX + .6 && z > b.minZ - .6 && z < b.maxZ + .6));
+  assert.ok(freeSpawns.length >= 8, `${level.id}: spawns livres suficientes`);
+}
+assert.equal(A.incursionBudget(A.INCURSION_STAGES[3], none), -1);
+assert.ok(A.incursionBudget(A.INCURSION_STAGES[0], A.incursionEffects('cameras', ['derrubar'])) < 10);
+assert.equal(A.incursionInterval(A.INCURSION_STAGES[0], none, true), A.INCURSION_STAGES[0].spawn.every * 0.5);
+const sp = A.pickIncursionSpawn(0, 0, (x, z) => solidAt(x, z, 0.6), () => 0.5); assert.ok(Math.hypot(sp[0], sp[1]) > 13);
+console.log('incursão: OK');

@@ -1,7 +1,7 @@
-const CACHE_NAME = 'arena-fps-v8-p16';
+const CACHE_NAME = 'arena-fps-v8-p23-nexus';
 const CORE = [
   './', './index.html', './style.css', './three.min.js', './script.js',
-  './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js',
+  './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js',
   './pathfinding.js', './tactics.js', './progression.js', './audio.js', './manifest.json', './icon.svg'
 ];
 
