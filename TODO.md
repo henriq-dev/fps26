@@ -261,3 +261,18 @@
 ## Pacote 29
 - [x] Torretas destrutíveis (40 HP, +50 pontos).
 - [ ] Pendente: medir `?perf=1` em celular; andares/área maior.
+
+## Pacote 30
+- [x] Cyberdeck (T): shell Kali/Arch simulado, scan e jam.
+- [ ] Ideias: laptop 3D na mão; mais comandos (ex.: `connect` ligado ao console); missão via deck.
+
+## Pacote 31
+- [x] Deck: sons, boot, Tab, chips de recarga, comandos extras.
+- [ ] Ideias: laptop 3D na mão; `connect` no console; ajustar volume dos sons do deck após ouvir.
+
+## Pacote 32
+- [x] connect liga o deck ao console (50% da barra, 1x por setor).
+
+## Pacote 33
+- [x] Animações: tampa, chips, glitch, barra, anel de scan, marcadores, câmeras/torretas desligando.
+- [ ] Próximo: laptop 3D na mão (p34).

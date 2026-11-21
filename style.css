@@ -363,3 +363,40 @@ body.touch:has(#incTerm:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar
 
 /* P25: marcadores 3D do drone (canvas por cima da cena, não captura cliques) */
 #droneOverlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
+
+/* ===== P30: CYBERDECK (laptop com shell Kali/Arch, tudo simulado) ===== */
+#deckBtn { position: fixed; right: 14px; bottom: 150px; z-index: 6; padding: 8px 12px; font: 600 12px ui-monospace, Menlo, Consolas, monospace; color: #cfe9ff; background: rgba(8,16,28,.78); border: 1px solid rgba(110,170,255,.55); border-radius: 8px; cursor: pointer; backdrop-filter: blur(4px); }
+#deckBtn.hidden, #deck.hidden { display: none; }
+#deck { --bg: #0e1522; --fg: #d7e0ee; --ac: #5b8def; --dim: #7b8aa3; --ok: #4be08a; --warn: #ffc857; --err: #ff6b6b;
+  position: fixed; inset: 0; z-index: 34; display: flex; align-items: center; justify-content: center; padding: clamp(8px, 2.5vw, 28px); background: rgba(2,5,12,.82); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+#deck.deck-arch { --bg: #0a0c0f; --fg: #cfd6dd; --ac: #1793d1; --dim: #6b7682; }
+.deck-laptop { width: min(900px, 100%); max-height: 100%; display: flex; flex-direction: column; background: var(--bg); color: var(--fg); border: 2px solid var(--ac); border-radius: 14px; box-shadow: 0 0 0 8px #11151c, 0 24px 70px rgba(0,0,0,.65), 0 0 40px color-mix(in srgb, var(--ac) 35%, transparent); overflow: hidden; }
+.deck-bar { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: color-mix(in srgb, var(--ac) 18%, #000); font-size: 12px; }
+.deck-bar b { letter-spacing: .12em; } .deck-bar span { color: var(--dim); flex: 1; }
+.deck-skins { display: flex; gap: 6px; }
+.deck-bar button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--dim); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.deck-skins button.on { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 30%, transparent); }
+.deck-out { flex: 1; min-height: 220px; max-height: 58vh; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.deck-out .dim { color: var(--dim); } .deck-out .ok { color: var(--ok); } .deck-out .warn { color: var(--warn); } .deck-out .err { color: var(--err); } .deck-out .top, .deck-in label .top { color: var(--ac); }
+.deck-in { display: flex; align-items: flex-start; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid color-mix(in srgb, var(--ac) 30%, transparent); font-size: 13px; }
+.deck-in label { white-space: pre; color: var(--ok); line-height: 1.5; }
+.deck-in input { flex: 1; min-width: 0; background: transparent; color: var(--fg); border: 0; outline: 0; font: inherit; line-height: 1.5; caret-color: var(--ac); }
+@media (max-width: 560px) { .deck-bar span { display: none; } #deckBtn { bottom: 190px; } }
+
+/* P31: detalhes do deck — chips de recarga, linhas CRT, cursor */
+.deck-chips { display: flex; gap: 6px; font-style: normal; }
+.deck-chips i { font-style: normal; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dim); color: var(--dim); font-size: 11px; white-space: nowrap; }
+.deck-chips i.ready { color: var(--ok); border-color: var(--ok); } .deck-chips i.active { color: #0b0f14; background: var(--warn); border-color: var(--warn); }
+.deck-laptop { position: relative; }
+.deck-laptop::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 12px; background: repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+.deck-out .hint { color: var(--dim); font-style: italic; }
+@media (max-width: 760px) { .deck-chips { display: none; } }
+
+/* P33: animações do deck (respeitam prefers-reduced-motion) */
+@keyframes deckLid { from { transform: perspective(900px) rotateX(-28deg) translateY(36px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes chipPulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 55%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+@keyframes deckGlitch { 0% { transform: translate(0); filter: none; } 20% { transform: translate(-3px, 1px); filter: hue-rotate(40deg) saturate(1.8); } 40% { transform: translate(3px, -1px); } 60% { transform: translate(-2px, 0); filter: hue-rotate(-40deg); } 100% { transform: none; filter: none; } }
+#deck:not(.hidden) .deck-laptop { animation: deckLid .28s ease-out; }
+.deck-chips i.ready { animation: chipPulse 1.6s ease-in-out infinite; }
+#deck .deck-laptop.glitch { animation: deckGlitch .32s steps(2, end); }
+@media (prefers-reduced-motion: reduce) { #deck:not(.hidden) .deck-laptop, .deck-chips i.ready, #deck .deck-laptop.glitch { animation: none; } }

@@ -692,3 +692,58 @@ Armas, dano, IA, colisão e balanceamento: intocados. Os mapas de combate (modo 
 
 Testes: `./test.sh` aprovado; Chromium: pistola a 6 m destrói a torreta (40 → −15 de HP), modelo some, +50 pontos, 0 erros JS. Armas, dano, IA, colisão e balanceamento existentes intocados.
 **Decisão (confirme):** HP 40 e +50 pontos são palpites meus.
+
+## Pacote 30 — Cyberdeck: laptop com shell Kali/Arch (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | `deck.js` registrado no `index.html` e no cache `v8-p30`; botão `⌨ DECK [T]` | Estrutura de arquivos, PWA | Mesma organização dos outros módulos. |
+| Fácil | Visual do laptop (CSS com variáveis `--bg/--ac`; skins Kali e Arch) | Custom properties, `color-mix` | Trocar de skin é só trocar a classe. |
+| Médio | `Arena.deckRun(linha, contexto)`: interpretador puro (alias, `sudo`, `help`, `scan`, `jam`, `theme`, `neofetch`…) | Parsing de string, função pura testável | Fica testado em Node, sem DOM. |
+| Médio | Prompt por skin: Kali = zsh em 2 linhas, Arch = bash em 1 linha; mensagens de erro de cada shell | Dados por configuração | Dá a sensação do sistema sem copiar logos. |
+| Difícil | Integração no jogo: T abre o deck e congela a Incursão (`choiceOpen`); histórico com ↑/↓; Esc fecha | Foco de teclado, pointer lock | Reaproveita o mesmo mecanismo do modal NEXUS. |
+| Difícil | Efeitos de jogo: `scan` marca inimigos/câmeras/torretas/console por 8 s (recarga 20 s); `jam` desliga câmeras e torretas por 12 s (recarga 40 s) | Estados com tempo e recarga | Dá função de jogo ao laptop, sem alterar armas, dano ou IA. |
+
+**Segurança / cenografia:** nada é executado de verdade e não há rede. Ferramentas reais (hydra, msfconsole, sqlmap, ssh, ping, etc.) só respondem "desativado neste jogo". Os IPs são da faixa de documentação 192.0.2.x. Os nomes `nmap`, `apt`, `pacman` são só sabor.
+Testes: `./test.sh` aprovado (interpretador, recargas, skins, ferramentas reais bloqueadas, IPs só da faixa 192.0.2.x); Chromium: T abre, digitação e Enter funcionam, trocar skin muda cores/prompt, scan/jam ativam e esfriam, Esc fecha, 0 erros JS.
+**Decisões a conferir:** tempos/recargas de scan (8/20 s) e jam (12/40 s) são palpites meus. Limite: o laptop é uma tela sobreposta, não um modelo 3D na mão do personagem.
+
+## Pacote 31 — Detalhes do cyberdeck: sons, animação e comandos (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Linhas CRT (`::after` com `repeating-linear-gradient`) e estilo `.hint` | CSS moderno, pseudo-elementos | Visual de tela de laptop sem imagem. |
+| Fácil | Comandos novos: `status`, `date`, `uptime`, `ip a`, `echo`, `history`, `motd` | Mapa de comandos | Todos fictícios; `status` mostra recargas, câmeras, alarme, vigilância. |
+| Médio | Sons sintetizados: tecla, Enter, abrir, erro, boot, scan (varredura), jam (ruído + grave) | Web Audio (osciladores e ruído) | Sem arquivos de áudio, no mesmo padrão do `audio.js`. |
+| Médio | Chips SCAN/JAM no topo (pronto / ativo Ns / recarga Ns) | Estado visível, `aria` | O jogador vê as recargas sem digitar `status`. |
+| Médio | `Arena.deckComplete` (Tab): completa comando e argumento do `theme`; várias opções são listadas | Prefixo comum, função pura | Testado em Node. |
+| Difícil | Saída "digitando": fila com `setTimeout` (38 ms por linha, 90 ms no boot); limpa/fecha esvazia a fila na hora | Fila assíncrona, cancelamento | Sensação de terminal sem travar a entrada. |
+| Difícil | Boot por skin (`Arena.deckBoot`) na 1ª abertura de cada visual | Dados por configuração | Kali mostra zsh, Arch mostra bash. |
+
+Testes: `./test.sh` aprovado (Tab, boot, status, date, ip, history); Chromium: boot animado, Tab (`sta`→`status `, `s`→lista `scan status`), chips, 0 erros JS. Os sons foram só confirmados sem erro (não ouvi o áudio). Armas, dano, IA, colisão e balanceamento: intocados.
+
+## Pacote 32 — `connect`: o deck prepara a invasão do console (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Comando `connect` em `help`, Tab e cache `v32` | Dados e lista de comandos | Descoberta fácil para o jogador. |
+| Médio | `deckRun` devolve `fx.connect` conforme o estado (`ready/far/primed/exit`) e mensagens de aviso | Função pura, estados explícitos | Testado em Node sem DOM. |
+| Difícil | `deckConnectState()` e efeito: adianta 50% de `inc.hold` (uma vez por setor, `primedStage`) | Integração com a mecânica existente | O jogador ainda precisa segurar E; a barra decai 0,25/s se ele se afastar, então não é "pular o setor". |
+
+Testes: `./test.sh` aprovado; Chromium: longe → recusa; perto → hold 0 → 2 (de 4); repetir → "já preparada"; segurar E conclui o setor; 0 erros JS.
+**Decisão (confirme):** 50% de adianto e 1 uso por setor são palpites meus; o deck congela o jogo enquanto aberto, então o `connect` reduz o tempo de exposição no console, não o torna instantâneo. Armas, dano, IA, colisão: intocados.
+
+## Pacote 33 — Animações do hacker e do cyberdeck (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Tampa do laptop abrindo (`@keyframes deckLid`) e chips SCAN/JAM pulsando quando prontos | CSS `animation`, `color-mix`, `box-shadow` | Sem JS e sem custo de render. |
+| Fácil | Glitch (RGB/translate) ao rodar `jam` ou errar um comando | Reinício de animação por classe (`offsetWidth`) | Feedback imediato. |
+| Fácil | Todas as animações respeitam `prefers-reduced-motion` | Acessibilidade | Quem desativa movimento no sistema não vê. |
+| Médio | Barra de progresso animada (`[██████░░░░] 60%`) em `scan`, `jam` e `connect` | Fila assíncrona com tipo `bar`, `setTimeout` | A fila principal espera a barra acabar; `flush` completa a barra. |
+| Médio | Anel azul do scan crescendo pelo chão (RingGeometry + MeshBasicMaterial transparente) | Escala/opacidade por tempo | Não usa luz dinâmica. |
+| Médio | Marcadores 2D "travam" no alvo (começam 3,4× maiores e encolhem em 0,4 s) e pulsam a menos de 8 m | Interpolação com tempo real (`performance.now`) | Independe do congelamento do jogo. |
+| Difícil | Câmeras e torretas "desligam": `power` 1→0 suave, cabeça cai, lente pisca ao apagar e volta ao religar | Transição com lerp, `Euler.order = 'YXZ'`, pivô no centro da cabeça | A cabeça gira em torno de si, não do chão. |
+
+Testes: `./test.sh` aprovado; Chromium: câmera 1→0,04 (cabeça 0,53 rad), torreta 1→0,04 (0,58 rad), lente apaga, barra 100%, anel visível (escala 4,8, opacidade 0,66), 0 erros JS. Armas, dano, IA, colisão: intocados.
+**Não feito (p34):** laptop 3D na mão do personagem.

@@ -256,14 +256,14 @@ function loadMap(index) {
   (M.cameras || []).forEach(c => {                        // câmeras de segurança: corpo escuro + luz (vermelha = ativa)
     const g = new THREE.Group(); g.position.set(c.x, 3.25, c.z);
     const body = new THREE.Mesh(blockGeo, camBodyMat); body.scale.set(0.34, 0.26, 0.55); const lamp = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lamp.scale.set(0.12, 0.12, 0.05); lamp.position.set(0, 0, 0.3);
-    g.add(body, lamp); scene.add(g); mapMeshes.push(g); incCams.push({ g, lamp, c });
+    g.add(body, lamp); scene.add(g); mapMeshes.push(g); incCams.push({ g, lamp, c, power: 1 });
   });
   (M.turrets || []).forEach(c => {                        // torretas: base + cano + lente (lente brilha ao carregar o tiro)
     const g = new THREE.Group(); g.position.set(c.x, 0, c.z);
     const base = new THREE.Mesh(blockGeo, camBodyMat); base.scale.set(0.5, 1.0, 0.5); base.position.y = 0.5;
-    const head = new THREE.Mesh(blockGeo, camBodyMat); head.scale.set(0.46, 0.32, 0.7); head.position.y = 1.15;
-    const lens = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lens.scale.set(0.14, 0.14, 0.06); lens.position.set(0, 1.15, 0.38);
-    const pivot = new THREE.Group(); pivot.position.y = 0; pivot.add(head, lens); g.add(base, pivot); scene.add(g); mapMeshes.push(g); const T = { g, pivot, lens, c, st: { cd: 0.8, charge: 0, hp: Arena.TURRET.hp } }; base.userData.turret = head.userData.turret = T; T.parts = [base, head]; incTurrets.push(T);
+    const head = new THREE.Mesh(blockGeo, camBodyMat); head.scale.set(0.46, 0.32, 0.7); head.position.y = 0;
+    const lens = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lens.scale.set(0.14, 0.14, 0.06); lens.position.set(0, 0, 0.38);
+    const pivot = new THREE.Group(); pivot.position.y = 1.15; pivot.rotation.order = 'YXZ'; pivot.add(head, lens); g.add(base, pivot); scene.add(g); mapMeshes.push(g); const T = { g, pivot, lens, c, st: { cd: 0.8, charge: 0, hp: Arena.TURRET.hp } }; base.userData.turret = head.userData.turret = T; T.parts = [base, head]; T.power = 1; incTurrets.push(T);
   });
   if (inc && Arena.createIncursionTerminal) Object.entries(M.terminals || {}).forEach(([id, terminal]) => {
     const view = Arena.createIncursionTerminal({ ...terminal, id }); scene.add(view); mapMeshes.push(view); incTerminalViews[id] = view;
@@ -439,7 +439,7 @@ function startIncursion() {
   loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
   terminalInteraction.id = null; terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = false; terminalInteraction.focus = 0;
   inc = { stage: 0, hold: 0, inRange: false, security: null, targets: [], fx: Arena.incursionEffects(null, []), spawned: 0, spawnT: 2, alarmT: 0, overrun: false,
-          marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0, alertT: 0, camCd: 0, camHits: 0 };
+          marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0, alertT: 0, camCd: 0, camHits: 0, scanT: 0, scanCd: 0, jamT: 0, jamCd: 0 };
   toSpawn = 0; bossPending = false; introQueue = []; waveDelay = 1e9;
   enterIncStage(0);
 }
@@ -467,22 +467,22 @@ function updateIncursionHud() {
   if (active && st.exit) { const t = incTarget(); status = `SAÍDA A ${Math.round(Math.hypot(t.x - px, t.z - pz))} m`; ratio = 1; }
   else if (active) { ratio = inc.hold / st.hold; status = inc.inRange ? `INVASÃO ${Math.floor(ratio * 100)}% · SEGURE E` : 'APROXIME-SE DO CONSOLE E SEGURE E'; }
   if (inc.alarmT > 0) status += ` · ALARME ${Math.ceil(inc.alarmT)}s`; else if (inc.overrun && active) status += ' · RESPOSTA TOTAL';
-  status += Arena.camerasOff(inc.security, inc.targets) ? ' · CÂMERAS OFF' : inc.alertT > 0 ? ' · ALERTA' : ' · CÂMERAS ON';
+  status += (Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0) ? ' · CÂMERAS OFF' : inc.alertT > 0 ? ' · ALERTA' : ' · CÂMERAS ON';
   status += inc.droneT > 0 ? ` · DRONE ${Math.ceil(inc.droneT)}s` : inc.droneCd > 0 ? ` · DRONE ${Math.ceil(inc.droneCd)}s` : ' · DRONE [F]';
   el.objectiveFill.style.width = `${clamp(ratio, 0, 1) * 100}%`; el.objectiveStatus.textContent = status;
 }
 // P25: marcadores do drone. Canvas 2D por cima da cena; só desenha com o drone ativo (custo zero fora disso)
-const droneEl = $('droneOverlay'), dctx = droneEl.getContext('2d'); let droneDrawn = false; const _dv = new THREE.Vector3();
+const droneEl = $('droneOverlay'), dctx = droneEl.getContext('2d'); let droneDrawn = false; let markT0 = 0; const _dv = new THREE.Vector3();
 function drawDroneMarks() {
-  const on = !!(inc && !inc.done && inc.droneT > 0);
+  const on = !!(inc && !inc.done && (inc.droneT > 0 || inc.scanT > 0)); if (!on) markT0 = 0;       // drone (F) ou scan do deck (T)
   if (!on && !droneDrawn) return;
-  const W = innerWidth, Hh = innerHeight;
+  const W = innerWidth, Hh = innerHeight, nowMs = performance.now(); if (!markT0) markT0 = nowMs; const age = (nowMs - markT0) / 1000;      // idade dos marcadores: eles "travam" no alvo
   if (droneEl.width !== W || droneEl.height !== Hh) { droneEl.width = W; droneEl.height = Hh; }
   dctx.clearRect(0, 0, W, Hh); droneDrawn = on; if (!on) return;
   const mark = (x, y, h, color, label, big) => {                                   // projeta um ponto 3D e desenha colchetes + distância
     _dv.set(x, h, y).project(camera);
     const pos = Arena.droneScreenPos(_dv.x, _dv.y, _dv.z, W, Hh); if (!pos) return;
-    const d = Math.round(Math.hypot(x - px, y - pz)), r = big ? 16 : 10;
+    const d = Math.round(Math.hypot(x - px, y - pz)), lock = 1 + 2.4 * Math.max(0, 1 - age / 0.4), pulse = d < 8 ? Math.sin(nowMs / 90) * 2 : 0, r = (big ? 16 : 10) * lock + pulse;
     dctx.strokeStyle = color; dctx.fillStyle = color; dctx.lineWidth = 2; dctx.globalAlpha = pos.edge ? 0.55 : 0.95;
     if (pos.edge) { dctx.beginPath(); dctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2); dctx.fill(); }
     else { dctx.strokeRect(pos.x - r, pos.y - r, r * 2, r * 2); }
@@ -494,6 +494,102 @@ function drawDroneMarks() {
   for (const t of incTurrets) if (!t.st.dead) mark(t.c.x, t.c.z, 1.2, '#ff8a3d', 'TORRETA', false);
   for (const { g } of incCams) mark(g.position.x, g.position.z, g.position.y, '#ff5a4d', 'CÂM', false);
   dctx.globalAlpha = 1;
+}
+// ---- P30: CYBERDECK (laptop com shell Kali/Arch). Tudo simulado: a lógica está em deck.js ----
+const deckEl = $('deck'), deckOutEl = $('deckOut'), deckInEl = $('deckInput'), deckPromptEl = $('deckPrompt'), deckBtnEl = $('deckBtn');
+let scanWave = null; const scanRing = new THREE.Mesh(new THREE.RingGeometry(0.97, 1, 72), new THREE.MeshBasicMaterial({ color: 0x4de7ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+scanRing.rotation.x = -Math.PI / 2; scanRing.position.y = 0.07; scanRing.visible = false; scene.add(scanRing);
+function updateScanWave(dt) {                          // anel azul que cresce pelo chão a partir de onde o scan foi dado
+  if (!scanWave) return; scanWave.t += dt; const k = scanWave.t / 1.2;
+  if (k >= 1) { scanWave = null; scanRing.visible = false; return; }
+  scanRing.visible = true; scanRing.position.x = scanWave.x; scanRing.position.z = scanWave.z; scanRing.scale.setScalar(1 + k * 30); scanRing.material.opacity = 0.75 * (1 - k);
+}
+let deckOpen = false, deckSkin = 'kali'; const deckBooted = {}; const deckHist = []; let deckHistIdx = 0;
+function deckSetSkin(id) {
+  deckSkin = id; const sk = Arena.DECK_SKINS[id];
+  deckEl.classList.toggle('deck-kali', id === 'kali'); deckEl.classList.toggle('deck-arch', id === 'arch');
+  deckEl.querySelectorAll('[data-skin]').forEach(b => b.classList.toggle('on', b.dataset.skin === id));
+  deckPromptEl.innerHTML = (sk.promptTop ? `<span class="top">${sk.promptTop}</span>\n` : '') + sk.prompt;
+}
+function deckPrint(text, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; deckOutEl.appendChild(d); deckOutEl.scrollTop = deckOutEl.scrollHeight; }
+// Saída "digitando": as linhas entram uma a uma (fila). Ao fechar o deck ou limpar, a fila é descartada/esvaziada na hora.
+let deckQueue = [], deckTimer = 0;
+let deckBarCur = null;
+function deckGlitch() { const lp = deckEl.querySelector('.deck-laptop'); lp.classList.remove('glitch'); void lp.offsetWidth; lp.classList.add('glitch'); setTimeout(() => lp.classList.remove('glitch'), 340); }
+function deckBarText(l, n) { return `${l.t.padEnd(13)} [${'█'.repeat(n)}${'░'.repeat(10 - n)}] ${n * 10}%`; }
+function deckPump() {
+  deckTimer = 0; const l = deckQueue.shift(); if (!l) return;
+  if (l.k === 'bar') {                                                      // barra de progresso: enche de 0 a 100% (10 passos)
+    const d = document.createElement('div'); d.className = 'dim'; deckOutEl.appendChild(d); let n = 0; deckBarCur = { d, l };
+    const step = () => { n++; d.textContent = deckBarText(l, n); deckOutEl.scrollTop = deckOutEl.scrollHeight; sfx.deckKey();
+      if (n < 10) deckTimer = setTimeout(step, 55); else { deckBarCur = null; deckTimer = setTimeout(deckPump, 70); } };
+    step(); return;
+  }
+  deckPrint(l.t, l.k); if (l.k === 'err') { sfx.deckErr(); deckGlitch(); } else if (l.k === 'ok') sfx.deckKey();
+  if (deckQueue.length) deckTimer = setTimeout(deckPump, l.k === 'dim' ? 90 : 38);
+}
+function deckEnqueue(lines) { deckQueue.push(...lines); if (!deckTimer) deckPump(); }
+function deckFlush() { clearTimeout(deckTimer); deckTimer = 0; if (deckBarCur) { deckBarCur.d.textContent = deckBarText(deckBarCur.l, 10); deckBarCur = null; } deckQueue.forEach(l => deckPrint(l.t, l.k)); deckQueue = []; }
+function deckUpdateChips() {                              // chips no topo mostram pronto / ativo / recarga
+  const set = (id, name, t, cd) => { const c = $(id); c.className = t > 0 ? 'active' : cd > 0 ? '' : 'ready'; c.textContent = t > 0 ? `${name} ${Math.ceil(t)}s` : cd > 0 ? `${name} ${Math.ceil(cd)}s` : `${name} pronto`; };
+  if (inc) { set('deckChipScan', 'SCAN', inc.scanT, inc.scanCd); set('deckChipJam', 'JAM', inc.jamT, inc.jamCd); }
+}
+function deckTargets() {                                   // alvos que o "scan" lista (câmeras, torretas, console/saída)
+  const list = [], d = (x, z) => Math.hypot(x - px, z - pz);
+  incCams.forEach(({ g }, i) => list.push({ label: `CAM-0${i + 1}`, dist: d(g.position.x, g.position.z) }));
+  incTurrets.forEach((t, i) => { if (!t.st.dead) list.push({ label: `TORRETA-0${i + 1}`, dist: d(t.c.x, t.c.z) }); });
+  const t = incTarget(); list.push({ label: incStage().exit ? 'SAIDA' : 'CONSOLE', dist: d(t.x, t.z) });
+  return list;
+}
+function openDeck() {
+  if (!inc || inc.done || inc.choiceOpen || perkOpen || !alive) return;
+  inc.choiceOpen = true; deckOpen = true; locked = false; mouseHeld = false; scoped = false; interactHeld = false;
+  for (const k in keys) keys[k] = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  deckSetSkin(deckSkin); deckEl.classList.remove('hidden');
+  sfx.deckOpen(); deckUpdateChips();
+  if (!deckBooted[deckSkin]) { deckBooted[deckSkin] = true; sfx.deckBoot(); deckEnqueue(Arena.deckBoot(deckSkin).map(t => ({ t, k: 'dim' }))); }
+  setTimeout(() => deckInEl.focus(), 30);
+}
+function closeDeck(silent) {
+  deckFlush(); deckOpen = false; deckEl.classList.add('hidden'); deckInEl.blur();
+  if (inc) inc.choiceOpen = false;
+  if (!silent && alive) { canvas.requestPointerLock(); setTimeout(() => { if (!locked && alive && !(inc && inc.choiceOpen) && !deckOpen) showOverlay('pause'); }, 400); }
+}
+function deckConnectState() {                              // o que o comando "connect" pode fazer agora
+  const st = incStage(), t = Arena.INCURSION_LEVELS && incData().terminals && st.terminal ? incData().terminals[st.terminal] : null;
+  if (st.exit || !st.terminal) return { state: 'exit' };
+  if (inc.primedStage === inc.stage) return { state: 'primed' };
+  return { state: inc.inRange ? 'ready' : 'far', name: t ? t.name : 'CONSOLE' };
+}
+function deckSubmit(line) {
+  const sk = Arena.DECK_SKINS[deckSkin]; sfx.deckEnter(); deckFlush();
+  deckPrint((sk.promptTop ? sk.promptTop + '\n' : '') + sk.prompt + ' ' + line, 'top');
+  if (line.trim()) { deckHist.push(line); deckHistIdx = deckHist.length; }
+  const st = incStage(), cams = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
+  const r = Arena.deckRun(line, { skin: deckSkin, scanCd: inc.scanCd, jamCd: inc.jamCd, targets: deckTargets(), history: deckHist, time: inc.time, connect: deckConnectState(),
+    status: { stage: inc.stage + 1, mission: st.title, camsOff: cams, alarm: inc.alarmT, threats: cams ? 0 : incCams.length + incTurrets.filter(t => !t.st.dead).length } });
+  const fx = r.fx;
+  if (fx.clear) { deckQueue = []; deckOutEl.textContent = ''; }
+  if (fx.skin) { deckSetSkin(fx.skin); if (!deckBooted[fx.skin]) { deckBooted[fx.skin] = true; r.lines.push(...Arena.deckBoot(fx.skin).map(t => ({ t, k: 'dim' }))); } }
+  if (fx.scan) { inc.scanT = fx.scan; inc.scanCd = Arena.DECK.scan.cd; sfx.deckScan(); scanWave = { t: 0, x: px, z: pz }; }
+  if (fx.connect) { inc.hold = Math.max(inc.hold, st.hold * 0.5); inc.primedStage = inc.stage; sfx.deckBoot(); }
+  if (fx.jam) { inc.jamT = fx.jam; inc.jamCd = Arena.DECK.jam.cd; sfx.deckJam(); deckGlitch(); }
+  deckEnqueue(r.lines); deckUpdateChips();
+  if (fx.exit) closeDeck();
+}
+deckEl.querySelectorAll('[data-skin]').forEach(b => b.addEventListener('click', () => { deckSetSkin(b.dataset.skin); deckInEl.focus(); }));
+$('deckClose').addEventListener('click', () => closeDeck());
+deckBtnEl.addEventListener('click', openDeck); deckOutEl.addEventListener('click', () => deckInEl.focus());
+$('deckForm').addEventListener('submit', e => { e.preventDefault(); const v = deckInEl.value; deckInEl.value = ''; deckSubmit(v); });
+function deckKey(e) {                                          // Esc fecha, Tab completa, setas navegam no histórico; o resto digita no campo
+  if (e.code === 'Tab') {
+    e.preventDefault(); const r = Arena.deckComplete(deckInEl.value); deckInEl.value = r.line;
+    if (r.options.length) deckPrint(r.options.join('   '), 'hint');
+  } else if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) sfx.deckKey();
+  if (e.code === 'Escape') { e.preventDefault(); closeDeck(); }
+  else if (e.code === 'ArrowUp' && deckHist.length) { e.preventDefault(); deckHistIdx = Math.max(0, deckHistIdx - 1); deckInEl.value = deckHist[deckHistIdx] || ''; }
+  else if (e.code === 'ArrowDown' && deckHist.length) { e.preventDefault(); deckHistIdx = Math.min(deckHist.length, deckHistIdx + 1); deckInEl.value = deckHist[deckHistIdx] || ''; }
 }
 function useDrone() {
   if (!inc || inc.done) return;
@@ -507,7 +603,8 @@ function updateIncursion(dt) {
   const st = incStage();
   if (inc.marker) { inc.marker.userData.ring.rotation.z += dt * 1.5; inc.marker.userData.core.rotation.y += dt * 1.8; }
   inc.droneT = Math.max(0, inc.droneT - dt); inc.droneCd = Math.max(0, inc.droneCd - dt);
-  updateIncDoors(dt); updateIncCameras(dt); updateIncTurrets(dt); drawDroneMarks();
+  inc.scanT = Math.max(0, inc.scanT - dt); inc.scanCd = Math.max(0, inc.scanCd - dt); inc.jamT = Math.max(0, inc.jamT - dt); inc.jamCd = Math.max(0, inc.jamCd - dt);
+  deckBtnEl.classList.toggle('hidden', !!inc.done); updateScanWave(dt); updateIncDoors(dt); updateIncCameras(dt); updateIncTurrets(dt); drawDroneMarks();
   if (inc.alarmT > 0) {                                                        // alarme: só troca cores (não mexe em luzes = sem recompilar shader)
     inc.alarmT -= dt; const f = (Math.sin(inc.time * 7) + 1) / 2;
     stripMat.color.setRGB(0.6 + 0.4 * f, 0.1, 0.08); if (scene.fog) scene.fog.color.setRGB(0.12 + 0.1 * f, 0.02, 0.02);
@@ -541,11 +638,13 @@ function updateIncDoors(dt) {                            // abre a porta quando 
   }
 }
 function updateIncCameras(dt) {
-  const off = Arena.camerasOff(inc.security, inc.targets);
+  const off = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
   inc.camCd = Math.max(0, inc.camCd - dt); inc.alertT = Math.max(0, inc.alertT - dt);
-  incCams.forEach(({ g, lamp, c }, i) => {
-    const ang = Arena.cameraAngle(c, inc.time, i); g.rotation.y = off ? c.dir : ang;
-    lamp.visible = !off;                                                       // luz vermelha só enquanto a câmera está ativa
+  incCams.forEach((cam, i) => {
+    const { g, lamp, c } = cam; g.rotation.order = 'YXZ';
+    cam.power += ((off ? 0 : 1) - cam.power) * Math.min(1, dt * 3);                // 1 = ligada, 0 = desligada (transição suave)
+    const ang = Arena.cameraAngle(c, inc.time, i); g.rotation.y = off ? c.dir : ang; g.rotation.x = (1 - cam.power) * 0.55;   // desligada: cabeça cai
+    lamp.visible = cam.power > 0.92 || (cam.power > 0.05 && Math.sin(inc.time * 40) > 0);   // pisca ao apagar
     if (!off && !inc.done && inc.camCd <= 0 && Arena.cameraSees(c, ang, px, pz) && Arena.lineClear(navGrid, c.x, c.z, px, pz)) {
       inc.camCd = 20; inc.alertT = 12; inc.camHits++; banner('CÂMERA DETECTOU VOCÊ\nREFORÇOS A CAMINHO', 2.2);
       for (let k = 0; k < 2; k++) spawnEnemy(pickType());
@@ -558,13 +657,14 @@ function destroyTurret(t) {                           // explosão pequena, some
 }
 function updateIncTurrets(dt) {                       // torretas: giram para o jogador, carregam (lente acende) e atiram projéteis fracos
   if (!incTurrets.length) return;
-  const off = Arena.camerasOff(inc.security, inc.targets);
+  const off = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
   for (const t of incTurrets) {
     if (t.st.dead) continue;
     const dx = px - t.c.x, dz = pz - t.c.z, dist = Math.hypot(dx, dz), active = !off && !inc.done;
     const los = active && dist <= Arena.TURRET.range && Arena.lineClear(navGrid, t.c.x, t.c.z, px, pz) && !Arena.segmentBlockedByDoors(incDoors, t.c.x, t.c.z, px, pz);
     if (los) t.pivot.rotation.y = Math.atan2(dx, dz);
-    t.lens.visible = active && (los ? t.st.charge > 0 : true);
+    t.power += ((off ? 0 : 1) - t.power) * Math.min(1, dt * 3); t.pivot.rotation.x = (1 - t.power) * 0.6;   // desligada: cabeça abaixa
+    t.lens.visible = t.power > 0.92 ? active && (los ? t.st.charge > 0 : true) : t.power > 0.05 && Math.sin(inc.time * 40) > 0;
     if (Arena.turretStep(t.st, dt, { active, dist, los })) {
       const len = dist || 1, dmg = Arena.TURRET.damage * Arena.difficultyConfig(currentDifficulty).damage;
       shootProjectile(t.c.x, 1.15, t.c.z, dx / len, (py - 0.4 - 1.15) / len, dz / len, 8, dmg, 0xff4d4d, 0.1);
@@ -2124,7 +2224,7 @@ function resetGame() {
   clearPickups(); clearFx(); clearCasings(); clearSurfaceImpacts();
   projectiles.forEach(p => projPool.put(p.m)); grenades.forEach(g => grenadePool.put(g.m));
   grenades = []; introQueue = []; projectiles = []; enemies = [];
-  if (inc && inc.marker) scene.remove(inc.marker); inc = null; if (droneDrawn) { dctx.clearRect(0, 0, droneEl.width, droneEl.height); droneDrawn = false; } incVictory = false; closeIncTerm(); 
+  if (inc && inc.marker) scene.remove(inc.marker); inc = null; if (droneDrawn) { dctx.clearRect(0, 0, droneEl.width, droneEl.height); droneDrawn = false; } deckBtnEl.classList.add('hidden'); if (deckOpen) closeDeck(true); scanWave = null; scanRing.visible = false; incVictory = false; closeIncTerm(); 
   clearObjectiveMarkers(); interactQueued = interactHeld = false;
   currentMode = $('modeSelect').value || 'survival'; currentDifficulty = $('difficultySelect').value || 'normal'; refreshRecord(); if (!perfMode) career.beginDay(); enemySerial = 0;
   perks = {}; shop = { dmg: 0, hp: 0, dash: 0 }; shopBought.buyAmmo = 0; credits = 0; combo = 1; comboT = 0; maxCombo = 1; shake = 0; lastHurt = 0; beatT = 0; aliveTime = 0; handGrenades = 3; machineGunHeat = 0; el.feed.innerHTML = '';
@@ -2650,11 +2750,13 @@ document.addEventListener('keydown', e => {
   if (perfMode && e.code === 'F8') { e.preventDefault(); if (!e.repeat) perfPanel.hidden = !perfPanel.hidden; return; }
   if (perfMode && e.code === 'F9') { e.preventDefault(); if (!e.repeat) restartPerfScenario(); return; }
   if (perfMode && e.code === 'F10') { e.preventDefault(); if (!e.repeat) downloadPerfCsv(); return; }
+  if (deckOpen) { deckKey(e); return; }                                       // cyberdeck aberto: digitação vai para o campo
   if (inc && inc.choiceOpen) { incTermKey(e); return; }                          // terminal de invasão (fictício) aberto
   if (perkOpen) {                                                                // tela de upgrades: 1–3 escolhem o cartão, 4–7 compram na loja
     const k = parseInt(e.key, 10); if (k >= 1 && k <= 3) pickPerk(k - 1); else if (k >= 4 && k <= 7) buyShop(['buyDamage', 'buyAmmo', 'buyHealth', 'buyDash'][k - 4]); return;
   }   // tela de upgrades: teclas 1–3
   if (!locked || !alive) return;
+  if (e.code === 'KeyT' && inc) { e.preventDefault(); openDeck(); return; }          // abre o cyberdeck (só na Incursão)
   if (e.code === 'KeyR') startReload();
   if (e.code === 'KeyQ') dashQueued = true;
   if (e.code === 'KeyG') throwHandGrenade();

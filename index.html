@@ -74,6 +74,17 @@
   <button class="tbtn" id="bPause" type="button" aria-label="Pausar">II</button>
 </div>
 <div id="rotateMsg"><span>⟳</span>GIRE O CELULAR<br>PARA O MODO HORIZONTAL</div>
+<button id="deckBtn" class="hidden" type="button" aria-label="Abrir o cyberdeck (tecla T)">⌨ DECK [T]</button>
+<div id="deck" class="hidden deck-kali" role="dialog" aria-label="Cyberdeck (simulação, sem rede real)">
+  <div class="deck-laptop">
+    <header class="deck-bar"><b>CYBERDECK CX-7</b><span>SIMULAÇÃO · SEM REDE REAL</span>
+      <div class="deck-chips" aria-live="off"><i id="deckChipScan">SCAN</i><i id="deckChipJam">JAM</i></div>
+      <div class="deck-skins" role="group" aria-label="Visual do shell"><button type="button" data-skin="kali">KALI</button><button type="button" data-skin="arch">ARCH</button></div>
+      <button id="deckClose" type="button" aria-label="Fechar o deck">✕</button></header>
+    <div id="deckOut" class="deck-out" role="log" aria-live="polite"></div>
+    <form id="deckForm" class="deck-in" autocomplete="off"><label id="deckPrompt" for="deckInput"></label><input id="deckInput" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Comando"></form>
+  </div>
+</div>
 <div id="incTerm" class="hidden" role="dialog" aria-label="Terminal NEXUS de invasão (cenográfico)">
   <div class="nexus-shell">
     <header class="nexus-topbar">
@@ -153,6 +164,7 @@
 <script src="maps.js"></script>
 <script src="incursion.js"></script>
 <script src="terminal-props.js"></script>
+<script src="deck.js"></script>
 <script src="pathfinding.js"></script>
 <script src="tactics.js"></script>
 <script src="progression.js"></script>

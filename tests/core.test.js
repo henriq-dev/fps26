@@ -6,7 +6,7 @@ const context = { window: {}, Math, Uint8Array, Float32Array, Int32Array, Date }
 context.Arena = context.window.Arena = {};
 context.window.window = context.window;
 vm.createContext(context);
-for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'incursion.js', 'terminal-props.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
+for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'incursion.js', 'terminal-props.js', 'deck.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
 }
 const A = context.Arena;
@@ -346,3 +346,46 @@ console.log('p28: campus OK');
   assert.equal(A.turretStep(t, 5, { active: true, dist: 5, los: true }), false, 'destruída não atira');
 }
 console.log('p29: torretas destrutíveis OK');
+
+// ---- p30: cyberdeck (laptop Kali/Arch, simulado) ----
+{
+  const run = (l, c = {}) => A.deckRun(l, { skin: 'kali', scanCd: 0, jamCd: 0, targets: [{ label: 'CAM-01', dist: 12.4 }, { label: 'CONSOLE', dist: 4 }], ...c });
+  assert.equal(run('').lines.length, 0, 'linha vazia não faz nada');
+  assert.ok(run('help').lines.some(l => l.t.includes('scan')), 'help lista scan');
+  const sc = run('scan'); assert.equal(sc.fx.scan, A.DECK.scan.time); assert.ok(sc.lines.some(l => l.t.includes('192.0.2.')), 'IPs fictícios (faixa de documentação)');
+  assert.ok(sc.lines.findIndex(l => l.t.includes('CONSOLE')) < sc.lines.findIndex(l => l.t.includes('CAM-01')), 'ordena por distância');
+  assert.equal(run('sudo nmap -sV x').fx.scan, A.DECK.scan.time, 'sudo e alias nmap');
+  assert.equal(run('scan', { scanCd: 9 }).fx.scan, undefined, 'recarga bloqueia'); assert.ok(run('scan', { scanCd: 9 }).lines[0].t.includes('9'));
+  assert.equal(run('jam').fx.jam, A.DECK.jam.time); assert.equal(run('jam', { jamCd: 5 }).fx.jam, undefined);
+  assert.equal(run('theme arch').fx.skin, 'arch'); assert.equal(run('theme xyz').fx.skin, undefined);
+  assert.ok(run('foo').lines[0].t.startsWith('zsh:'), 'Kali = zsh'); assert.ok(run('foo', { skin: 'arch' }).lines[0].t.startsWith('bash:'), 'Arch = bash');
+  assert.ok(run('neofetch', { skin: 'arch' }).lines.some(l => l.t.includes('Arch Linux (simulado)')));
+  for (const real of ['hydra', 'msfconsole', 'sqlmap', 'ssh', 'ping']) { const r = run(real + ' alvo'); assert.ok(r.lines[0].t.includes('desativado') && !r.fx.scan && !r.fx.jam, `${real} real não executa`); }
+  assert.equal(run('clear').fx.clear, true); assert.equal(run('exit').fx.exit, true);
+  const all = JSON.stringify(['help', 'scan', 'jam', 'neofetch', 'uname -a', 'cat notas.txt'].map(c => run(c).lines));
+  assert.ok(!/\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(all.replace(/192\.0\.2\.\d+|192\.0\.2\.0\/24/g, '')), 'só IPs da faixa 192.0.2.x');
+}
+console.log('p30: cyberdeck OK');
+
+// ---- p31: detalhes do deck (Tab, boot, status, comandos extras) ----
+{
+  assert.equal(A.deckComplete('sca').line, 'scan ', 'completa único'); assert.equal(JSON.stringify(A.deckComplete('s').options.slice().sort()), '["scan","status"]', 'várias opções');
+  assert.equal(A.deckComplete('theme a').line, 'theme arch ', 'completa argumento'); assert.equal(A.deckComplete('xyz').line, 'xyz');
+  assert.ok(A.deckBoot('kali').some(t => t.includes('zsh')) && A.deckBoot('arch').some(t => t.includes('bash')), 'boot por skin');
+  const st = A.deckRun('status', { skin: 'kali', scanCd: 3, jamCd: 0, time: 75, status: { stage: 2, mission: 'REDE', camsOff: true, alarm: 0, threats: 0 } });
+  assert.ok(st.lines.some(l => l.t.includes('resfriando 3 s')) && st.lines.some(l => l.t.includes('FORA DO AR')), 'status mostra recarga e câmeras');
+  assert.ok(A.deckRun('date', { time: 75 }).lines[0].t.includes('T+01:15'), 'tempo de missão');
+  assert.ok(A.deckRun('ip a', {}).lines.some(l => l.t.includes('192.0.2.2')), 'ip fictício');
+  assert.ok(A.deckRun('history', { history: ['scan', 'jam'] }).lines.length === 2, 'history');
+}
+console.log('p31: detalhes do deck OK');
+
+// ---- p32: connect (deck ↔ console) ----
+{
+  const run = (st) => A.deckRun('connect', { skin: 'kali', connect: { state: st, name: 'CONSOLE KVM' } });
+  assert.equal(run('ready').fx.connect, true, 'perto do console: prepara'); assert.ok(run('ready').lines.some(l => l.t.includes('CONSOLE KVM')));
+  for (const st of ['far', 'primed', 'exit']) { assert.ok(!run(st).fx.connect, `${st}: não prepara`); assert.equal(run(st).lines[0].k, 'warn'); }
+  assert.ok(A.deckRun('help', {}).lines.some(l => l.t.includes('connect')), 'help cita connect'); assert.equal(A.deckComplete('conn').line, 'connect ');
+  assert.ok(!A.deckRun('connect', {}).fx.connect, 'sem contexto = longe');
+}
+console.log('p32: connect OK');

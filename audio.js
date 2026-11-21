@@ -88,6 +88,14 @@ Arena.createAudio = getVolume => {
     combo(n) { playTone(500 + n * 120, 900 + n * 160, 0.1, 0.12, 'triangle'); },                       // sobe de tom a cada nível do combo
     boss()   { playTone(90, 45, 0.5, 0.5, 'sawtooth'); playNoise(0.4, 600, 0.5); },    // rugido do chefe ao mudar de fase
     objective(){ playTone(660, 990, 0.16, 0.22, 'triangle'); playTone(880, 1320, 0.2, 0.18, 'sine', 0.1); },
+    // CYBERDECK: cliques de teclado, confirmação, erro, varredura, interferência e boot (tudo sintetizado)
+    deckKey(){ playTone(1500 + Math.random() * 500, 900, 0.03, 0.05, 'square'); },
+    deckEnter(){ playTone(520, 420, 0.06, 0.1, 'square'); },
+    deckOpen(){ playTone(300, 620, 0.12, 0.12, 'triangle'); },
+    deckErr(){ playTone(190, 120, 0.2, 0.18, 'sawtooth'); },
+    deckBoot(){ [0, 0.09, 0.18].forEach((d, i) => playTone(500 + i * 220, 600 + i * 260, 0.08, 0.1, 'square', d)); },
+    deckScan(){ playTone(380, 1700, 0.38, 0.14, 'sine'); playTone(1700, 1700, 0.08, 0.1, 'triangle', 0.4); },
+    deckJam(){ playNoise(0.7, 3200, 0.22, 0, 'bandpass'); playTone(110, 55, 0.6, 0.14, 'sawtooth'); },
     achievement(){ playTone(523, 1046, 0.22, 0.2, 'triangle'); playTone(784, 1568, 0.22, 0.16, 'sine', 0.12); }
   };
   return { init, setVolume, setListener, sfx };
