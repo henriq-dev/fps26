@@ -360,3 +360,6 @@ body.touch #perfPanel pre { max-height: 28vh; overflow: auto; }
 @media (max-width: 700px) { .nexus-layout { grid-template-columns: 1fr; min-height: auto; }.nexus-sidebar { display: none; }.nexus-topbar { padding: 0 10px; gap: 8px; }.nexus-brand span, .nexus-clock { display: none; }.nexus-status { font-size: 8px; }.nexus-main { padding: 16px 12px; }.nexus-main #incOptions { grid-template-columns: 1fr; }.nexus-main #incOptions .perk { min-height: 68px; }.nexus-network { height: 190px; }.nexus-console-head b { display: none; } }
 @media (prefers-reduced-motion: reduce) { .nexus-brand i, .nexus-scanline { animation: none; }.nexus-shell::before { display: none; } }
 body.touch:has(#incTerm:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar, #bossBar, #combo, #feed) { visibility: hidden; }
+
+/* P25: marcadores 3D do drone (canvas por cima da cena, não captura cliques) */
+#droneOverlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }

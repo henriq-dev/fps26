@@ -592,3 +592,51 @@ A validação visual do modal foi feita em prévia estática e a validação fun
 ### Próximo pacote
 
 Integrar uma versão compacta da identidade NEXUS aos monitores físicos KVM, Rede e Datacenter e fazer as escolhas alterarem LEDs, racks, portas, câmeras e iluminação dos prédios.
+
+## Pacote 24 — Mescla p23 + portas/câmeras, consoles leves (21/11/2026)
+
+**Base:** seu p23 (interface NEXUS, `terminal-props.js`). Trazidos do p22: portas e câmeras de segurança nos 3 prédios.
+
+### Ordem das atividades (Fácil → Difícil)
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Texto das opções ("sem alertas") e log inicial `[SIM] aguardando seleção…` | Dados separados da lógica | Só muda texto em `incursion.js`/`script.js`. |
+| Fácil | Cache `arena-fps-v8-p24` | Service Worker / versionamento | Força o PWA a baixar os arquivos novos. |
+| Fácil | `Arena.holdAllowed` (progresso do hold respeita `lockout`) | Função pura e testável | Corrige o bug do p23: segurar E durante o bloqueio por dano ainda enchia a barra. |
+| Médio | Portas (lista `doors`) e câmeras (cone + linha de visão) por prédio | Produto escalar, `lineClear`, listas de dados | Porta é só visual (colisão/IA inalteradas); câmera detecta no cone sem parede. |
+| Médio | Alerta só troca cores (faixa e névoa) | Custo de shaders no Three r128 | Mudar nº de luzes recompila shaders; cor não. |
+| Médio | Material próprio por terminal (`ownMat`) | Estado isolado | No p23 todos os terminais compartilhavam o material e as telas mudavam juntas. |
+| Difícil | `mergeByMaterial`: funde os meshes do console por material em 1 `BufferGeometry` | Geometria manual (posições/normais/índices), descarte (`dispose`) | Console passou de 56/76/66 para 15/16/18 meshes. |
+| Difícil | Rótulos do canvas na base e grafo escalado (`KX/KY`) | Canvas 2D responsivo | Rótulos não cobrem mais o grafo. |
+
+### Testes
+- `./test.sh` aprovado (inclui testes p24: portas, câmeras, cone, `holdAllowed`, ≤24 meshes/console, cores distintas, materiais não compartilhados).
+- Chromium/SwiftShader: fluxo completo (infiltrar → rede → datacenter → fuga → vitória) sem erro JS; lockout mantém hold em 0; 8 portas e 3 câmeras no Complexo; câmera dispara alerta de 12 s.
+- Draw calls (4 pontos): p24 193/153/173/164 · p23 290/194/211/183 · p22 164/139/159/151. Triângulos ≈ iguais ao p23; geometrias 115 (p23 108, p22 66); programas 11 nos três.
+
+### Limites
+- Medidas são de renderizador por software: só valem como comparação relativa. FPS real em celular/GPU continua **não medido** (use `?perf=1` e envie o CSV).
+- Portas não bloqueiam tiro nem visão dos inimigos. Armas, dano, IA, colisão e balanceamento não foram alterados.
+- Toda a "invasão" é cenográfica; nenhum comando ou rede real.
+
+## Pacote 25 — Marcadores 3D do drone (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cache `v8-p25`, canvas `#droneOverlay` + CSS | Camadas sobrepostas, `pointer-events: none` | O marcador não atrapalha mouse/toque. |
+| Médio | `Arena.droneScreenPos` (função pura) | Coordenadas NDC → pixels, borda | Testável em Node; marcador fora da tela fica preso à borda, atrás da câmera não aparece. |
+| Médio | `drawDroneMarks()` | `Vector3.project(camera)`, Canvas 2D | Com o drone ativo (F), mostra inimigos, console/saída e câmeras com distância, atravessando paredes. Fora do drone não desenha nada (custo zero). |
+
+Testes: `./test.sh` aprovado (inclui p25); Chromium: marcador de câmera/console aparece, canvas limpo ao fim do drone, 0 erros JS. Armas, dano, IA, colisão e balanço não foram alterados.
+**Medição de celular:** abra `?perf=1`, jogue ~60 s e envie o CSV exportado (e `chrome://gpu`). Ainda não medido.
+
+### P25 (parte 2) — NEXUS nos monitores físicos
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Texto da tela por estado (STANDBY, ENLACE DETECTADO, INTRUSÃO SIM…, CONCLUÍDO, ACESSO NEGADO) | Mapa de dados | Textos fictícios, só cenografia. |
+| Médio | UVs mantidos na fusão de malhas | Atributos de `BufferGeometry` | Sem UV a textura não aparece na malha fundida. |
+| Médio | Uma `CanvasTexture` 256×128 por terminal, em tons de branco; `material.color` tinge pelo estado | Textura dinâmica, tinta por multiplicação | A cor de estado (p24) continua valendo sem redesenhar cores. |
+| Difícil | `Arena.paintIncursionScreen` (grade + grafo animado), ≤ ~6 quadros/s e só a menos de 14 m | Orçamento de custo, `needsUpdate` | Evita enviar textura à GPU toda frame e para terminais distantes. |
+| Difícil | `dispose` da textura ao trocar de mapa | Gestão de memória GPU | Sem vazamento entre fases. |
+
+Testes: `./test.sh` aprovado (textura própria por terminal, UV nas malhas, repintura limitada); Chromium sem erros JS e capturas dos 3 consoles. Programas de shader: 12 (eram 11), pois a tela agora usa `map`; o aquecimento do menu já cobre isso. Não medido em GPU real.

@@ -230,6 +230,18 @@
 - [x] Aquecimento de shaders/geometrias/texturas no menu e a cada troca de mapa.
 - [x] Resolução adaptativa em desktop e celular (desce rápido, sobe devagar; desligada em `?perf=1`).
 - [x] `./test.sh` aprovado, Chromium sem erros; cache `arena-fps-v8-p16`.
-- [ ] Pendente: medir `?perf=1` em celular/GPU física e comparar o CSV com o p15.
+- [x] NEXUS nos monitores físicos (textura por terminal).
+- [ ] Pendente: medir `?perf=1` em celular/GPU física.e comparar o CSV com o p15.
 - [ ] Pendente: fundir as peças dos inimigos para reduzir chamadas de desenho.
 - [ ] Pendente: HUD enxuto, céu em gradiente avermelhado, luzes ciano e letreiros (referência visual).
+
+## Pacote 24
+- [x] Mescla p23 + portas/câmeras; hold respeita lockout; consoles fundidos (≤18 meshes); telas por terminal.
+- [x] NEXUS nos monitores físicos (textura por terminal).
+- [ ] Pendente: medir `?perf=1` em celular/GPU física.
+- [ ] Pendente: torretas, prédios multi-bloco, marcadores 3D do drone, NEXUS dentro dos monitores físicos, porta bloqueando LOS dos inimigos.
+
+## Pacote 25
+- [x] Marcadores 3D do drone (inimigos, console/saída, câmeras).
+- [x] NEXUS nos monitores físicos (textura por terminal).
+- [ ] Pendente: medir `?perf=1` em celular/GPU física.

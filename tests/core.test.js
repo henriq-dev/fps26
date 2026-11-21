@@ -249,3 +249,49 @@ assert.ok(A.incursionBudget(A.INCURSION_STAGES[0], A.incursionEffects('cameras',
 assert.equal(A.incursionInterval(A.INCURSION_STAGES[0], none, true), A.INCURSION_STAGES[0].spawn.every * 0.5);
 const sp = A.pickIncursionSpawn(0, 0, (x, z) => solidAt(x, z, 0.6), () => 0.5); assert.ok(Math.hypot(sp[0], sp[1]) > 13);
 console.log('incursão: OK');
+
+// ---- p24: portas, câmeras, bloqueio por dano e consoles ----
+for (const L of A.INCURSION_LEVELS) {
+  assert.ok(L.doors.length >= 4, L.id + ': tem portas');
+  assert.equal(L.cameras.length, 3, L.id + ': 3 câmeras');
+  const solid = (x, z) => L.blocks.some(([bx, bz, w, h, d]) => Math.abs(x - bx) < w / 2 + 0.3 && Math.abs(z - bz) < d / 2 + 0.3);
+  for (const c of L.cameras) assert.ok(Math.abs(c.x) <= 27 && Math.abs(c.z) <= 27 && !solid(c.x, c.z), L.id + ': câmera fora de blocos');
+  for (const d of L.doors) assert.ok(!L.blocks.some(([bx, bz, w, h, dd]) => Math.abs(d.x - bx) < w / 2 && Math.abs(d.z - bz) < dd / 2), L.id + ': porta no vão');
+}
+const cam = { x: 0, z: 0, dir: 0 };
+assert.ok(A.cameraSees(cam, 0, 0, 10) && !A.cameraSees(cam, 0, 10, 0) && !A.cameraSees(cam, 0, 0, 20) && !A.cameraSees(cam, 0, 0, -5));
+assert.ok(A.camerasOff('cameras', []) && A.camerasOff(null, ['derrubar']) && !A.camerasOff('drone', ['dados']));
+assert.ok(A.holdAllowed({ inRange: true, held: true, lockout: false }));
+assert.ok(!A.holdAllowed({ inRange: true, held: true, lockout: true }), 'com bloqueio (depois de dano) a barra não sobe');
+assert.ok(!A.holdAllowed({ inRange: false, held: true, lockout: false }) && !A.holdAllowed({ inRange: true, held: false, lockout: false }));
+{ // consoles: materiais próprios por terminal e poucas malhas (precisa do THREE)
+  const vm2 = require('vm'), calls = [], c2d = new Proxy({}, { get: (t, k) => k in t ? t[k] : (...a) => { calls.push(k); }, set: (t, k, v) => { t[k] = v; return true; } }), ctx = { console, document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) } }; ctx.window = ctx; ctx.self = ctx; vm2.createContext(ctx);
+  vm2.runInContext(fs.readFileSync('three.min.js', 'utf8'), ctx); vm2.runInContext(fs.readFileSync('terminal-props.js', 'utf8'), ctx);
+  const T = ctx.Arena, views = ['kvm', 'network', 'datacenter'].map((kind, i) => T.createIncursionTerminal({ x: i * 5, z: 0, kind, name: kind }));
+  views.forEach(v => { let n = 0; v.traverse(o => { if (o.isMesh) n++; }); assert.ok(n <= 24, 'console com poucas malhas (' + n + ')'); });
+  T.updateIncursionTerminal(views[0], 'intrusion', 1); T.updateIncursionTerminal(views[1], 'locked', 1); T.updateIncursionTerminal(views[2], 'committed', 1);
+  const col = v => v.userData.screenMats[0].color.getHexString();
+  assert.notEqual(col(views[0]), col(views[1])); assert.notEqual(col(views[1]), col(views[2])); assert.notEqual(col(views[0]), col(views[2]));
+  assert.notStrictEqual(views[0].userData.screenMats[0], views[1].userData.screenMats[0], 'telas não compartilham material');
+  assert.equal(col(views[1]), 'ff3b5f', 'bloqueado = vermelho'); assert.equal(col(views[2]), '3ddc84', 'concluído = verde');
+
+  // p25: tela física com textura própria, UV nas malhas fundidas e repintura limitada
+  {
+  const T2 = ctx.Arena, v = T2.createIncursionTerminal({ x: 0, z: 0, kind: 'kvm', name: 'kvm' }), n0 = calls.length;
+  assert.ok(v.userData.tex && v.userData.screenMats.every(m => m.map === v.userData.tex), 'telas usam a textura do terminal');
+  v.traverse(o => { if (o.isMesh) assert.ok(o.geometry.attributes.uv, 'malha fundida mantém UV'); });
+  T2.paintIncursionScreen(v, 'intrusion', 1, true); const n1 = calls.length; T2.paintIncursionScreen(v, 'intrusion', 1.05); assert.equal(calls.length, n1, 'dentro de 0,16 s não repinta');
+  T2.paintIncursionScreen(v, 'intrusion', 1.4); assert.ok(calls.length > n1, 'depois do intervalo repinta'); assert.ok(n1 > n0);
+  }
+}
+console.log('p24: portas, câmeras, bloqueio e consoles OK');
+
+// ---- p25: marcadores 3D do drone ----
+{
+  const c = A.droneScreenPos(0, 0, 0.5, 1000, 600);
+  assert.ok(c && c.x === 500 && c.y === 300 && !c.edge, 'centro da tela');
+  const f = A.droneScreenPos(3, 0, 0.5, 1000, 600);
+  assert.ok(f && f.edge && f.x === 972, 'fora da tela fica preso à borda');
+  assert.equal(A.droneScreenPos(0, 0, 1.2, 1000, 600), null, 'atrás da câmera não aparece');
+}
+console.log('p25: marcadores do drone OK');

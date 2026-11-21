@@ -120,7 +120,9 @@ function setViewModelLights(index) {
 const solids = [];   // meshes que bloqueiam tiros (raycast)
 const boxes = [];    // caixas de colisão AABB (movimento)
 let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     // navGrid = grade do A* (recriada a cada mapa)
-let incTerminalViews = Object.create(null);                                     // terminais visuais, sem colisão extra
+let incTerminalViews = Object.create(null);
+let incDoors = [], incCams = [];
+const doorMat = new THREE.MeshLambertMaterial({ color: 0x4a5866 }), camBodyMat = new THREE.MeshLambertMaterial({ color: 0x20262e });                                     // terminais visuais, sem colisão extra
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
 const blockMats = new Map();
 function blockMat(color) {
@@ -244,7 +246,18 @@ function loadMap(index) {
   (M.glows || []).forEach(([x, y, z, w, h, d, c]) => {  // detalhes luminosos (telas, LEDs): sem colisão, material compartilhado por cor
     const g = new THREE.Mesh(blockGeo, glowMat(c)); g.scale.set(w, h, d); g.position.set(x, y, z); scene.add(g); mapMeshes.push(g);
   });
+  Object.values(incTerminalViews).forEach(v => Arena.disposeIncursionTerminal && Arena.disposeIncursionTerminal(v));   // libera malhas/materiais dos consoles do mapa anterior
   incTerminalViews = Object.create(null);
+  incDoors = []; incCams = [];
+  (M.doors || []).forEach(d => {                          // portas deslizantes (só visual; a colisão/A* continuam tratando a abertura como livre)
+    const m = new THREE.Mesh(blockGeo, doorMat); m.scale.set(d.axis === 'x' ? 4 : 0.3, M.ceiling - 0.15, d.axis === 'x' ? 0.3 : 4);
+    m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m); incDoors.push({ m, x: d.x, z: d.z, open: 0, y0: m.position.y });
+  });
+  (M.cameras || []).forEach(c => {                        // câmeras de segurança: corpo escuro + luz (vermelha = ativa)
+    const g = new THREE.Group(); g.position.set(c.x, 3.25, c.z);
+    const body = new THREE.Mesh(blockGeo, camBodyMat); body.scale.set(0.34, 0.26, 0.55); const lamp = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lamp.scale.set(0.12, 0.12, 0.05); lamp.position.set(0, 0, 0.3);
+    g.add(body, lamp); scene.add(g); mapMeshes.push(g); incCams.push({ g, lamp, c });
+  });
   if (inc && Arena.createIncursionTerminal) Object.entries(M.terminals || {}).forEach(([id, terminal]) => {
     const view = Arena.createIncursionTerminal({ ...terminal, id }); scene.add(view); mapMeshes.push(view); incTerminalViews[id] = view;
   });
@@ -411,6 +424,7 @@ function updateIncursionTerminalViews() {
     if (!inc.done && stageIndex === inc.stage && incStage().terminal === id) state = inc.hold > 0 ? 'intrusion' : inc.inRange ? 'detected' : 'standby';
     if (inc.alarmT > 0 && state === 'standby') state = 'locked';
     Arena.updateIncursionTerminal(view, state, inc.time);
+    if (Math.hypot(view.position.x - px, view.position.z - pz) < 14) Arena.paintIncursionScreen(view, state, inc.time);   // só redesenha a tela de quem está perto
   });
 }
 function startIncursion() {
@@ -418,7 +432,7 @@ function startIncursion() {
   loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
   terminalInteraction.id = null; terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = false; terminalInteraction.focus = 0;
   inc = { stage: 0, hold: 0, inRange: false, security: null, targets: [], fx: Arena.incursionEffects(null, []), spawned: 0, spawnT: 2, alarmT: 0, overrun: false,
-          marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0 };
+          marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0, alertT: 0, camCd: 0, camHits: 0 };
   toSpawn = 0; bossPending = false; introQueue = []; waveDelay = 1e9;
   enterIncStage(0);
 }
@@ -446,14 +460,38 @@ function updateIncursionHud() {
   if (active && st.exit) { const t = incTarget(); status = `SAÍDA A ${Math.round(Math.hypot(t.x - px, t.z - pz))} m`; ratio = 1; }
   else if (active) { ratio = inc.hold / st.hold; status = inc.inRange ? `INVASÃO ${Math.floor(ratio * 100)}% · SEGURE E` : 'APROXIME-SE DO CONSOLE E SEGURE E'; }
   if (inc.alarmT > 0) status += ` · ALARME ${Math.ceil(inc.alarmT)}s`; else if (inc.overrun && active) status += ' · RESPOSTA TOTAL';
+  status += Arena.camerasOff(inc.security, inc.targets) ? ' · CÂMERAS OFF' : inc.alertT > 0 ? ' · ALERTA' : ' · CÂMERAS ON';
   status += inc.droneT > 0 ? ` · DRONE ${Math.ceil(inc.droneT)}s` : inc.droneCd > 0 ? ` · DRONE ${Math.ceil(inc.droneCd)}s` : ' · DRONE [F]';
   el.objectiveFill.style.width = `${clamp(ratio, 0, 1) * 100}%`; el.objectiveStatus.textContent = status;
+}
+// P25: marcadores do drone. Canvas 2D por cima da cena; só desenha com o drone ativo (custo zero fora disso)
+const droneEl = $('droneOverlay'), dctx = droneEl.getContext('2d'); let droneDrawn = false; const _dv = new THREE.Vector3();
+function drawDroneMarks() {
+  const on = !!(inc && !inc.done && inc.droneT > 0);
+  if (!on && !droneDrawn) return;
+  const W = innerWidth, Hh = innerHeight;
+  if (droneEl.width !== W || droneEl.height !== Hh) { droneEl.width = W; droneEl.height = Hh; }
+  dctx.clearRect(0, 0, W, Hh); droneDrawn = on; if (!on) return;
+  const mark = (x, y, h, color, label, big) => {                                   // projeta um ponto 3D e desenha colchetes + distância
+    _dv.set(x, h, y).project(camera);
+    const pos = Arena.droneScreenPos(_dv.x, _dv.y, _dv.z, W, Hh); if (!pos) return;
+    const d = Math.round(Math.hypot(x - px, y - pz)), r = big ? 16 : 10;
+    dctx.strokeStyle = color; dctx.fillStyle = color; dctx.lineWidth = 2; dctx.globalAlpha = pos.edge ? 0.55 : 0.95;
+    if (pos.edge) { dctx.beginPath(); dctx.arc(pos.x, pos.y, 5, 0, Math.PI * 2); dctx.fill(); }
+    else { dctx.strokeRect(pos.x - r, pos.y - r, r * 2, r * 2); }
+    dctx.font = '600 12px ui-monospace, monospace'; dctx.textAlign = 'center';
+    dctx.fillText(`${label} ${d}m`, Math.min(W - 48, Math.max(48, pos.x)), Math.min(Hh - 90, pos.y - r - 5));   // rótulo nunca sai da tela
+  };
+  for (const e of enemies) if (!e.dead) mark(e.g.position.x, e.g.position.z, 1.1, e.T.boss ? '#ff4d6d' : '#ffd166', e.T.boss ? 'CHEFE' : '', e.T.boss);
+  const t = incTarget(); mark(t.x, t.z, 1.4, incStage().exit ? '#3ddc84' : '#4de7ff', incStage().exit ? 'SAÍDA' : 'CONSOLE', true);
+  for (const { g } of incCams) mark(g.position.x, g.position.z, g.position.y, '#ff5a4d', 'CÂM', false);
+  dctx.globalAlpha = 1;
 }
 function useDrone() {
   if (!inc || inc.done) return;
   if (inc.droneT > 0 || inc.droneCd > 0) { addFeed('DRONE EM RECARGA', false); return; }
   inc.droneT = inc.fx.droneTime; inc.droneCd = inc.fx.droneTime + inc.fx.droneCooldown;
-  banner('DRONE EM VOO\nINIMIGOS MARCADOS NO RADAR', 1.6); sfx.objective();
+  banner('DRONE EM VOO\nINIMIGOS, CONSOLE E CÂMERAS MARCADOS', 1.6); sfx.objective();
 }
 function updateIncursion(dt) {
   inc.time += dt;
@@ -461,16 +499,18 @@ function updateIncursion(dt) {
   const st = incStage();
   if (inc.marker) { inc.marker.userData.ring.rotation.z += dt * 1.5; inc.marker.userData.core.rotation.y += dt * 1.8; }
   inc.droneT = Math.max(0, inc.droneT - dt); inc.droneCd = Math.max(0, inc.droneCd - dt);
+  updateIncDoors(dt); updateIncCameras(dt); drawDroneMarks();
   if (inc.alarmT > 0) {                                                        // alarme: só troca cores (não mexe em luzes = sem recompilar shader)
     inc.alarmT -= dt; const f = (Math.sin(inc.time * 7) + 1) / 2;
     stripMat.color.setRGB(0.6 + 0.4 * f, 0.1, 0.08); if (scene.fog) scene.fog.color.setRGB(0.12 + 0.1 * f, 0.02, 0.02);
     if (inc.alarmT <= 0) { inc.overrun = true; banner('RESPOSTA TOTAL\nREFORÇOS ACELERADOS', 2.6); }
   }
+  if (inc.alertT > 0 && inc.alarmT <= 0) stripMat.color.setRGB(0.9, 0.12, 0.1); else if (inc.alertT <= 0 && inc.alarmT <= 0 && !inc.overrun) stripMat.color.setHex(incData().strip);
   if (inc.done) return;
   const budget = Arena.incursionBudget(st, inc.fx);                            // reforços contínuos até o limite do setor
   inc.spawnT -= dt;
   if (inc.spawnT <= 0 && (budget < 0 || inc.spawned < budget) && enemies.filter(e => !e.dead).length < Math.min(MAX_ALIVE, st.spawn.max + inc.fx.risk)) {
-    spawnEnemy(pickType()); inc.spawned++; inc.spawnT = Arena.incursionInterval(st, inc.fx, inc.overrun); updateHUD();
+    spawnEnemy(pickType()); inc.spawned++; inc.spawnT = Arena.incursionInterval(st, inc.fx, inc.overrun) * (inc.alertT > 0 ? 0.6 : 1); updateHUD();
   }
   if (inc.choiceOpen) return;
   const t = incTarget(), dist = Math.hypot(t.x - px, t.z - pz);
@@ -478,11 +518,31 @@ function updateIncursion(dt) {
   else {
     inc.inRange = terminalInteraction.canUse;
     const contested = enemies.some(e => !e.dead && Math.hypot(e.g.position.x - t.x, e.g.position.z - t.z) < 4);   // inimigo perto atrasa a invasão
-    if (inc.inRange && (keys.KeyE || interactHeld)) inc.hold = Math.min(st.hold, inc.hold + dt * (contested ? 0.55 : 1));
+    if (Arena.holdAllowed({ inRange: inc.inRange, held: keys.KeyE || interactHeld, lockout: terminalInteraction.lockout })) inc.hold = Math.min(st.hold, inc.hold + dt * (contested ? 0.55 : 1));
     else inc.hold = Math.max(0, inc.hold - dt * 0.25);
     if (inc.hold >= st.hold) { if (st.choose) openIncChoice(st); else { banner('ACESSO CONCEDIDO\nPRÓXIMO SETOR', 2); sfx.objective(); enterIncStage(inc.stage + 1); } }
   }
   updateIncursionHud();
+}
+function updateIncDoors(dt) {                            // abre a porta quando o jogador ou um inimigo chega perto
+  for (const d of incDoors) {
+    let near = Math.hypot(px - d.x, pz - d.z) < 4.6;
+    if (!near) for (const e of enemies) { if (!e.dead && Math.abs(e.g.position.x - d.x) < 4 && Math.abs(e.g.position.z - d.z) < 4) { near = true; break; } }
+    d.open = clamp(d.open + (near ? 1 : -1) * dt * 4, 0, 1);
+    d.m.position.y = d.y0 + d.open * (incData().ceiling - 0.3); d.m.visible = d.open < 0.98;
+  }
+}
+function updateIncCameras(dt) {
+  const off = Arena.camerasOff(inc.security, inc.targets);
+  inc.camCd = Math.max(0, inc.camCd - dt); inc.alertT = Math.max(0, inc.alertT - dt);
+  incCams.forEach(({ g, lamp, c }, i) => {
+    const ang = Arena.cameraAngle(c, inc.time, i); g.rotation.y = off ? c.dir : ang;
+    lamp.visible = !off;                                                       // luz vermelha só enquanto a câmera está ativa
+    if (!off && !inc.done && inc.camCd <= 0 && Arena.cameraSees(c, ang, px, pz) && Arena.lineClear(navGrid, c.x, c.z, px, pz)) {
+      inc.camCd = 20; inc.alertT = 12; inc.camHits++; banner('CÂMERA DETECTOU VOCÊ\nREFORÇOS A CAMINHO', 2.2);
+      for (let k = 0; k < 2; k++) spawnEnemy(pickType());
+    }
+  });
 }
 function finishIncursion() {
   inc.done = true; incVictory = true;
@@ -498,7 +558,7 @@ function openIncChoice(st) {
   inc.choiceOpen = true; locked = false; mouseHeld = false; scoped = false; interactHeld = false; keys.KeyE = false;
   if (document.pointerLockElement) document.exitPointerLock();
   const multi = st.choose === 'target', list = multi ? Arena.INCURSION_TARGETS : Arena.INCURSION_SECURITY;
-  incPhase = 'choose'; incSel.clear(); incLogEl.textContent = ''; incOptionsEl.innerHTML = '';
+  incPhase = 'choose'; incSel.clear(); incLogEl.textContent = '[SIM] aguardando seleção…'; incOptionsEl.innerHTML = '';
   $('incTitle').textContent = multi ? 'DATACENTER // OBJETIVO FINAL' : 'REDE DE SEGURANÇA // ESCOLHA UM SISTEMA';
   $('incInfo').textContent = (multi ? 'Escolha um ou mais objetivos (teclas 1–4). Combinar rende bônus, mas aumenta o risco na fuga.' : 'Escolha um sistema (teclas 1–3).') + ' Tela cenográfica: nada aqui é real.';
   $('incNodeId').textContent = String(7 + inc.stage).padStart(2, '0');
@@ -560,9 +620,10 @@ function startIncNet() {
     g.strokeStyle = 'rgba(77,231,255,.10)'; g.lineWidth = 1;
     for (let x = 0; x <= W; x += 36) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, Hh); g.stroke(); }
     for (let y = 0; y <= Hh; y += 28) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
-    g.fillStyle = 'rgba(151,204,218,.55)'; g.font = '9px ui-monospace, monospace'; g.fillText('NEXUS / ROUTE GRAPH', 14, 19); g.fillText(`FRAME ${String(Math.floor(t * 24) % 9999).padStart(4, '0')}`, W - 86, 19);
+    g.fillStyle = 'rgba(151,204,218,.55)'; g.font = '9px ui-monospace, monospace'; g.fillText('NEXUS / ROUTE GRAPH', 14, Hh - 12); g.fillText(`FRAME ${String(Math.floor(t * 24) % 9999).padStart(4, '0')}`, W - 86, Hh - 12);   // rodapé: não colide com os rótulos em HTML do topo
+    const KX = W / 420, KY = Hh / 190;                       // o desenho foi pensado para 420×190: escala para ocupar o canvas todo
     const dead = incSel.has('derrubar'), vir = incSel.has('virus'), boom = incSel.has('destruir'), steal = incSel.has('dados');
-    const P = incNodes.map(n => { const x = n.x * ca - n.z * sa, z = n.x * sa + n.z * ca, s = 260 / (260 + z * 90); return { x: W / 2 + x * 90 * s, y: Hh / 2 + n.y * 70 * s, s, k: n.k }; });
+    const P = incNodes.map(n => { const x = n.x * ca - n.z * sa, z = n.x * sa + n.z * ca, s = 260 / (260 + z * 90); return { x: W / 2 + x * 90 * KX * s, y: Hh / 2 + n.y * 70 * KY * s, s, k: n.k }; });
     g.lineWidth = 1;
     for (let i = 1; i < P.length; i++) {
       g.strokeStyle = dead ? 'rgba(80,90,100,.4)' : boom ? 'rgba(255,106,61,.5)' : 'rgba(77,231,255,.35)';
@@ -2031,7 +2092,7 @@ function resetGame() {
   clearPickups(); clearFx(); clearCasings(); clearSurfaceImpacts();
   projectiles.forEach(p => projPool.put(p.m)); grenades.forEach(g => grenadePool.put(g.m));
   grenades = []; introQueue = []; projectiles = []; enemies = [];
-  if (inc && inc.marker) scene.remove(inc.marker); inc = null; incVictory = false; closeIncTerm(); 
+  if (inc && inc.marker) scene.remove(inc.marker); inc = null; if (droneDrawn) { dctx.clearRect(0, 0, droneEl.width, droneEl.height); droneDrawn = false; } incVictory = false; closeIncTerm(); 
   clearObjectiveMarkers(); interactQueued = interactHeld = false;
   currentMode = $('modeSelect').value || 'survival'; currentDifficulty = $('difficultySelect').value || 'normal'; refreshRecord(); if (!perfMode) career.beginDay(); enemySerial = 0;
   perks = {}; shop = { dmg: 0, hp: 0, dash: 0 }; shopBought.buyAmmo = 0; credits = 0; combo = 1; comboT = 0; maxCombo = 1; shake = 0; lastHurt = 0; beatT = 0; aliveTime = 0; handGrenades = 3; machineGunHeat = 0; el.feed.innerHTML = '';
@@ -2740,7 +2801,7 @@ function showOverlay(mode, keepHidden = false) {
     el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = helpText() + (perkSummary() ? `\n<b>Upgrades:</b> ${perkSummary()}` : ''); el.btn.textContent = 'CONTINUAR';
   } else {
     el.title.innerHTML = incVictory ? 'MISSÃO <span>CUMPRIDA</span>' : 'GAME <span>OVER</span>';
-    el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão' : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
+    el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão · ' + incData().name : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
     el.btn.textContent = 'JOGAR NOVAMENTE';
   }
   el.btn.dataset.mode = mode;

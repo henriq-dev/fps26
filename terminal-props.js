@@ -19,13 +19,19 @@
   function add(g, geometry, material, x, y, z, sx = 1, sy = 1, sz = 1, rz = 0) {
     const m = new THREE.Mesh(geometry, material); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.z = rz; g.add(m); return m;
   }
+  // Materiais PRÓPRIOS de cada terminal para tela e LED: o estado (cor) de um console não pode vazar para os outros.
+  function ownMat(g, color, kind) {
+    const own = g.userData.own || (g.userData.own = new Map()), key = `${kind}:${color}`;
+    if (!own.has(key)) { const m = new THREE.MeshBasicMaterial({ color }); m.userData = { kind, base: color }; own.set(key, m); }
+    return own.get(key);
+  }
   function led(g, x, y, z, color, sx = .035, sy = .035, sz = .018) {
-    const m = add(g, box(1, 1, 1), mat(color, true), x, y, z, sx, sy, sz); m.userData.led = true; return m;
+    return add(g, box(1, 1, 1), ownMat(g, color, 'led'), x, y, z, sx, sy, sz);
   }
   function screw(g, x, y, z) { return add(g, cyl(.018, .014, 6), mat(0xb4c5c8, false), x, y, z, 1, 1, 1); }
   function screen(g, x, y, z, w, h, color) {
     add(g, box(w + .12, h + .12, .075), mat(frame), x, y, z - .02);
-    const m = add(g, box(w, h, .012), mat(color, true), x, y, z + .025); m.userData.screen = true; return m;
+    return add(g, box(w, h, .012), ownMat(g, color, 'screen'), x, y, z + .025);
   }
   function keyboard(g, x, y, z, wide = .68) {
     add(g, box(wide, .055, .27), mat(rubber), x, y, z);
@@ -78,20 +84,75 @@
     cable(g, [[-.48, 1.05, -.20], [-.65, .78, -.36], [-.65, .35, -.36]], 0x4de7ff); cable(g, [[.48, 1.05, -.20], [.65, .78, -.36], [.65, .35, -.36]], 0xffb04d);
     return g;
   }
+  // Funde todas as peças que usam o mesmo material numa só malha (cada console cai de ~60 para ~20 chamadas de desenho).
+  function mergeByMaterial(g) {
+    const groups = new Map(); g.updateMatrixWorld(true);
+    g.children.slice().forEach(c => { if (c.isMesh) { if (!groups.has(c.material)) groups.set(c.material, []); groups.get(c.material).push(c); } });
+    const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+    groups.forEach((list, material) => {
+      let vc = 0, ic = 0; list.forEach(m => { vc += m.geometry.attributes.position.count; ic += m.geometry.index.count; });
+      const pos = new Float32Array(vc * 3), nor = new Float32Array(vc * 3), uvs = new Float32Array(vc * 2), idx = new Uint16Array(ic); let vo = 0, io = 0;
+      list.forEach(m => {
+        m.updateMatrix(); nm.getNormalMatrix(m.matrix);
+        const p = m.geometry.attributes.position, n = m.geometry.attributes.normal, uv = m.geometry.attributes.uv, ix = m.geometry.index.array;
+        for (let i = 0; i < p.count; i++) {
+          uvs[(vo + i) * 2] = uv.getX(i); uvs[(vo + i) * 2 + 1] = uv.getY(i);
+          v.fromBufferAttribute(p, i).applyMatrix4(m.matrix); pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+          v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); nor[(vo + i) * 3] = v.x; nor[(vo + i) * 3 + 1] = v.y; nor[(vo + i) * 3 + 2] = v.z;
+        }
+        for (let j = 0; j < ix.length; j++) idx[io + j] = ix[j] + vo;
+        vo += p.count; io += ix.length; g.remove(m);
+      });
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2)); geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.add(new THREE.Mesh(geo, material));
+    });
+  }
   Arena.createIncursionTerminal = function createIncursionTerminal(spec) {
     const g = new THREE.Group(); g.position.set(spec.x, 0, spec.z); g.rotation.y = spec.rotation || 0; g.userData.terminalId = spec.id || spec.name;
     if (spec.kind === 'network') buildNetwork(g); else if (spec.kind === 'datacenter') buildDatacenter(g); else buildKvm(g);
-    const screens = [], leds = [];
-    g.traverse(node => { if (node.userData.screen) screens.push(node.material); if (node.userData.led) leds.push(node.material); });
-    g.userData.screenMats = screens; g.userData.ledMats = leds; g.userData.state = 'standby'; g.userData.phase = Math.random() * 5; g.userData.label = spec.name;
+    const own = [...(g.userData.own || new Map()).values()];
+    g.userData.screenMats = own.filter(m => m.userData.kind === 'screen'); g.userData.ledMats = own.filter(m => m.userData.kind === 'led');
+    // P25: a tela física mostra o NEXUS. Textura 256x128 em tons de branco; a cor do estado (material.color) tinge o desenho.
+    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+    const tex = new THREE.CanvasTexture(cv); tex.generateMipmaps = false; tex.minFilter = THREE.LinearFilter;
+    g.userData.tex = tex; g.userData.tctx = cv.getContext('2d'); g.userData.nextPaint = 0;
+    g.userData.screenMats.forEach(m => { m.map = tex; m.needsUpdate = true; });
+    mergeByMaterial(g); Arena.paintIncursionScreen(g, 'standby', 0, true); g.userData.state = 'standby'; g.userData.phase = Math.random() * 5; g.userData.label = spec.name;
     return g;
+  };
+  // Desenha o mini NEXUS (grade + grafo de nós + texto). Limitado a ~6 quadros/s por terminal; force = true ignora o limite.
+  const NODES = [[.18, .30], [.40, .68], [.62, .26], [.82, .62], [.30, .86], [.74, .88]];
+  const SCREEN_TEXT = { standby: 'NEXUS // STANDBY', detected: 'ENLACE DETECTADO', intrusion: 'INTRUSÃO SIM…', committed: 'CONCLUÍDO', locked: 'ACESSO NEGADO' };
+  Arena.paintIncursionScreen = function paintIncursionScreen(g, state, time, force) {
+    const u = g.userData; if (!u.tctx || (!force && time < u.nextPaint)) return;
+    u.nextPaint = time + 0.16; const c = u.tctx, W = 256, H = 128;
+    c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 1; c.beginPath();
+    for (let x = 0; x <= W; x += 32) { c.moveTo(x, 0); c.lineTo(x, H); } for (let y = 0; y <= H; y += 32) { c.moveTo(0, y); c.lineTo(W, y); } c.stroke();
+    const pos = NODES.map(([x, y], i) => [x * W + Math.sin(time * 1.3 + i * 1.7 + u.phase) * 6, y * H * .8 + 14 + Math.cos(time * 1.1 + i) * 4]);
+    c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 2; c.beginPath();
+    pos.forEach((p, i) => { const q = pos[(i + 1) % pos.length], h = pos[2]; c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.moveTo(p[0], p[1]); c.lineTo(h[0], h[1]); }); c.stroke();
+    c.fillStyle = '#fff'; pos.forEach((p, i) => { c.beginPath(); c.arc(p[0], p[1], i === 2 ? 8 : 5, 0, Math.PI * 2); c.fill(); });
+    c.font = 'bold 15px monospace'; c.textAlign = 'left'; c.fillText(SCREEN_TEXT[state] || SCREEN_TEXT.standby, 8, 18);
+    if (state === 'intrusion') { const f = (time * .5) % 1; c.fillRect(8, H - 14, (W - 16) * f, 7); } else if (state === 'committed') c.fillRect(8, H - 14, W - 16, 7);
+    u.tex.needsUpdate = true;
   };
   Arena.updateIncursionTerminal = function updateIncursionTerminal(g, state, time) {
     if (!g || !g.userData) return;
-    const next = palette[state] ? state : 'standby'; g.userData.state = next;
-    const color = palette[next], pulse = next === 'intrusion' ? .65 + .35 * ((Math.sin(time * 8 + g.userData.phase) + 1) / 2) : 1;
-    g.userData.screenMats.forEach(m => m.color.setHex(color));
-    g.userData.ledMats.forEach((m, i) => m.color.setHex(i % 3 === 0 && next === 'locked' ? 0xff3b5f : (i % 2 === 0 ? color : 0x3ddc84)));
+    const next = palette[state] ? state : 'standby', pulse = next === 'intrusion' ? .65 + .35 * ((Math.sin(time * 8 + g.userData.phase) + 1) / 2) : 1;
+    if (next === g.userData.state && next !== 'intrusion') return;                 // sem mudança: não mexe nos materiais
+    g.userData.state = next; const color = palette[next];
+    g.userData.screenMats.forEach(m => m.color.setHex(color).multiplyScalar(pulse));
+    g.userData.ledMats.forEach(m => {                                              // LEDs verdes seguem o estado; os demais mantêm a própria cor
+      if (m.userData.base === 0x3ddc84) m.color.setHex(next === 'standby' ? 0x3ddc84 : color).multiplyScalar(pulse);
+      else m.color.setHex(next === 'locked' ? 0xff3b5f : m.userData.base);
+    });
     g.scale.y += (1 + (pulse - 1) * .015 - g.scale.y) * .14;
+  };
+  Arena.disposeIncursionTerminal = function disposeIncursionTerminal(g) {            // libera as malhas fundidas e os materiais próprios
+    if (!g) return;
+    g.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+    if (g.userData.tex) g.userData.tex.dispose();
+    (g.userData.screenMats || []).concat(g.userData.ledMats || []).forEach(m => m.dispose());
   };
 })();

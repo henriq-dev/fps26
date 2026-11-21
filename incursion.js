@@ -17,8 +17,8 @@ function segments(a, b, doors) {
   for (const c of cuts) { if (c - 2 > from) out.push([from, c - 2]); from = c + 2; }
   if (b > from) out.push([from, b]); return out;
 }
-const wallX = (list, z, x0, x1, doors = [], color = WALL) => segments(x0, x1, doors).forEach(([p, q]) => list.push([(p + q) / 2, z, q - p, H, 1, color]));
-const wallZ = (list, x, z0, z1, doors = [], color = WALL) => segments(z0, z1, doors).forEach(([p, q]) => list.push([x, (p + q) / 2, 1, H, q - p, color]));
+const wallX = (list, z, x0, x1, doors = [], color = WALL) => { doors.forEach(c => (list.doors = list.doors || []).push({ x: c, z, axis: 'x' })); segments(x0, x1, doors).forEach(([p, q]) => list.push([(p + q) / 2, z, q - p, H, 1, color])); };
+const wallZ = (list, x, z0, z1, doors = [], color = WALL) => { doors.forEach(c => (list.doors = list.doors || []).push({ x, z: c, axis: 'z' })); segments(z0, z1, doors).forEach(([p, q]) => list.push([x, (p + q) / 2, 1, H, q - p, color])); };
 const screens = (terms, glows) => Object.values(terms).forEach(t => glows.push([t.x, 1.55, t.z, 1.3, 0.7, 0.06, 0x4de7ff]));
 const withDesks = (terms, blocks) => Object.values(terms).forEach(t => blocks.push([t.x, t.z, 1.8, 1, 0.9, DESK]));
 const roof = (glows, lines) => lines.forEach(l => glows.push([...l, 0xffb04d]));
@@ -34,12 +34,15 @@ function buildComplex() {
   blocks.push([14, -22, 1.4, 2.4, 6, RACK], [19, -17, 1.4, 2.4, 6, RACK], [10, -9, 2, 1.2, 2, DESK], [25, -13, 1.4, 2.2, 3, RACK]);            // rede
   blocks.push([9, 20, 1.2, 3, 12, RACK], [13.5, 20, 1.2, 3, 12, RACK], [18, 20, 1.2, 3, 12, RACK], [24, 24, 3, 1.1, 1.2, DESK]);              // datacenter
   blocks.push([-14, 20, 5, 0.9, 2, BUNK], [-20, 14, 2, 0.9, 5, BUNK], [-10, 10, 2, 1.2, 2, DESK], [-23, 24, 4, 0.9, 2, BUNK]);                // alojamento
+  blocks.doors = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) blocks.doors.push({ x: sx * 3.5, z: sz * 12, axis: 'z' }, { x: sx * 12, z: sz * 3.5, axis: 'x' });
   const terminals = { t1: { x: -23, z: -23, name: 'CONSOLE KVM', kind: 'kvm', rotation: 0 }, t2: { x: 23, z: -22, name: 'PORTA DE GERENCIAMENTO DE REDE', kind: 'network', rotation: Math.PI }, t3: { x: 23, z: 10, name: 'CONSOLE CENTRAL DO DATACENTER', kind: 'datacenter', rotation: -Math.PI / 2 } };
   withDesks(terminals, blocks);
   [[9, 0x4de7ff], [13.5, 0x9e7bff], [18, 0x4de7ff]].forEach(([x, c]) => glows.push([x + 0.63, 1.7, 20, 0.03, 0.14, 11, c], [x - 0.63, 1.2, 20, 0.03, 0.14, 11, c]));
   roof(glows, [[0, 3.6, -14, 0.3, 0.06, 18], [0, 3.6, 14, 0.3, 0.06, 18], [-14, 3.6, 0, 18, 0.06, 0.3], [14, 3.6, 0, 18, 0.06, 0.3]]);
   return { id: 'complexo', name: 'Complexo', theme: 'COMPLEXO // INCURSÃO', ceiling: H, floorTint: 0x8c9092, strip: 0x4de7ff, sky: 0x1b2630, floorA: '#3b4144', floorB: '#2c3235', wall: 0x5d6b75,
-    blocks, glows, terminals, exit: { x: -25, z: 0 },
+    blocks, glows, terminals, exit: { x: -25, z: 0 }, doors: blocks.doors,
+    cameras: [{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }],
     spawns: [[-8, -8], [-22, -8], [-8, -22], [8, -8], [22, -8], [8, -24], [8, 8], [22, 24], [24, 16], [-8, 8], [-22, 8], [-22, 24], [0, -25], [0, 25], [25, 0]],
     hints: ['Atravesse o prédio até a SALA DE SEGURANÇA (noroeste) e invada o console KVM.', 'Vá à SALA DE REDE (nordeste) e escolha qual sistema de segurança reduzir.', 'Entre no DATACENTER (sudeste) e use o console central. Escolha o objetivo final.', 'Volte pelo corredor oeste até a SAÍDA DE SERVIÇO antes que a resposta chegue.'] };
 }
@@ -58,7 +61,8 @@ function buildRefinery() {
   glows.push([0, 0.1, 0, 5, 0.04, 5, 0xffb04d]);                                                                              // marca luminosa no chão do núcleo
   roof(glows, [[-11.5, 3.6, 0, 0.3, 0.06, 18], [11.5, 3.6, 0, 0.3, 0.06, 18], [0, 3.6, -11.5, 18, 0.06, 0.3], [0, 3.6, 11.5, 18, 0.06, 0.3]]);
   return { id: 'refinaria', name: 'Refinaria', theme: 'REFINARIA // NÚCLEO ÂMBAR', ceiling: H, floorTint: 0x9a9283, strip: 0xffb04d, sky: 0x2a2218, floorA: '#4a4338', floorB: '#352f27', wall: 0x6b6252,
-    blocks, glows, terminals, exit: { x: 25, z: 0 },
+    blocks, glows, terminals, exit: { x: 25, z: 0 }, doors: blocks.doors,
+    cameras: [{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }],
     spawns: [[0, -11], [0, 11], [-11, 0], [11, 0], [-11, -11], [11, 11], [-22, -8], [-22, 8], [22, -8], [22, 8], [-15, -22], [15, -22], [-15, 22], [15, 22], [0, 24], [0, -24]],
     hints: ['Saia do NÚCLEO pela porta oeste e invada o console do ESCRITÓRIO.', 'Siga o anel até a SALA DE CONTROLE (norte) e escolha qual sistema reduzir.', 'Vá à sala do REATOR (sul) e use o console. Escolha o objetivo final.', 'Cruze o anel até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
@@ -77,7 +81,8 @@ function buildLab() {
   roof(glows, [[-14, 3.6, 0, 18, 0.06, 0.3], [14, 3.6, 0, 18, 0.06, 0.3], [-18, 3.6, -5.2, 0.5, 0.06, 0.3], [0, 3.6, -5.2, 0.5, 0.06, 0.3], [18, 3.6, 5.2, 0.5, 0.06, 0.3]]);
   [[-18, -26], [0, -26], [18, -26], [-18, 26], [0, 26], [18, 26]].forEach(([x, z]) => glows.push([x, 3.0, z, 2.4, 0.08, 0.08, 0x9ef2ff]));   // luminárias de teto
   return { id: 'laboratorio', name: 'Laboratório', theme: 'LABORATÓRIO // SETOR MÉDICO', ceiling: H, floorTint: 0x9aa7a8, strip: 0x3ddc84, sky: 0x1c2a2a, floorA: '#3d4a4a', floorB: '#2e3a3a', wall: 0x607373,
-    blocks, glows, terminals, exit: { x: 26, z: 0 },
+    blocks, glows, terminals, exit: { x: 26, z: 0 }, doors: blocks.doors,
+    cameras: [{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }],
     spawns: [[-20, 0], [20, 0], [-8, 0], [8, 0], [-18, -15], [0, -14], [18, -15], [-18, 15], [0, 14], [18, 15], [-24, -10], [24, 10], [-24, 22], [24, -22]],
     hints: ['Entre na sala do LABORATÓRIO (noroeste) e invada o console.', 'Cruze o salão até a sala da CIRURGIA (sudeste) e escolha qual sistema reduzir.', 'Volte ao ARQUIVO CENTRAL (sudoeste) e use o console. Escolha o objetivo final.', 'Corra pelo salão até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
@@ -95,17 +100,28 @@ Arena.INCURSION_STAGES = [
 
 // Escolha do estágio 2 (uma só)
 Arena.INCURSION_SECURITY = [
-  { id: 'cameras', name: 'DESATIVAR CÂMERAS', desc: 'Menos inimigos no resto da missão (−20%).' },
+  { id: 'cameras', name: 'DESATIVAR CÂMERAS', desc: 'Desliga as câmeras (sem alertas) e reduz os inimigos em 20%.' },
   { id: 'reforcos', name: 'CORTAR REFORÇOS', desc: 'Reforços demoram mais para chegar (+50% no intervalo).' },
   { id: 'drone', name: 'LIBERAR O DRONE', desc: 'Drone de reconhecimento (tecla F) dura mais e recarrega mais rápido.' }
 ];
 // Objetivos do estágio 3 (um ou vários). risco = quanto aumenta a pressão na fuga.
 Arena.INCURSION_TARGETS = [
-  { id: 'derrubar', name: 'DERRUBAR O SISTEMA', desc: 'Apaga câmeras e controles: −30% de reforços. Silencioso.', risk: 0 },
+  { id: 'derrubar', name: 'DERRUBAR O SISTEMA', desc: 'Apaga câmeras e controles: −30% de reforços e sem alertas. Silencioso.', risk: 0 },
   { id: 'virus', name: 'INSERIR VÍRUS FICTÍCIO', desc: 'Corrompe os sistemas: inimigos 20% mais lentos. Chama atenção.', risk: 1 },
   { id: 'dados', name: 'ROUBAR DADOS', desc: '+1000 pontos e +400 créditos. Dispara o alarme (75 s).', risk: 2 },
   { id: 'destruir', name: 'DESTRUIR O DATACENTER', desc: '+1500 pontos. Sobrecarga e alarme geral (60 s), mais reforços.', risk: 3 }
 ];
+
+// Câmeras de segurança: varrem para os lados e "veem" o jogador dentro de um cone (a linha livre é checada no jogo)
+Arena.cameraAngle = (cam, t, i) => cam.dir + Math.sin(t * 0.7 + i * 1.7) * 0.6;
+Arena.cameraSees = (cam, ang, px, pz, range = 15, halfFov = 0.5) => {
+  const dx = px - cam.x, dz = pz - cam.z, d = Math.hypot(dx, dz);
+  if (d < 0.01 || d > range) return false;
+  return (dx * Math.sin(ang) + dz * Math.cos(ang)) / d > Math.cos(halfFov);
+};
+Arena.camerasOff = (security, targets) => security === 'cameras' || (Array.isArray(targets) && targets.includes('derrubar'));
+// A barra de invasão só sobe com o console visível, E segurado e SEM bloqueio (depois de dano, só volta a subir ao soltar e apertar E de novo)
+Arena.holdAllowed = ({ inRange, held, lockout }) => !!inRange && !!held && !lockout;
 
 // Soma os efeitos das escolhas (função pura: mesmas escolhas = mesmo resultado)
 Arena.incursionEffects = (security, targets) => {
@@ -134,5 +150,14 @@ Arena.pickIncursionSpawn = (px, pz, blockedFn, rnd = Math.random, spawns = Arena
   const ok = SPAWNS.filter(([x, z]) => Math.hypot(x - px, z - pz) > 13 && !blockedFn(x, z));
   const pool = ok.length ? ok : SPAWNS.filter(([x, z]) => !blockedFn(x, z));
   return pool.length ? pool[Math.floor(rnd() * pool.length)] : [0, -25];
+};
+
+// Converte coordenadas normalizadas da câmera (NDC, -1..1) em pixels. Retorna null se estiver atrás da câmera.
+// edge = true quando está fora da tela (o marcador então é preso à borda, como no radar).
+Arena.droneScreenPos = (ndcX, ndcY, ndcZ, w, h, margin = 28) => {
+  if (ndcZ > 1) return null;
+  const x = (ndcX * 0.5 + 0.5) * w, y = (-ndcY * 0.5 + 0.5) * h;
+  const cx = Math.min(w - margin, Math.max(margin, x)), cy = Math.min(h - margin, Math.max(margin, y));
+  return { x: cx, y: cy, edge: cx !== x || cy !== y };
 };
 })();
