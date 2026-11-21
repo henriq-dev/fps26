@@ -640,3 +640,43 @@ Testes: `./test.sh` aprovado (inclui p25); Chromium: marcador de câmera/console
 | Difícil | `dispose` da textura ao trocar de mapa | Gestão de memória GPU | Sem vazamento entre fases. |
 
 Testes: `./test.sh` aprovado (textura própria por terminal, UV nas malhas, repintura limitada); Chromium sem erros JS e capturas dos 3 consoles. Programas de shader: 12 (eram 11), pois a tela agora usa `map`; o aquecimento do menu já cobre isso. Não medido em GPU real.
+
+## Pacote 26 — Portas barram os tiros dos inimigos (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Guardar `axis` em cada porta e cache `v8-p26` | Dados completos | A regra precisa saber a orientação da porta. |
+| Médio | `Arena.doorBlocks` / `pointBlockedByDoors` (função pura) | Teste de caixa (AABB) 2D | Porta fechada (`open < 0.5`) ocupa 4 m × 0,6 m; aberta é livre. |
+| Médio | `segmentBlockedByDoors` | Amostragem de segmento (passo 0,25 m < espessura) | Evita "tunelamento" do raio pela porta fina. |
+| Difícil | Integração: projétil some ao tocar porta fechada; atirador à distância não dispara se a porta fechada estiver no caminho | Mínima intervenção na IA | Só adiciona uma condição; movimento, A*, colisão e dano não mudam. |
+
+Testes: `./test.sh` aprovado; Chromium: projétil que cruza porta fechada some (1 → 0), 0 erros JS.
+**Decisões a conferir:** tiros do jogador continuam atravessando a porta (não alterei armas); inimigos corpo a corpo e o chefe não mudaram; a "visão" dos inimigos (perseguir) segue igual, só o tiro é barrado. Armas, dano e balanceamento: intocados.
+
+## Pacote 27 — Torretas de segurança (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cache `v8-p27`; constantes `Arena.TURRET` (alcance 14 m, carga 0,6 s, intervalo 1,6 s, dano 4) | Números mágicos em um lugar | Balanceamento fácil de ajustar. |
+| Médio | `Arena.turretsFor(cameras)`: 2 torretas por prédio, 1,6 m à frente das câmeras | Reuso de dados já validados | Posição já está fora das paredes; teste confirma nos 3 prédios. |
+| Médio | Visual: base + cabeça giratória + lente vermelha (poucos meshes, material básico, sem luz nova) | Custo de render | Não recompila shaders. |
+| Difícil | `Arena.turretStep` (máquina de estados pura: carregar → atirar → recarregar; perder o alvo zera a carga) | Regra pura testável | O aviso de 0,6 s dá chance de reação. |
+| Difícil | `updateIncTurrets`: alcance + `lineClear` + porta fechada barra; desligadas quando as câmeras estão desligadas (`camerasOff`) | Integração mínima, reaproveita `shootProjectile` | Mesmo projétil e dano escalado pela dificuldade; as portas do p26 também as bloqueiam. |
+
+Testes: `./test.sh` aprovado (posição fora das paredes, estados da torreta); Chromium: ativa → vida 9999→9991 (2 tiros), desligada → 0 projéteis, 0 erros JS.
+**Decisão de balanceamento (confirme):** dano 4 por tiro (×dificuldade), a cada 1,6 s, só dentro de 14 m e com linha livre; torretas são indestrutíveis (só desligam com a escolha de segurança/derrubar). Armas, IA e dano existentes: intocados.
+
+## Pacote 28 — Prédio com vários blocos: Campus A–E (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | 4ª opção no seletor de prédio e cache `v8-p28` | HTML semântico, versionamento do PWA | Nada mais muda na interface. |
+| Médio | `buildCampus()` com os mesmos ajudantes `wallX`/`wallZ` (5 blocos em fila, divisórias com 2 portas cada) | Reuso e dados declarativos | Mesmo formato dos outros prédios; as portas animadas do p22 funcionam sem código novo. |
+| Médio | Estágios espalhados pelos blocos: C (início) → D → A → E → saída em B; dicas citam os blocos | Level design: força cruzar o prédio todo | O jogador usa as portas e passa pelas câmeras/torretas. |
+| Difícil | Teste automático de alcance: A* de (0,0) até cada console e a saída; spawns, câmeras e torretas fora das paredes | Validação de dados, A* | Garante que nenhum bloco ficou isolado ou com item dentro da parede. |
+
+Testes: `./test.sh` aprovado (incl. p28); Chromium: Campus carrega, 8 portas, 0 erros JS; draw calls 159–232 conforme o ponto (renderizador por software, só relativo).
+Armas, dano, IA, colisão e balanceamento: intocados. Os mapas de combate (modo normal) não mudaram.
+**Limite:** o Campus usa a mesma área de 56×56 (a cadeia ocupa 56×32, o resto fica vazio/fechado). Prédios maiores exigiriam aumentar `ARENA`, o que afeta tudo, então não fiz.
+
+**Fluxo completo no Campus (Chromium):** infiltrar (D) → rede (A, escolha de segurança) → datacenter (E, 3 objetivos combinados) → fuga (B) → MISSÃO CUMPRIDA, 0 erros JS. O tempo de 'segurar E' foi encurtado no teste (renderizador por software é lento); a posição/linha de visão dos consoles foi validada de verdade.

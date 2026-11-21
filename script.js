@@ -120,7 +120,7 @@ function setViewModelLights(index) {
 const solids = [];   // meshes que bloqueiam tiros (raycast)
 const boxes = [];    // caixas de colisão AABB (movimento)
 let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     // navGrid = grade do A* (recriada a cada mapa)
-let incTerminalViews = Object.create(null);
+let incTerminalViews = Object.create(null); let incTurrets = [];
 let incDoors = [], incCams = [];
 const doorMat = new THREE.MeshLambertMaterial({ color: 0x4a5866 }), camBodyMat = new THREE.MeshLambertMaterial({ color: 0x20262e });                                     // terminais visuais, sem colisão extra
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
@@ -248,15 +248,22 @@ function loadMap(index) {
   });
   Object.values(incTerminalViews).forEach(v => Arena.disposeIncursionTerminal && Arena.disposeIncursionTerminal(v));   // libera malhas/materiais dos consoles do mapa anterior
   incTerminalViews = Object.create(null);
-  incDoors = []; incCams = [];
+  incDoors = []; incCams = []; incTurrets = [];
   (M.doors || []).forEach(d => {                          // portas deslizantes (só visual; a colisão/A* continuam tratando a abertura como livre)
     const m = new THREE.Mesh(blockGeo, doorMat); m.scale.set(d.axis === 'x' ? 4 : 0.3, M.ceiling - 0.15, d.axis === 'x' ? 0.3 : 4);
-    m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m); incDoors.push({ m, x: d.x, z: d.z, open: 0, y0: m.position.y });
+    m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m); incDoors.push({ m, x: d.x, z: d.z, axis: d.axis, open: 0, y0: m.position.y });
   });
   (M.cameras || []).forEach(c => {                        // câmeras de segurança: corpo escuro + luz (vermelha = ativa)
     const g = new THREE.Group(); g.position.set(c.x, 3.25, c.z);
     const body = new THREE.Mesh(blockGeo, camBodyMat); body.scale.set(0.34, 0.26, 0.55); const lamp = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lamp.scale.set(0.12, 0.12, 0.05); lamp.position.set(0, 0, 0.3);
     g.add(body, lamp); scene.add(g); mapMeshes.push(g); incCams.push({ g, lamp, c });
+  });
+  (M.turrets || []).forEach(c => {                        // torretas: base + cano + lente (lente brilha ao carregar o tiro)
+    const g = new THREE.Group(); g.position.set(c.x, 0, c.z);
+    const base = new THREE.Mesh(blockGeo, camBodyMat); base.scale.set(0.5, 1.0, 0.5); base.position.y = 0.5;
+    const head = new THREE.Mesh(blockGeo, camBodyMat); head.scale.set(0.46, 0.32, 0.7); head.position.y = 1.15;
+    const lens = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lens.scale.set(0.14, 0.14, 0.06); lens.position.set(0, 1.15, 0.38);
+    const pivot = new THREE.Group(); pivot.position.y = 0; pivot.add(head, lens); g.add(base, pivot); scene.add(g); mapMeshes.push(g); incTurrets.push({ g, pivot, lens, c, st: { cd: 0.8, charge: 0 } });
   });
   if (inc && Arena.createIncursionTerminal) Object.entries(M.terminals || {}).forEach(([id, terminal]) => {
     const view = Arena.createIncursionTerminal({ ...terminal, id }); scene.add(view); mapMeshes.push(view); incTerminalViews[id] = view;
@@ -499,7 +506,7 @@ function updateIncursion(dt) {
   const st = incStage();
   if (inc.marker) { inc.marker.userData.ring.rotation.z += dt * 1.5; inc.marker.userData.core.rotation.y += dt * 1.8; }
   inc.droneT = Math.max(0, inc.droneT - dt); inc.droneCd = Math.max(0, inc.droneCd - dt);
-  updateIncDoors(dt); updateIncCameras(dt); drawDroneMarks();
+  updateIncDoors(dt); updateIncCameras(dt); updateIncTurrets(dt); drawDroneMarks();
   if (inc.alarmT > 0) {                                                        // alarme: só troca cores (não mexe em luzes = sem recompilar shader)
     inc.alarmT -= dt; const f = (Math.sin(inc.time * 7) + 1) / 2;
     stripMat.color.setRGB(0.6 + 0.4 * f, 0.1, 0.08); if (scene.fog) scene.fog.color.setRGB(0.12 + 0.1 * f, 0.02, 0.02);
@@ -543,6 +550,20 @@ function updateIncCameras(dt) {
       for (let k = 0; k < 2; k++) spawnEnemy(pickType());
     }
   });
+}
+function updateIncTurrets(dt) {                       // torretas: giram para o jogador, carregam (lente acende) e atiram projéteis fracos
+  if (!incTurrets.length) return;
+  const off = Arena.camerasOff(inc.security, inc.targets);
+  for (const t of incTurrets) {
+    const dx = px - t.c.x, dz = pz - t.c.z, dist = Math.hypot(dx, dz), active = !off && !inc.done;
+    const los = active && dist <= Arena.TURRET.range && Arena.lineClear(navGrid, t.c.x, t.c.z, px, pz) && !Arena.segmentBlockedByDoors(incDoors, t.c.x, t.c.z, px, pz);
+    if (los) t.pivot.rotation.y = Math.atan2(dx, dz);
+    t.lens.visible = active && (los ? t.st.charge > 0 : true);
+    if (Arena.turretStep(t.st, dt, { active, dist, los })) {
+      const len = dist || 1, dmg = Arena.TURRET.damage * Arena.difficultyConfig(currentDifficulty).damage;
+      shootProjectile(t.c.x, 1.15, t.c.z, dx / len, (py - 0.4 - 1.15) / len, dz / len, 8, dmg, 0xff4d4d, 0.1);
+    }
+  }
 }
 function finishIncursion() {
   inc.done = true; incVictory = true;
@@ -1617,7 +1638,7 @@ function updateProjectiles(dt) {
     const p = projectiles[i]; p.life -= dt; p.m.position.addScaledVector(p.v, dt); p.m.userData.ring.rotation.z += dt * 8;
     const hitPlayer = Math.hypot(p.m.position.x - px, p.m.position.z - pz) < 0.65 && Math.abs(p.m.position.y - py) < 1.2;
     if (hitPlayer) { hurtPlayer(p.dmg, p.from.x, p.from.z); removeProjectile(i); continue; }
-    if (p.life <= 0 || blocked(p.m.position.x, p.m.position.z, 0.08)) removeProjectile(i);
+    if (p.life <= 0 || blocked(p.m.position.x, p.m.position.z, 0.08) || (incDoors.length && Arena.pointBlockedByDoors(incDoors, p.m.position.x, p.m.position.z))) removeProjectile(i);   // porta fechada barra o tiro
   }
 }
 
@@ -2356,7 +2377,7 @@ function update(dt) {
     // Ação de cada tipo (o chefe age dentro de updateBoss)
     if (e.T.boss) { /* ataques em updateBoss */ }
     else if (e.T.ranged) {                       // atira andando, alcance 16
-      if (dist < 16 && time >= e.nextAtk) { e.nextAtk = time + 1.55 + (e.squad?.fireDelay || 0); fireEnemyProjectile(e); }
+      if (dist < 16 && time >= e.nextAtk && !(incDoors.length && Arena.segmentBlockedByDoors(incDoors, pos.x, pos.z, px, pz))) { e.nextAtk = time + 1.55 + (e.squad?.fireDelay || 0); fireEnemyProjectile(e); }
     } else if (e.T.healer) {                     // pulso de cura: +12% da vida máxima dos aliados feridos num raio de 7
       if (time >= e.nextHeal) {
         e.nextHeal = time + 1.4;

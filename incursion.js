@@ -7,6 +7,18 @@
 'use strict';
 window.Arena = window.Arena || {};
 
+// P27: torretas de segurança. Ficam 1,6 m à frente das 2 primeiras câmeras (posição já validada fora das paredes).
+// Regra pura: dentro do alcance e com linha livre, "carrega" 0,6 s (aviso) e então atira a cada 1,6 s. Câmeras desligadas = torretas desligadas.
+Arena.TURRET = { range: 14, charge: 0.6, every: 1.6, damage: 4 };
+Arena.turretsFor = (cameras) => (cameras || []).slice(0, 2).map(c => ({ x: c.x + Math.sin(c.dir) * 1.6, z: c.z + Math.cos(c.dir) * 1.6 }));
+Arena.turretStep = (t, dt, { active, dist, los }) => {
+  t.cd = Math.max(0, (t.cd || 0) - dt);
+  if (!active || !los || dist > Arena.TURRET.range) { t.charge = 0; return false; }
+  t.charge = (t.charge || 0) + dt;
+  if (t.charge >= Arena.TURRET.charge && t.cd <= 0) { t.cd = Arena.TURRET.every; return true; }
+  return false;
+};
+
 const H = 3.8;                                   // altura das paredes internas (o teto fica nesta altura)
 const WALL = 0x7b8895, DESK = 0x3b4558, RACK = 0x2a3142, BUNK = 0x68736c, TANK = 0x4b5560, BED = 0x8a9aa6;
 
@@ -42,7 +54,7 @@ function buildComplex() {
   roof(glows, [[0, 3.6, -14, 0.3, 0.06, 18], [0, 3.6, 14, 0.3, 0.06, 18], [-14, 3.6, 0, 18, 0.06, 0.3], [14, 3.6, 0, 18, 0.06, 0.3]]);
   return { id: 'complexo', name: 'Complexo', theme: 'COMPLEXO // INCURSÃO', ceiling: H, floorTint: 0x8c9092, strip: 0x4de7ff, sky: 0x1b2630, floorA: '#3b4144', floorB: '#2c3235', wall: 0x5d6b75,
     blocks, glows, terminals, exit: { x: -25, z: 0 }, doors: blocks.doors,
-    cameras: [{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }],
+    cameras: [{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }], turrets: Arena.turretsFor([{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }]),
     spawns: [[-8, -8], [-22, -8], [-8, -22], [8, -8], [22, -8], [8, -24], [8, 8], [22, 24], [24, 16], [-8, 8], [-22, 8], [-22, 24], [0, -25], [0, 25], [25, 0]],
     hints: ['Atravesse o prédio até a SALA DE SEGURANÇA (noroeste) e invada o console KVM.', 'Vá à SALA DE REDE (nordeste) e escolha qual sistema de segurança reduzir.', 'Entre no DATACENTER (sudeste) e use o console central. Escolha o objetivo final.', 'Volte pelo corredor oeste até a SAÍDA DE SERVIÇO antes que a resposta chegue.'] };
 }
@@ -62,7 +74,7 @@ function buildRefinery() {
   roof(glows, [[-11.5, 3.6, 0, 0.3, 0.06, 18], [11.5, 3.6, 0, 0.3, 0.06, 18], [0, 3.6, -11.5, 18, 0.06, 0.3], [0, 3.6, 11.5, 18, 0.06, 0.3]]);
   return { id: 'refinaria', name: 'Refinaria', theme: 'REFINARIA // NÚCLEO ÂMBAR', ceiling: H, floorTint: 0x9a9283, strip: 0xffb04d, sky: 0x2a2218, floorA: '#4a4338', floorB: '#352f27', wall: 0x6b6252,
     blocks, glows, terminals, exit: { x: 25, z: 0 }, doors: blocks.doors,
-    cameras: [{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }],
+    cameras: [{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }], turrets: Arena.turretsFor([{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }]),
     spawns: [[0, -11], [0, 11], [-11, 0], [11, 0], [-11, -11], [11, 11], [-22, -8], [-22, 8], [22, -8], [22, 8], [-15, -22], [15, -22], [-15, 22], [15, 22], [0, 24], [0, -24]],
     hints: ['Saia do NÚCLEO pela porta oeste e invada o console do ESCRITÓRIO.', 'Siga o anel até a SALA DE CONTROLE (norte) e escolha qual sistema reduzir.', 'Vá à sala do REATOR (sul) e use o console. Escolha o objetivo final.', 'Cruze o anel até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
@@ -82,12 +94,33 @@ function buildLab() {
   [[-18, -26], [0, -26], [18, -26], [-18, 26], [0, 26], [18, 26]].forEach(([x, z]) => glows.push([x, 3.0, z, 2.4, 0.08, 0.08, 0x9ef2ff]));   // luminárias de teto
   return { id: 'laboratorio', name: 'Laboratório', theme: 'LABORATÓRIO // SETOR MÉDICO', ceiling: H, floorTint: 0x9aa7a8, strip: 0x3ddc84, sky: 0x1c2a2a, floorA: '#3d4a4a', floorB: '#2e3a3a', wall: 0x607373,
     blocks, glows, terminals, exit: { x: 26, z: 0 }, doors: blocks.doors,
-    cameras: [{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }],
+    cameras: [{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }], turrets: Arena.turretsFor([{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }]),
     spawns: [[-20, 0], [20, 0], [-8, 0], [8, 0], [-18, -15], [0, -14], [18, -15], [-18, 15], [0, 14], [18, 15], [-24, -10], [24, 10], [-24, 22], [24, -22]],
     hints: ['Entre na sala do LABORATÓRIO (noroeste) e invada o console.', 'Cruze o salão até a sala da CIRURGIA (sudeste) e escolha qual sistema reduzir.', 'Volte ao ARQUIVO CENTRAL (sudoeste) e use o console. Escolha o objetivo final.', 'Corra pelo salão até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
 
-Arena.INCURSION_LEVELS = [buildComplex(), buildRefinery(), buildLab()];
+
+/* ---------- Prédio 4: CAMPUS — cinco blocos (A–E) em fila, ligados por portas; você começa no bloco C ---------- */
+function buildCampus() {
+  const blocks = [], glows = [];
+  wallX(blocks, -16, -28, 28); wallX(blocks, 16, -28, 28);                                      // paredes externas (norte e sul)
+  for (const x of [-16.8, -5.6, 5.6, 16.8]) wallZ(blocks, x, -16, 16, [-8, 8]);                 // divisórias entre blocos, 2 portas cada
+  [[-23, -6, 5, 0.9, 2, BUNK], [-23, 6, 5, 0.9, 2, BUNK]].forEach(b => blocks.push(b));        // A: alojamento
+  [[-11.2, -6, 4, 1.1, 1.2, DESK], [-14, 11, 1.4, 2.2, 3, RACK]].forEach(b => blocks.push(b)); // B: escritório
+  [[0, -9, 2, 1.2, 2, DESK], [0, 9, 2, 1.2, 2, DESK]].forEach(b => blocks.push(b));            // C: hall (centro livre)
+  [[11.2, -4, 1.2, 3, 7, RACK], [8.8, 4, 1.2, 3, 7, RACK]].forEach(b => blocks.push(b));       // D: sala de racks
+  [[20, -4, 1.2, 3, 10, RACK], [24.5, 4, 1.2, 3, 10, RACK]].forEach(b => blocks.push(b));      // E: datacenter
+  const terminals = { t1: { x: 11.2, z: -14.5, name: 'CONSOLE DO BLOCO D', kind: 'kvm', rotation: 0 }, t2: { x: -22.4, z: 14.5, name: 'CONSOLE DO BLOCO A', kind: 'network', rotation: Math.PI }, t3: { x: 22.4, z: -14.5, name: 'CONSOLE CENTRAL DO BLOCO E', kind: 'datacenter', rotation: 0 } };
+  withDesks(terminals, blocks);
+  roof(glows, [[-22.4, 3.6, 0, 0.3, 0.06, 20], [-11.2, 3.6, 0, 0.3, 0.06, 20], [0, 3.6, 0, 0.3, 0.06, 20], [11.2, 3.6, 0, 0.3, 0.06, 20], [22.4, 3.6, 0, 0.3, 0.06, 20]]);
+  const cameras = [{ x: -11.2, z: -14.6, dir: 0 }, { x: 11.2, z: 14.6, dir: Math.PI }, { x: 0, z: -14.6, dir: 0 }];
+  return { id: 'campus', name: 'Campus', theme: 'CAMPUS // BLOCOS A–E', ceiling: H, floorTint: 0x8f94a3, strip: 0x9e7bff, sky: 0x1d1b30, floorA: '#3a3b4a', floorB: '#2c2d3a', wall: 0x5f6678,
+    blocks, glows, terminals, exit: { x: -11.2, z: 0 }, doors: blocks.doors, cameras, turrets: Arena.turretsFor(cameras),
+    spawns: [[-22, 0], [-22, -11], [-11, -11], [-11, 10], [0, -12], [0, 12], [11, 10], [11, -11], [22, 11], [22, -12], [-26, 12], [26, 0]],
+    hints: ['Parta do BLOCO C (hall) para o BLOCO D (leste) e invada o console.', 'Cruze o campus até o BLOCO A (extremo oeste) e escolha qual sistema reduzir.', 'Atravesse tudo até o BLOCO E (extremo leste) e use o console central. Escolha o objetivo final.', 'Volte ao BLOCO B (oeste, perto do hall): a SAÍDA DE SERVIÇO fica no centro dele.'] };
+}
+
+Arena.INCURSION_LEVELS = [buildComplex(), buildRefinery(), buildLab(), buildCampus()];
 Arena.INCURSION = Arena.INCURSION_LEVELS[0];          // compatibilidade
 
 // Estágios da missão. spawn = { max: vivos ao mesmo tempo, every: segundos entre reforços, total: -1 = sem fim }
@@ -160,4 +193,16 @@ Arena.droneScreenPos = (ndcX, ndcY, ndcZ, w, h, margin = 28) => {
   const cx = Math.min(w - margin, Math.max(margin, x)), cy = Math.min(h - margin, Math.max(margin, y));
   return { x: cx, y: cy, edge: cx !== x || cy !== y };
 };
+
+// P26: porta fechada barra projétil e linha de tiro dos inimigos (só na Incursão). Porta: { x, z, axis, open } ; fechada = open < 0.5
+// Largura 4 m ao longo do eixo da parede, espessura 0.6 m. Aberta, a passagem é livre (o jogador e a IA andam normalmente).
+Arena.doorBlocks = (d, x, z) => d.open < 0.5 && (d.axis === 'x' ? Math.abs(x - d.x) <= 2 && Math.abs(z - d.z) <= 0.3 : Math.abs(z - d.z) <= 2 && Math.abs(x - d.x) <= 0.3);
+Arena.pointBlockedByDoors = (doors, x, z) => { for (const d of doors) if (Arena.doorBlocks(d, x, z)) return true; return false; };
+Arena.segmentBlockedByDoors = (doors, ax, az, bx, bz) => {          // amostra o segmento a cada ~0.25 m (passo menor que a espessura da porta)
+  if (!doors.length) return false;
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.25));
+  for (let k = 0; k <= n; k++) if (Arena.pointBlockedByDoors(doors, ax + (bx - ax) * k / n, az + (bz - az) * k / n)) return true;
+  return false;
+};
+
 })();

@@ -245,3 +245,15 @@
 - [x] Marcadores 3D do drone (inimigos, console/saída, câmeras).
 - [x] NEXUS nos monitores físicos (textura por terminal).
 - [ ] Pendente: medir `?perf=1` em celular/GPU física.
+
+## Pacote 26
+- [x] Portas fechadas barram projétil e disparo de inimigos à distância.
+- [ ] Decidir: tiro do jogador também ser barrado? chefe/ataques em área?
+
+## Pacote 27
+- [x] Torretas de segurança (2 por prédio), desligáveis.
+- [ ] Ajustar dano/alcance após playtest; tornar destrutíveis?
+
+## Pacote 28
+- [x] Prédio 4: Campus (blocos A–E).
+- [ ] Pendente: medir `?perf=1` em celular; blocos em altura (andares) ou área maior exigem mexer em ARENA.

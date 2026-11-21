@@ -210,7 +210,7 @@ console.log('core tests: OK');
 // ---- Incursão (p20) ----
 assert.equal(A.INCURSION_STAGES.length, 4);
 assert.equal(A.INCURSION.terminals.t3.x, 23);
-assert.equal(A.INCURSION_LEVELS.length, 3);
+assert.equal(A.INCURSION_LEVELS.length, 4);
 assert.deepEqual(JSON.parse(JSON.stringify(Object.values(A.INCURSION.terminals).map(t => t.kind))), ['kvm', 'network', 'datacenter']);
 assert.ok(Object.values(A.INCURSION.terminals).every(t => Number.isFinite(t.rotation)));
 assert.match(fs.readFileSync('index.html', 'utf8'), /terminal-props\.js/);
@@ -295,3 +295,44 @@ console.log('p24: portas, câmeras, bloqueio e consoles OK');
   assert.equal(A.droneScreenPos(0, 0, 1.2, 1000, 600), null, 'atrás da câmera não aparece');
 }
 console.log('p25: marcadores do drone OK');
+
+// ---- p26: porta fechada barra tiro ----
+{
+  const D = [{ x: 0, z: 10, axis: 'x', open: 0 }, { x: 10, z: 0, axis: 'z', open: 1 }];
+  assert.ok(A.doorBlocks(D[0], 1, 10.2), 'dentro da porta fechada');
+  assert.ok(!A.doorBlocks(D[0], 3, 10), 'fora da largura');
+  assert.ok(!A.doorBlocks(D[1], 10, 0), 'porta aberta não bloqueia');
+  assert.ok(A.segmentBlockedByDoors(D, 0, 0, 0, 20), 'segmento atravessa a porta fechada');
+  assert.ok(!A.segmentBlockedByDoors(D, 5, 0, 5, 20), 'segmento ao lado passa');
+  assert.ok(!A.segmentBlockedByDoors([], 0, 0, 0, 20), 'sem portas, livre');
+}
+console.log('p26: portas barram tiro OK');
+
+// ---- p27: torretas ----
+{
+  const inBlock = (x, z, list) => list.some(([bx, bz, w, , d]) => Math.abs(x - bx) < w / 2 + 0.4 && Math.abs(z - bz) < d / 2 + 0.4);
+  A.INCURSION_LEVELS.forEach((L, n) => {
+    assert.equal(L.turrets.length, 2, `nível ${n}: 2 torretas`);
+    L.turrets.forEach(t => { assert.ok(!inBlock(t.x, t.z, L.blocks), `nível ${n}: torreta fora das paredes (${t.x.toFixed(1)}, ${t.z.toFixed(1)})`); assert.ok(Math.abs(t.x) < 29 && Math.abs(t.z) < 29, 'dentro do mapa'); });
+  });
+  const t = { cd: 0, charge: 0 };
+  assert.equal(A.turretStep(t, 0.3, { active: true, dist: 8, los: true }), false, 'ainda carregando');
+  assert.equal(A.turretStep(t, 0.4, { active: true, dist: 8, los: true }), true, 'dispara após 0,6 s');
+  assert.equal(A.turretStep(t, 0.4, { active: true, dist: 8, los: true }), false, 'recarga 1,6 s');
+  assert.equal(A.turretStep(t, 0.1, { active: false, dist: 8, los: true }), false, 'desligada não atira');
+  assert.equal(t.charge, 0, 'perder o alvo zera a carga');
+  assert.equal(A.turretStep({ cd: 0, charge: 5 }, 0.1, { active: true, dist: 20, los: true }), false, 'fora do alcance');
+}
+console.log('p27: torretas OK');
+
+// ---- p28: Campus (blocos A–E) ----
+{
+  const C = A.INCURSION_LEVELS[3], inB = (x, z) => C.blocks.some(([bx, bz, w, , d]) => Math.abs(x - bx) < w / 2 + 0.3 && Math.abs(z - bz) < d / 2 + 0.3);
+  assert.equal(C.id, 'campus'); assert.equal(C.hints.length, 4);
+  assert.ok(!inB(0, 0), 'começa livre no bloco C');
+  C.spawns.forEach(([x, z]) => assert.ok(!inB(x, z), `spawn livre (${x}, ${z})`));
+  C.cameras.forEach(c => assert.ok(!inB(c.x, c.z), 'câmera fora das paredes'));
+  assert.equal(C.doors.length, 8, '4 divisórias × 2 portas');
+  assert.ok(Object.values(C.terminals).every(t => Math.abs(t.x) < 28 && Math.abs(t.z) < 16), 'consoles dentro da área');
+}
+console.log('p28: campus OK');
