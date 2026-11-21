@@ -263,7 +263,7 @@ function loadMap(index) {
     const base = new THREE.Mesh(blockGeo, camBodyMat); base.scale.set(0.5, 1.0, 0.5); base.position.y = 0.5;
     const head = new THREE.Mesh(blockGeo, camBodyMat); head.scale.set(0.46, 0.32, 0.7); head.position.y = 1.15;
     const lens = new THREE.Mesh(blockGeo, glowMat(0xff2a3a)); lens.scale.set(0.14, 0.14, 0.06); lens.position.set(0, 1.15, 0.38);
-    const pivot = new THREE.Group(); pivot.position.y = 0; pivot.add(head, lens); g.add(base, pivot); scene.add(g); mapMeshes.push(g); incTurrets.push({ g, pivot, lens, c, st: { cd: 0.8, charge: 0 } });
+    const pivot = new THREE.Group(); pivot.position.y = 0; pivot.add(head, lens); g.add(base, pivot); scene.add(g); mapMeshes.push(g); const T = { g, pivot, lens, c, st: { cd: 0.8, charge: 0, hp: Arena.TURRET.hp } }; base.userData.turret = head.userData.turret = T; T.parts = [base, head]; incTurrets.push(T);
   });
   if (inc && Arena.createIncursionTerminal) Object.entries(M.terminals || {}).forEach(([id, terminal]) => {
     const view = Arena.createIncursionTerminal({ ...terminal, id }); scene.add(view); mapMeshes.push(view); incTerminalViews[id] = view;
@@ -491,6 +491,7 @@ function drawDroneMarks() {
   };
   for (const e of enemies) if (!e.dead) mark(e.g.position.x, e.g.position.z, 1.1, e.T.boss ? '#ff4d6d' : '#ffd166', e.T.boss ? 'CHEFE' : '', e.T.boss);
   const t = incTarget(); mark(t.x, t.z, 1.4, incStage().exit ? '#3ddc84' : '#4de7ff', incStage().exit ? 'SAÍDA' : 'CONSOLE', true);
+  for (const t of incTurrets) if (!t.st.dead) mark(t.c.x, t.c.z, 1.2, '#ff8a3d', 'TORRETA', false);
   for (const { g } of incCams) mark(g.position.x, g.position.z, g.position.y, '#ff5a4d', 'CÂM', false);
   dctx.globalAlpha = 1;
 }
@@ -551,10 +552,15 @@ function updateIncCameras(dt) {
     }
   });
 }
+function destroyTurret(t) {                           // explosão pequena, some o modelo, ganha 50 pontos
+  blastFx(t.c.x, 1.1, t.c.z, 1.1, 0xff8a3d, 0.3); debris(new THREE.Vector3(t.c.x, 1, t.c.z), 0x666f7a, 8); sfx.shieldBreak();
+  t.g.visible = false; score += 50; addFeed('TORRETA DESTRUÍDA  +50', false);
+}
 function updateIncTurrets(dt) {                       // torretas: giram para o jogador, carregam (lente acende) e atiram projéteis fracos
   if (!incTurrets.length) return;
   const off = Arena.camerasOff(inc.security, inc.targets);
   for (const t of incTurrets) {
+    if (t.st.dead) continue;
     const dx = px - t.c.x, dz = pz - t.c.z, dist = Math.hypot(dx, dz), active = !off && !inc.done;
     const los = active && dist <= Arena.TURRET.range && Arena.lineClear(navGrid, t.c.x, t.c.z, px, pz) && !Arena.segmentBlockedByDoors(incDoors, t.c.x, t.c.z, px, pz);
     if (los) t.pivot.rotation.y = Math.atan2(dx, dz);
@@ -1836,7 +1842,8 @@ function tryShoot() {
   const sp = currentSpread();
 
   // Alvos: inimigos vivos + cenário (o cenário bloqueia tiros)
-  const targets = solids.concat(...enemies.filter(e => !e.dead).map(e => e.shield ? [e.body, e.head, e.shield] : [e.body, e.head]));
+  const turretParts = incTurrets.filter(t => !t.st.dead).flatMap(t => t.parts);          // torretas vivas também recebem tiro
+  const targets = solids.concat(turretParts, ...enemies.filter(e => !e.dead).map(e => e.shield ? [e.body, e.head, e.shield] : [e.body, e.head]));
   guns[curW].userData.flash.getWorldPosition(_muzzle);
   const hitTotals = new Map();
   const pushed = new Set();
@@ -1875,6 +1882,10 @@ function tryShoot() {
         prior.amount += ud.head ? pelletDamage * stats.head : pelletDamage; prior.head = prior.head || ud.head; hitTotals.set(ud.enemy, prior);
         end = hit.point;
         if (!w.pierce) { stopped = true; break; }              // balas comuns param no primeiro inimigo
+      } else if (ud && ud.turret) {                            // torreta: recebe dano, bloqueia o tiro
+        sparkBurst(hit.point, 0xffd27a, 4); end = hit.point; stopped = true;
+        if (Arena.turretHit(ud.turret.st, w.dmg * stats.dmg * (1 - w.falloff * Math.min(hit.distance / w.range, 1)))) destroyTurret(ud.turret);
+        break;
       } else { surfaceImpact(hit, w.color); end = hit.point; stopped = true; break; }   // cenário bloqueia tudo
     }
     if (end && stopped) _end.copy(end);

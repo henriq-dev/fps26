@@ -257,3 +257,7 @@
 ## Pacote 28
 - [x] Prédio 4: Campus (blocos A–E).
 - [ ] Pendente: medir `?perf=1` em celular; blocos em altura (andares) ou área maior exigem mexer em ARENA.
+
+## Pacote 29
+- [x] Torretas destrutíveis (40 HP, +50 pontos).
+- [ ] Pendente: medir `?perf=1` em celular; andares/área maior.

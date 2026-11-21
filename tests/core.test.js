@@ -336,3 +336,13 @@ console.log('p27: torretas OK');
   assert.ok(Object.values(C.terminals).every(t => Math.abs(t.x) < 28 && Math.abs(t.z) < 16), 'consoles dentro da área');
 }
 console.log('p28: campus OK');
+
+// ---- p29: torretas destrutíveis ----
+{
+  const t = { cd: 0, charge: 0, hp: A.TURRET.hp };
+  assert.equal(A.turretHit(t, 15), false); assert.equal(t.hp, 25);
+  assert.equal(A.turretHit(t, 30), true, 'morre ao zerar o HP'); assert.ok(t.dead);
+  assert.equal(A.turretHit(t, 30), false, 'já destruída não "morre" de novo');
+  assert.equal(A.turretStep(t, 5, { active: true, dist: 5, los: true }), false, 'destruída não atira');
+}
+console.log('p29: torretas destrutíveis OK');

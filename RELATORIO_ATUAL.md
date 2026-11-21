@@ -680,3 +680,15 @@ Armas, dano, IA, colisão e balanceamento: intocados. Os mapas de combate (modo 
 **Limite:** o Campus usa a mesma área de 56×56 (a cadeia ocupa 56×32, o resto fica vazio/fechado). Prédios maiores exigiriam aumentar `ARENA`, o que afeta tudo, então não fiz.
 
 **Fluxo completo no Campus (Chromium):** infiltrar (D) → rede (A, escolha de segurança) → datacenter (E, 3 objetivos combinados) → fuga (B) → MISSÃO CUMPRIDA, 0 erros JS. O tempo de 'segurar E' foi encurtado no teste (renderizador por software é lento); a posição/linha de visão dos consoles foi validada de verdade.
+
+## Pacote 29 — Torretas destrutíveis (21/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | `Arena.TURRET.hp = 40`, cache `v8-p29`, marcador `TORRETA` no drone | Constantes de balanceamento | Valor único, fácil de ajustar. |
+| Médio | `Arena.turretHit` (função pura) e `turretStep` ignora torreta destruída | Estado `dead`, testes de unidade | Mesmo padrão dos inimigos; testado em Node. |
+| Difícil | Integração no raio do tiro: partes da torreta viva entram na lista de alvos, `userData.turret`, queda de dano pela distância (mesma fórmula) | `Raycaster`, `userData` | Sem alterar armas: só um ramo novo no laço de acertos; a torreta bloqueia o tiro como o cenário. |
+| Difícil | `destroyTurret`: explosão, some o modelo, +50 pontos, aviso no feed | Reuso de efeitos existentes | Nenhuma luz nova (sem recompilar shaders). |
+
+Testes: `./test.sh` aprovado; Chromium: pistola a 6 m destrói a torreta (40 → −15 de HP), modelo some, +50 pontos, 0 erros JS. Armas, dano, IA, colisão e balanceamento existentes intocados.
+**Decisão (confirme):** HP 40 e +50 pontos são palpites meus.

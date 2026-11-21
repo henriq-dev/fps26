@@ -2,7 +2,7 @@
 
 ## Conceito: invasão hacker em terminais da arena
 
-**Status (P28):** modo Incursão implementado (P20), com 4 prédios, portas animadas e câmeras (P22), consoles NEXUS (P23–P25), drone com marcadores 3D (P25), portas que barram tiros (P26), torretas (P27) e o prédio em blocos A–E (P28). Faltam: torretas destrutíveis, andares/área maior, medição de FPS em celular.
+**Status (P28):** modo Incursão implementado (P20), com 4 prédios, portas animadas e câmeras (P22), consoles NEXUS (P23–P25), drone com marcadores 3D (P25), portas que barram tiros (P26), torretas (P27) e o prédio em blocos A–E (P28), torretas destrutíveis (P29). Faltam: andares/área maior, medição de FPS em celular.
 
 O personagem pode encontrar computadores ou terminais durante as fases e usá-los para invadir a rede do complexo. A invasão acrescentaria um objetivo além de eliminar inimigos: o jogador acessa um terminal, inicia a quebra de segurança e precisa concluí-la enquanto se defende.
 

@@ -9,9 +9,12 @@ window.Arena = window.Arena || {};
 
 // P27: torretas de segurança. Ficam 1,6 m à frente das 2 primeiras câmeras (posição já validada fora das paredes).
 // Regra pura: dentro do alcance e com linha livre, "carrega" 0,6 s (aviso) e então atira a cada 1,6 s. Câmeras desligadas = torretas desligadas.
-Arena.TURRET = { range: 14, charge: 0.6, every: 1.6, damage: 4 };
+Arena.TURRET = { range: 14, charge: 0.6, every: 1.6, damage: 4, hp: 40 };
 Arena.turretsFor = (cameras) => (cameras || []).slice(0, 2).map(c => ({ x: c.x + Math.sin(c.dir) * 1.6, z: c.z + Math.cos(c.dir) * 1.6 }));
+// Aplica dano a uma torreta (função pura). Retorna true quando ela acaba de ser destruída.
+Arena.turretHit = (t, dmg) => { if (t.dead) return false; t.hp = (t.hp === undefined ? Arena.TURRET.hp : t.hp) - dmg; if (t.hp <= 0) { t.dead = true; return true; } return false; };
 Arena.turretStep = (t, dt, { active, dist, los }) => {
+  if (t.dead) return false;
   t.cd = Math.max(0, (t.cd || 0) - dt);
   if (!active || !los || dist > Arena.TURRET.range) { t.charge = 0; return false; }
   t.charge = (t.charge || 0) + dt;
