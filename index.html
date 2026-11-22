@@ -8,12 +8,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi · P48</title>
+<title>Arena FPS — Industrial Sci-Fi · P49</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
 <body>
+<div id="updateBar" class="hidden" role="alert"><span>Nova versão disponível.</span><button id="updateBtn" type="button">ATUALIZAR</button><button id="updateLater" type="button" aria-label="Dispensar">×</button></div>
 <main id="game" aria-label="Arena 3D do jogo"></main>
 <div id="hud">
   <div id="vignette"></div>
@@ -151,6 +153,9 @@
     <label>Qualidade<select id="qualitySelect"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
   </div>
   <button id="ovBtn" type="button">JOGAR</button>
+  <button id="installBtn" type="button" class="hidden">⬇ BAIXAR / INSTALAR APP</button>
+  <small id="installHint" class="hidden"></small>
+  <small id="appStatus" aria-live="polite"></small>
   <details id="careerPanel" class="panel career-panel">
     <summary>CARREIRA // CONQUISTAS // PERSONALIZAÇÃO</summary>
     <div id="careerContent"></div>
@@ -171,8 +176,6 @@
 <script src="audio.js"></script>
 <script src="perf-telemetry.js"></script>
 <script src="script.js"></script>
-<script>
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
-</script>
+<script src="app.js"></script>
 </body>
 </html>

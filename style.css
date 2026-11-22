@@ -457,3 +457,12 @@ body.spawn-in #hud, body.spawn-in #crosshair { animation: hudIn .7s .35s cubic-b
     scroll-behavior: auto !important;
   }
 }
+
+/* P49: instalação como app e aviso de atualização */
+#installBtn { padding: 10px 22px; border: 1px solid #4de7ff; background: rgba(5,8,18,.85); color: #4de7ff; font: inherit; letter-spacing: .08em; cursor: pointer; border-radius: 6px; }
+#installBtn:hover, #installBtn:focus-visible { background: #4de7ff; color: #050812; }
+#installHint, #appStatus { display: block; max-width: 520px; text-align: center; opacity: .75; font-size: 12px; line-height: 1.4; }
+#updateBar { position: fixed; z-index: 100; left: 50%; top: max(10px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(5,8,18,.95); border: 1px solid #ffc857; border-radius: 8px; color: #fff; box-shadow: 0 0 18px rgba(255,200,87,.35); }
+#updateBar button { font: inherit; cursor: pointer; border-radius: 5px; border: 1px solid #ffc857; background: #ffc857; color: #050812; padding: 6px 12px; }
+#updateBar #updateLater { background: transparent; color: #ffc857; padding: 4px 9px; }
+#updateBar button:disabled { opacity: .6; cursor: default; }

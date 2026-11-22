@@ -1,7 +1,18 @@
-# Relatório atual — Arena FPS v8 · Pacote P48
+# Relatório atual — Arena FPS v8 · Pacote P49
 
-**Base de integração:** P47 final, com correção do cache de skyline/neons ao trocar a qualidade. **Última atualização:** pacote P48 em 22/11/2026.  
+**Base de integração:** P48 + camada de app instalável. **Última atualização:** pacote P49 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 49 — App instalável com download e aviso de atualização (22/11/2026)
+
+- **Botão “BAIXAR / INSTALAR APP”** no menu (`app.js`): aparece quando o navegador oferece a instalação (Chrome/Edge/Android) e some depois de instalado. No iPhone/iPad mostra a instrução “Adicionar à Tela de Início”.
+- **Aviso de atualização:** a nova versão é baixada em segundo plano e fica em espera; aparece a barra “Nova versão disponível · ATUALIZAR”. Só ao tocar o SW troca e a página recarrega — nunca no meio da partida sem o jogador querer. Verificação ao voltar para o app e a cada 30 min.
+- **Status offline/versão** no menu (“Pronto para jogar offline”, “versão P49”).
+- **Ícones PNG** 192/512, maskable e apple-touch (o manifest só tinha SVG, que o Chrome não aceita para instalar); manifest com `id` e `display_override`.
+- `sw.js` sem `skipWaiting` automático; cache `arena-fps-v8-p49`. Gameplay intacto.
+- **Correção crítica:** o Three r128 empacotado não tem `InstancedMesh.computeBoundingSphere` (existe só a partir do r151). As chamadas dos pacotes P40–P48 lançavam `TypeError` ao carregar o mapa Hangar (visto em Chromium headless: `wallStrips.computeBoundingSphere is not a function`). Agora o helper `fitInstanced` usa a função se existir e, senão, desliga o frustum culling da instância.
+
+Limites: instalação e atualização exigem HTTPS (ou localhost) e não foram testadas em dispositivo real. Para testar a atualização, publique uma versão nova com `CACHE_NAME` diferente e reabra o app.
 
 ## Pacote 48 — Cache do cenário ao trocar a qualidade (22/11/2026)
 

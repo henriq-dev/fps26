@@ -18,6 +18,9 @@ const urlParams = new URLSearchParams(window.location.search);
 const perfMode = urlParams.get('perf') === '1';
 // Interruptores de diagnóstico (funcionam em qualquer link): ?semluzes=1 &simples=1 &escala=0.5 &semneblina=1 &sempoeira=1
 const FLAG = { noLights: urlParams.get('semluzes') === '1', simple: urlParams.get('simples') === '1', noFog: urlParams.get('semneblina') === '1', noDust: urlParams.get('sempoeira') === '1', scale: (v => v > 0 ? Math.min(2, Math.max(0.3, v)) : 0)(parseFloat(urlParams.get('escala'))) };
+// P49: o Three r128 empacotado NÃO tem InstancedMesh.computeBoundingSphere (só a partir do r151) — chamá-lo lançava TypeError ao carregar o mapa (P40–P48).
+// Com a API ausente, desliga o frustum culling da instância (a esfera padrão cobriria só a geometria na origem e sumiria com as instâncias).
+const fitInstanced = m => { if (typeof m.computeBoundingSphere === 'function') m.computeBoundingSphere(); else m.frustumCulled = false; };
 let appliedQuality = null;   // declarado cedo: loadMap(0) já consulta o modo gráfico
 const simpleGfx = () => FLAG.simple || appliedQuality === 'low';   // modo leve: materiais Lambert, sem decoração PBR, sem luzes extras
 const perfTelemetry = perfMode ? Arena.createPerfTelemetry(3600) : null;
@@ -215,13 +218,13 @@ function addIndustrialSetDressing() {
   for (const [i, z] of [-27.82, 27.82].entries()) {
     dummy.position.set(0, 2.72, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); longRails.setMatrixAt(i, dummy.matrix);
   }
-  longRails.instanceMatrix.needsUpdate = true; longRails.computeBoundingSphere(); group.add(longRails);
+  longRails.instanceMatrix.needsUpdate = true; fitInstanced(longRails); group.add(longRails);
   const sideRail = new THREE.BoxGeometry(0.07, 0.07, ARENA * 2);
   const sideRails = new THREE.InstancedMesh(sideRail, railMat, 2); // P45: os dois trilhos transversais em uma chamada
   for (const [i, x] of [-27.82, 27.82].entries()) {
     dummy.position.set(x, 2.72, 0); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); sideRails.setMatrixAt(i, dummy.matrix);
   }
-  sideRails.instanceMatrix.needsUpdate = true; sideRails.computeBoundingSphere(); group.add(sideRails);
+  sideRails.instanceMatrix.needsUpdate = true; fitInstanced(sideRails); group.add(sideRails);
 
   const panelGeo = new THREE.BoxGeometry(2.6, 0.50, 0.045);
   const panels = new THREE.InstancedMesh(panelGeo, panelMat, 12);
@@ -266,7 +269,7 @@ function addSkylineDressing() {
     const a = (i / ringCount) * Math.PI * 2 + rnd() * .25, r = ARENA + 16 + rnd() * 34, w = 7 + rnd() * 9, h = 24 + rnd() * 46;
     putTower(i, w, h, w, Math.cos(a) * r, h / 2, Math.sin(a) * r);
   }
-  putTower(ringCount, 16, 44, 12, 0, 22, -(ARENA + 26)); towers.instanceMatrix.needsUpdate = true; towers.computeBoundingSphere(); group.add(towers);
+  putTower(ringCount, 16, 44, 12, 0, 22, -(ARENA + 26)); towers.instanceMatrix.needsUpdate = true; fitInstanced(towers); group.add(towers);
   const banner = (lines, x, y, z, ry, w, h, bg, fs, fogOn) => {
     const tex = cvTex(256, Math.round(256 * h / w), (g, W, H) => {
       g.fillStyle = bg; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 3; g.strokeRect(6, 6, W - 12, H - 12);
@@ -288,7 +291,7 @@ function addSkylineDressing() {
   [[80, .5, 3, 0, 9.5, -(ARENA + 14)], [80, .9, .08, 0, 10.2, -(ARENA + 12.6)], [1.6, 15, 1.6, -4, 7.5, -(ARENA + 8)], [34, 1.2, 1.2, 12, 15, -(ARENA + 8)], [.08, 5.5, .08, 18, 12.2, -(ARENA + 8)]].forEach(([w, h, d, x, y, z], i) => {
     towerDummy.position.set(x, y, z); towerDummy.scale.set(w, h, d); towerDummy.rotation.set(0, 0, 0); towerDummy.updateMatrix(); darkStructures.setMatrixAt(i, towerDummy.matrix);
   });
-  darkStructures.instanceMatrix.needsUpdate = true; darkStructures.computeBoundingSphere(); group.add(darkStructures);
+  darkStructures.instanceMatrix.needsUpdate = true; fitInstanced(darkStructures); group.add(darkStructures);
   add(new THREE.MeshBasicMaterial({ color: 0xff4d5e, fog: false }), 80, .12, .2, 0, 9.15, -(ARENA + 14));
   add(new THREE.MeshBasicMaterial({ color: 0x3a1f1a, fog: false }), 3, 2.4, 6.4, 18, 8.4, -(ARENA + 8));
   const lampRed = new THREE.MeshBasicMaterial({ color: 0xff3a4a, fog: false });
@@ -296,7 +299,7 @@ function addSkylineDressing() {
   [[16.8, -(ARENA + 5.2)], [19.2, -(ARENA + 10.8)]].forEach(([x, z], i) => {
     towerDummy.position.set(x, 9.8, z); towerDummy.scale.set(.3, .3, .3); towerDummy.updateMatrix(); redLamps.setMatrixAt(i, towerDummy.matrix);
   });
-  redLamps.instanceMatrix.needsUpdate = true; redLamps.computeBoundingSphere(); group.add(redLamps);
+  redLamps.instanceMatrix.needsUpdate = true; fitInstanced(redLamps); group.add(redLamps);
   // brilho dos neons (caixas aditivas translúcidas: simulam bloom sem pós-processamento, barato em celular)
   const halo = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false });
   const W = ARENA * 2 + 2, redHalo = halo(0xff4d5e), cyanHalo = halo(0x4de7ff), cyanLamp = new THREE.MeshBasicMaterial({ color: 0x4de7ff });
@@ -304,7 +307,7 @@ function addSkylineDressing() {
   [[0, -ARENA, W, .6, .35], [0, ARENA, W, .6, .35], [-ARENA, 0, .35, .6, W], [ARENA, 0, .35, .6, W]].forEach(([x, z, w, h, d], i) => {
     towerDummy.position.set(x * .995, 2.2, z * .995); towerDummy.scale.set(w, h, d); towerDummy.updateMatrix(); redHalos.setMatrixAt(i, towerDummy.matrix);
   });
-  redHalos.instanceMatrix.needsUpdate = true; redHalos.computeBoundingSphere(); group.add(redHalos);
+  redHalos.instanceMatrix.needsUpdate = true; fitInstanced(redHalos); group.add(redHalos);
   const neonColumns = appliedQuality === 'high' ? [-18, -6, 6, 18] : [-18, 6]; // P42: Média reduz transparências/overdraw sem apagar a leitura do Hangar
   const neonCount = neonColumns.length * 2; // P43: quatro orientações/materiais instanciados, dois lados por coluna
   const cyanLampVertical = new THREE.InstancedMesh(blockGeo, cyanLamp, neonCount);
@@ -321,7 +324,7 @@ function addSkylineDressing() {
     towerDummy.position.set(c, 4.7, sgn * (ARENA - .3)); towerDummy.scale.set(3.2, .7, .5); towerDummy.updateMatrix(); cyanHaloHorizontal.setMatrixAt(neonIndex, towerDummy.matrix);
     neonIndex++;
   }
-  neonMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
+  neonMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; fitInstanced(m); });
   group.userData.decorativeOnly = true;
   cachedSkyline = group; scene.add(group); mapMeshes.push(group);
 }
@@ -370,7 +373,7 @@ function loadMap(index) {
   [[0, -ARENA, W, .08, .05], [0, ARENA, W, .08, .05], [-ARENA, 0, .05, .08, W], [ARENA, 0, .05, .08, W]].forEach(([x, z, w, h, d], i) => {
     const stripDummy = new THREE.Object3D(); stripDummy.scale.set(w, h, d); stripDummy.position.set(x * 0.998, 2.2, z * 0.998); stripDummy.updateMatrix(); wallStrips.setMatrixAt(i, stripDummy.matrix);
   });
-  wallStrips.instanceMatrix.needsUpdate = true; wallStrips.computeBoundingSphere();
+  wallStrips.instanceMatrix.needsUpdate = true; fitInstanced(wallStrips);
   scene.add(wallStrips); mapMeshes.push(wallStrips);
   if (activeMapLook === 'industrial' && !simpleGfx()) { addIndustrialSetDressing(); addSkylineDressing(); }
   navGrid = Arena.createGrid(ARENA, 1, boxes, 0.62);   // células de 1 m; 0,62 m = raio do corpo + folga

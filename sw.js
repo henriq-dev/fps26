@@ -1,12 +1,20 @@
-const CACHE_NAME = 'arena-fps-v8-p48';
+const VERSION = 'P49';
+const CACHE_NAME = 'arena-fps-v8-p49';
 const CORE = [
-  './', './index.html', './style.css', './three.min.js', './script.js',
+  './', './index.html', './style.css', './three.min.js', './script.js', './app.js',
   './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './deck.js',
-  './pathfinding.js', './tactics.js', './progression.js', './audio.js', './manifest.json', './icon.svg'
+  './pathfinding.js', './tactics.js', './progression.js', './audio.js', './manifest.json', './icon.svg',
+  './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'
 ];
 
+// P49: a nova versão instala em segundo plano e fica "waiting" até o jogador aceitar o aviso (sem trocar no meio da partida).
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)));
+});
+
+self.addEventListener('message', event => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  else if (event.data === 'GET_VERSION' && event.source) event.source.postMessage({ type: 'VERSION', version: VERSION });
 });
 
 self.addEventListener('activate', event => {
