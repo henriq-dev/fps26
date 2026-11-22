@@ -14,6 +14,12 @@
 
 Limites: instalação e atualização exigem HTTPS (ou localhost) e não foram testadas em dispositivo real. Para testar a atualização, publique uma versão nova com `CACHE_NAME` diferente e reabra o app.
 
+### Medições P49
+
+- **Teste de runtime novo:** `tests/e2e-smoke.py` (Chromium headless, `?test=1`) carrega os 3 mapas e os 3 prédios da Incursão nas 3 qualidades, renderiza um quadro e falha em qualquer exceção JS; `test.sh` roda quando o playwright existe.
+- **Medição real de draw calls (Hangar, software GL, contagem independe da GPU):** P39 = 123 (Média) / 122 (Alta); P49 = 94 / 94, cerca de -24%. Nos outros mapas a diferença é de 1-3 chamadas. Incursão: -2 a -3.
+- **Onde está o resto do custo:** ~60 das ~79 chamadas base de qualquer mapa vêm do viewmodel (arma + mãos, ~128 meshes sob a câmera). Próximo alvo de otimização: fundir as partes estáticas da arma por material, mantendo separadas as móveis (`movable`) e as de calor (`trackHeat`). Exige conferência visual das 10 armas.
+
 ## Pacote 48 — Cache do cenário ao trocar a qualidade (22/11/2026)
 
 `cachedSkyline` e `cachedIndustrialDressing` eram criados uma vez e nunca invalidados, então as versões adaptativas do P41 e P42 (torres e neons por qualidade) só valiam após recarregar a página. Agora ambos são zerados quando a qualidade muda, antes do `loadMap`, e o cenário é refeito com a quantidade correta. Nenhuma outra mudança; gameplay intacto. Cache PWA: `arena-fps-v8-p48`.

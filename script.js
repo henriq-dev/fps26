@@ -3302,6 +3302,7 @@ showOverlay('menu');
 loadPrefs(); applyPrefs();                          // restaura ajustes salvos (modo, dificuldade, controles e qualidade)
 applySkin(); if (!perfMode) career.beginDay(); refreshCareerUI(); syncRunSelection();
 applyControlMode();                                 // detecta celular (pointer: coarse) e ajusta HUD e ajuda
+if (urlParams.get('test') === '1') window.__arenaTest = { loadMap, setQuality: q => { prefEls.quality.value = q; applyPrefs(); }, frame: () => { renderer.info.reset(); renderer.render(scene, camera); return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, objs: mapMeshes.length }; } };   // P49: gancho só para tests/e2e-smoke.py
 requestAnimationFrame(loop);
 
 })();
