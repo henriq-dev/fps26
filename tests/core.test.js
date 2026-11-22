@@ -454,3 +454,8 @@ assert.match(gameSource, /HOLD_BASE\.x \* \(1 - adsT \* 0\.5\)/);
 assert.match(gameSource, /showOverlay\('lobby'\)/);
 assert.match(gameSource, /VOLTAR AO LOBBY/);
 assert.match(require('fs').readFileSync(require('path').join(__dirname,'..','app.js'),'utf8'), /sempre aparece/);
+{ const fs = require('fs'), path = require('path'); const idx = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  for (const id of ['modeSelect','incLevelSelect','difficultySelect','sensRange','fovRange','volumeRange','ctrlSelect','radarSelect','qualitySelect','ovBtn','ovTitle','ovText','helpCard','careerContent','installBtn'])
+    assert.ok(idx.includes(`id="${id}"`), 'lobby: falta #' + id);
+  assert.match(gameSource, /el\.overlay\.dataset\.view = mode/);
+  console.log('p51: lobby redesenhado OK'); }

@@ -29,6 +29,28 @@
   });
   refreshInstallUi();
 
+
+  // --- P51: lobby — seletores segmentados espelham os <select> originais (que continuam sendo a fonte da verdade) ---
+  const NOTES = { survival: 'Ondas sem fim: aguente o máximo que puder.', operations: 'Ondas com objetivos extras para cumprir.', incursion: 'Invada um prédio, hackeie terminais e fuja.' };
+  const ICONS = { survival: '🌊', operations: '🎯', incursion: '🏢', cadet: '🟢', normal: '🟡', nightmare: '🔴' };
+  const incField = $('incField'), modeSel = $('modeSelect'), modeNote = $('modeNote');
+  const syncLobby = () => {
+    document.querySelectorAll('.seg').forEach(seg => {
+      const sel = $(seg.dataset.for); if (!sel) return;
+      if (!seg.children.length) [...sel.options].forEach(o => {
+        const b = document.createElement('button'); b.type = 'button'; b.dataset.v = o.value;
+        b.innerHTML = `<i>${ICONS[o.value] || ''}</i><span>${o.textContent.replace(/ \(.*\)/, '')}</span>`;
+        b.addEventListener('click', () => { sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); syncLobby(); });
+        seg.appendChild(b);
+      });
+      [...seg.children].forEach(b => { const on = b.dataset.v === sel.value; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    });
+    if (incField) incField.classList.toggle('hidden', modeSel.value !== 'incursion');
+    if (modeNote) modeNote.textContent = NOTES[modeSel.value] || '';
+  };
+  ['modeSelect', 'difficultySelect'].forEach(id => $(id) && $(id).addEventListener('change', syncLobby));
+  syncLobby(); setTimeout(syncLobby, 300);   // 2ª passada: loadPrefs() do jogo restaura o modo salvo depois deste script
+
   // --- Aviso de atualização ---
   if (!('serviceWorker' in navigator)) { setStatus('Offline indisponível neste navegador'); return; }
   let reloading = false, hadController = !!navigator.serviceWorker.controller;

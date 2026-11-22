@@ -1,7 +1,16 @@
-# Relatório atual — Arena FPS v8 · Pacote P50
+# Relatório atual — Arena FPS v8 · Pacote P51
 
-**Base de integração:** P49 + mira, lobby e instalação. **Última atualização:** pacote P50 em 22/11/2026.  
+**Base de integração:** P50 + lobby redesenhado. **Última atualização:** pacote P51 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 51 — Lobby redesenhado (22/11/2026)
+
+- Duas cartas: **MISSÃO** (modo e dificuldade em botões, prédio só aparece na Incursão, JOGAR grande, instalar app) e **CONTROLES** (teclas em “keycaps” por grupo, em vez do bloco de texto).
+- Ajustes (sensibilidade, visão, volume, controles, radar, qualidade) e Carreira em painéis recolhidos.
+- O HUD do jogo não aparece mais por trás do menu/lobby/game over; o aviso de atualização foi para o rodapé e não cobre o título.
+- Cada tela mostra só o que precisa (`data-view`): menu/lobby completos, pausa sem a carta de missão, game over só com resultado e “VOLTAR AO LOBBY”.
+- Os `<select>` originais continuam como fonte da verdade (os botões os controlam), então preferências salvas e lógica do jogo não mudam. Layout testado em 1365×650, 390×780 e 844×390.
+- Cache PWA: `arena-fps-v8-p51`.
 
 ## Pacote 50 — Mira, primeira pessoa, lobby e instalação (22/11/2026)
 

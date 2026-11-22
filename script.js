@@ -3152,12 +3152,15 @@ function loadPrefs() {
   } catch (e) {}
 }
 Object.values(prefEls).forEach(e => { const f = () => { applyPrefs(); savePrefs(); syncRunSelection(); }; e.addEventListener('input', f); e.addEventListener('change', f); });
-const HELP_TOUCH = `<b>Joystick</b> mover  ·  <b>Arraste</b> mirar  ·  <b>FOGO</b> atirar · <b>USAR</b> interagir
-<b>MIRAR</b> zoom  ·  <b>RECAR.</b> recarregar  ·  <b>PULO</b>, <b>DASH</b> e <b>GRANADA</b>
-Toque nos números para trocar arma · acerte a cabeça para dano dobrado`;
-const HELP = `<b>W A S D</b> mover · <b>Mouse</b> mirar · <b>Clique</b> atirar · <b>R</b> recarregar · <b>E</b> interagir
-<b>1–8</b> ou roda do mouse trocar · <b>Shift</b> correr · <b>Espaço</b> pular · <b>Q</b> dash · <b>G</b> granada
-<b>Gamepad</b> analógicos mover/mirar · RT fogo · LT mirar · LB/RB trocar · X recarregar · Y granada · B dash · A pular · L3 interagir`;
+const kb = (...k) => '<span class="keys">' + k.map(x => `<kbd>${x}</kbd>`).join('') + '</span>';
+const hrow = (keys, txt) => `<div class="kb-row">${keys}<span>${txt}</span></div>`;
+const HELP_TOUCH = `<div class="kb-group"><h3>MOVER E MIRAR</h3>${hrow(kb('Joystick'), 'mover')}${hrow(kb('Arraste'), 'mirar')}${hrow(kb('PULO'), 'pular')}${hrow(kb('DASH'), 'esquiva')}</div>
+<div class="kb-group"><h3>COMBATE</h3>${hrow(kb('FOGO'), 'atirar')}${hrow(kb('MIRAR'), 'zoom')}${hrow(kb('RECAR.'), 'recarregar')}${hrow(kb('GRANADA'), 'explosivo')}${hrow(kb('USAR'), 'interagir')}</div>
+<p class="kb-tip">Toque nos números para trocar de arma · acerte a cabeça para dano dobrado</p>`;
+const HELP = `<div class="kb-group"><h3>MOVER</h3>${hrow(kb('W','A','S','D'), 'mover')}${hrow(kb('Shift'), 'correr')}${hrow(kb('Espaço'), 'pular')}${hrow(kb('Q'), 'dash')}${hrow(kb('E'), 'interagir')}</div>
+<div class="kb-group"><h3>COMBATE</h3>${hrow(kb('Clique'), 'atirar')}${hrow(kb('Botão dir.'), 'mirar')}${hrow(kb('R'), 'recarregar')}${hrow(kb('G'), 'granada')}${hrow(kb('1','–','0'), 'trocar arma (ou roda do mouse)')}</div>
+<p class="kb-tip">Gamepad: analógicos mover/mirar · RT fogo · LT mirar · LB/RB trocar · X recarregar · Y granada · B dash · A pular · L3 interagir</p>`;
+const helpCardEl = $('helpCard');
 const helpText = () => useTouch ? HELP_TOUCH : HELP;
 function refreshCareerUI() {
   const root = $('careerContent'); if (!root) return;
@@ -3175,18 +3178,18 @@ function syncRunSelection() {
 function showOverlay(mode, keepHidden = false) {
   if (!keepHidden) el.overlay.classList.remove('hidden');
   if (mode === 'menu') {
-    el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
-    if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P19:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
+    el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = ''; helpCardEl.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
+    if (perfMode) { el.text.innerHTML += '<b>DIAGNÓSTICO P19:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
   } else if (mode === 'lobby') {
-    el.title.innerHTML = 'LOBBY'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';   // P50: depois do fim de partida, recomeçar passa pelo lobby (modo, dificuldade, carreira)
+    el.title.innerHTML = 'LOBBY'; el.text.innerHTML = ''; helpCardEl.innerHTML = helpText(); el.btn.textContent = 'JOGAR';   // P50: depois do fim de partida, recomeçar passa pelo lobby (modo, dificuldade, carreira)
   } else if (mode === 'pause') {
-    el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = helpText() + (perkSummary() ? `\n<b>Upgrades:</b> ${perkSummary()}` : ''); el.btn.textContent = 'CONTINUAR';
+    el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = perkSummary() ? `<b>Upgrades:</b> ${perkSummary()}` : ''; helpCardEl.innerHTML = helpText(); el.btn.textContent = 'CONTINUAR';
   } else {
     el.title.innerHTML = incVictory ? 'MISSÃO <span>CUMPRIDA</span>' : 'GAME <span>OVER</span>';
     el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão · ' + incData().name : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
-    el.btn.textContent = 'VOLTAR AO LOBBY';
+    helpCardEl.innerHTML = ''; el.btn.textContent = 'VOLTAR AO LOBBY';
   }
-  el.btn.dataset.mode = mode;
+  el.btn.dataset.mode = mode; el.overlay.dataset.view = mode;   // P51: o CSS mostra só o que cada tela precisa
   refreshCareerUI();
 }
 el.btn.addEventListener('click', () => {

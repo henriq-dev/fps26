@@ -466,3 +466,77 @@ body.spawn-in #hud, body.spawn-in #crosshair { animation: hudIn .7s .35s cubic-b
 #updateBar button { font: inherit; cursor: pointer; border-radius: 5px; border: 1px solid #ffc857; background: #ffc857; color: #050812; padding: 6px 12px; }
 #updateBar #updateLater { background: transparent; color: #ffc857; padding: 4px 9px; }
 #updateBar button:disabled { opacity: .6; cursor: default; }
+
+/* ========== P51: LOBBY / MENU REDESENHADO ========== */
+#overlay { align-items: center; justify-content: flex-start; background:
+  radial-gradient(ellipse at 20% 10%, rgba(77,231,255,.10), transparent 55%),
+  radial-gradient(ellipse at 85% 90%, rgba(255,79,123,.12), transparent 55%),
+  linear-gradient(180deg, rgba(4,7,18,.80), rgba(3,5,14,.94)); }
+#overlay > .lobby { margin: auto; width: min(960px, 100%); display: grid; gap: 14px; }
+.lobby-head { display: grid; gap: 4px; justify-items: center; }
+#ovTitle { font-size: clamp(34px, 6.5vw, 66px); line-height: 1; margin: 0; }
+.tagline { margin: 4px 0 0; color: var(--muted); font-size: 13px; letter-spacing: .16em; text-transform: uppercase; }
+#ovText { margin: 6px 0 0; max-width: 640px; }
+#ovText:empty { display: none; }
+.lobby-cols { display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px; align-items: stretch; }
+.lobby-card { background: rgba(7,12,24,.74); border: 1px solid rgba(77,231,255,.22); border-radius: 12px; padding: 16px 18px; text-align: left;
+  box-shadow: 0 0 28px rgba(0,0,0,.35), inset 0 0 22px rgba(77,231,255,.03); backdrop-filter: blur(6px); }
+.lobby-card h2 { margin: 0 0 12px; font-size: 12px; letter-spacing: .26em; color: var(--cyan); font-weight: 600; }
+.lobby-setup { display: grid; gap: 12px; align-content: start; }
+.lobby-setup h2 { margin-bottom: 0; }
+.field { display: grid; gap: 6px; }
+.field-label { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.lobby-setup select { display: none; }                         /* o seletor nativo fica oculto; os botões o controlam */
+.lobby-setup #incLevelSelect { display: block; width: 100%; padding: 10px; background: rgba(5,8,18,.9); color: var(--ui); border: 1px solid rgba(77,231,255,.3); border-radius: 8px; font: inherit; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; }
+.seg button { display: grid; justify-items: center; gap: 2px; padding: 10px 6px; font: inherit; font-size: 12px; color: var(--ui); cursor: pointer;
+  background: rgba(5,8,18,.7); border: 1px solid rgba(255,255,255,.14); border-radius: 9px; transition: border-color .15s, background .15s, transform .15s; }
+.seg button i { font-style: normal; font-size: 18px; filter: grayscale(.6); }
+.seg button:hover { border-color: rgba(77,231,255,.55); transform: translateY(-1px); }
+.seg button.on { border-color: var(--cyan); background: rgba(77,231,255,.14); box-shadow: 0 0 14px rgba(77,231,255,.25); }
+.seg button.on i { filter: none; }
+.seg-note { margin: 0; min-height: 1.3em; font-size: 12px; color: var(--muted); }
+.lobby-setup #ovBtn { width: 100%; margin-top: 4px; padding: 16px 20px; font-size: 18px; letter-spacing: .3em; background: linear-gradient(90deg, #ff4f7b, #a06bff); box-shadow: 0 8px 30px rgba(255,79,123,.38); }
+.lobby-setup #installBtn { width: 100%; }
+.lobby-setup small { text-align: center; }
+.kb-group { margin-bottom: 12px; } .kb-group h3 { margin: 0 0 6px; font-size: 10px; letter-spacing: .22em; color: var(--muted); font-weight: 600; }
+.kb-row { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; padding: 3px 0; font-size: 12.5px; color: var(--ui); }
+.keys { display: flex; flex-wrap: wrap; gap: 4px; }
+kbd { font: inherit; font-size: 11px; padding: 2px 7px; min-width: 24px; text-align: center; color: var(--ui); background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.22); border-bottom-width: 2px; border-radius: 5px; }
+.kb-tip { margin: 6px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.lobby-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.lobby-extra details { padding: 10px 14px; max-height: none; width: auto; }
+.lobby-extra summary { cursor: pointer; color: var(--cyan); font-size: 11px; letter-spacing: .16em; text-align: center; }
+.lobby-extra .career-panel { max-height: 34vh; overflow: auto; }
+.settings-box .settings { width: 100%; margin-top: 10px; padding: 0; box-shadow: none; border: 0; background: none; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+.settings-box .settings label { grid-template-columns: 1fr; gap: 3px; }
+/* O HUD do jogo não aparece por trás do menu */
+body:has(#overlay:not(.hidden)[data-view="menu"]) :is(#hud, #crosshair, #hitmarker),
+body:has(#overlay:not(.hidden)[data-view="lobby"]) :is(#hud, #crosshair, #hitmarker),
+body:has(#overlay:not(.hidden)[data-view="over"]) :is(#hud, #crosshair, #hitmarker) { visibility: hidden; }
+/* cada tela mostra só o que precisa */
+#overlay[data-view="over"] :is(.lobby-help, .settings-box) { display: none; }
+#overlay[data-view="over"] .lobby-setup > :not(#ovBtn), #overlay[data-view="over"] .tagline, #overlay[data-view="pause"] .tagline { display: none; }
+#overlay[data-view="over"] .lobby-cols { grid-template-columns: minmax(0, 360px); justify-content: center; }
+#overlay[data-view="over"] .lobby-setup { background: none; border: 0; box-shadow: none; padding: 0; backdrop-filter: none; }
+#overlay[data-view="over"] .lobby-setup h2 { display: none; }
+#overlay[data-view="over"] .lobby-head { max-width: 560px; margin: 0 auto; }
+#overlay[data-view="over"] .lobby { width: min(620px, 100%); }
+#overlay[data-view="over"] .lobby-extra { grid-template-columns: 1fr; }
+#overlay[data-view="over"] .lobby-head::after { content: ""; }
+#overlay[data-view="pause"] .lobby-setup > :not(#ovBtn) { display: none; }
+#overlay[data-view="pause"] .lobby-cols { grid-template-columns: 1fr 1fr; }
+/* aviso de atualização: no rodapé, sem cobrir o título */
+#updateBar { top: auto; bottom: max(14px, env(safe-area-inset-bottom)); }
+@media (max-width: 760px) {
+  .lobby-cols, .lobby-extra, #overlay[data-view="pause"] .lobby-cols { grid-template-columns: 1fr; }
+  .lobby-help { order: 2; } .kb-row { grid-template-columns: 120px 1fr; }
+  .settings-box .settings { grid-template-columns: 1fr; }
+}
+@media (max-height: 480px) {
+  #overlay > .lobby { gap: 8px; } .tagline { display: none; } #ovTitle { font-size: clamp(24px, 8vh, 38px); }
+  .lobby-cols { grid-template-columns: 1.1fr .9fr; } .lobby-card { padding: 8px 12px; } .kb-group { margin-bottom: 6px; }
+  .lobby-setup #ovBtn { position: static; padding: 10px; }
+  .seg button { padding: 6px 4px; } .seg button i { display: none; }
+}

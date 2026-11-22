@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi · P50</title>
+<title>Arena FPS — Industrial Sci-Fi · P51</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -134,32 +134,50 @@
     </div>
   </section>
 </div>
-<div id="overlay" role="dialog" aria-live="polite">
-  <h1 id="ovTitle">ARENA <span>FPS</span></h1>
-  <p class="tagline">Sobreviva às ondas · complete operações · encadeie abates</p>
-  <p id="ovText"></p>
-  <div class="panel settings">
-    <label>Modo<select id="modeSelect"><option value="survival">Sobrevivência</option><option value="operations">Operações</option><option value="incursion">Incursão (prédio)</option></select></label>
-    <label>Prédio (Incursão)<select id="incLevelSelect"><option value="0">1 · Complexo</option><option value="1">2 · Refinaria</option><option value="2">3 · Laboratório</option><option value="3">4 · Campus (blocos A–E)</option></select></label>
-    <label>Dificuldade<select id="difficultySelect"><option value="cadet">Recruta</option><option value="normal" selected>Veterano</option><option value="nightmare">Pesadelo</option></select></label>
-    <label>Sensibilidade<input id="sensRange" type="range" min="0.0008" max="0.005" step="0.0001" value="0.0022"></label>
-    <label>Campo de visão<input id="fovRange" type="range" min="60" max="100" step="1" value="75"></label>
-    <label>Volume<input id="volumeRange" type="range" min="0" max="1" step="0.05" value="0.7"></label>
-    <label>Controles<select id="ctrlSelect"><option value="auto" selected>Automático</option><option value="touch">Toque (celular)</option><option value="mouse">Teclado e mouse</option></select></label>
-    <label>Radar<select id="radarSelect"><option value="on" selected>Ligado</option><option value="off">Desligado</option></select></label>
-    <label class="touch-only">Sensibilidade do toque<input id="touchSens" type="range" min="0.8" max="3.2" step="0.1" value="1.9"></label>
-    <label class="touch-only">Tamanho dos botões<input id="btnScale" type="range" min="0.8" max="1.35" step="0.05" value="1"></label>
-    <label class="touch-only">Mira assistida<select id="assistSelect"><option value="on" selected>Ligada</option><option value="off">Desligada</option></select></label>
-    <label>Qualidade<select id="qualitySelect"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
+<div id="overlay" role="dialog" aria-live="polite" data-view="menu">
+  <div class="lobby">
+    <header class="lobby-head">
+      <h1 id="ovTitle">ARENA <span>FPS</span></h1>
+      <p class="tagline">Sobreviva às ondas · complete operações · encadeie abates</p>
+      <p id="ovText"></p>
+    </header>
+    <div class="lobby-cols">
+      <section class="lobby-card lobby-setup" aria-label="Missão">
+        <h2>MISSÃO</h2>
+        <div class="field"><span class="field-label">Modo</span><div class="seg" data-for="modeSelect"></div><p class="seg-note" id="modeNote"></p><select id="modeSelect" aria-label="Modo"><option value="survival">Sobrevivência</option><option value="operations">Operações</option><option value="incursion">Incursão (prédio)</option></select></div>
+        <div class="field" id="incField"><span class="field-label">Prédio</span><select id="incLevelSelect" aria-label="Prédio da Incursão"><option value="0">1 · Complexo</option><option value="1">2 · Refinaria</option><option value="2">3 · Laboratório</option><option value="3">4 · Campus (blocos A–E)</option></select></div>
+        <div class="field"><span class="field-label">Dificuldade</span><div class="seg" data-for="difficultySelect"></div><select id="difficultySelect" aria-label="Dificuldade"><option value="cadet">Recruta</option><option value="normal" selected>Veterano</option><option value="nightmare">Pesadelo</option></select></div>
+        <button id="ovBtn" type="button">JOGAR</button>
+        <button id="installBtn" type="button" class="hidden">⬇ BAIXAR / INSTALAR APP</button>
+        <small id="installHint" class="hidden"></small>
+        <small id="appStatus" aria-live="polite"></small>
+      </section>
+      <section class="lobby-card lobby-help" aria-label="Controles">
+        <h2>CONTROLES</h2>
+        <div id="helpCard"></div>
+      </section>
+    </div>
+    <div class="lobby-extra">
+      <details class="lobby-card settings-box">
+        <summary>AJUSTES // VISÃO · VOLUME · QUALIDADE</summary>
+        <div class="settings">
+                    <label>Sensibilidade<input id="sensRange" type="range" min="0.0008" max="0.005" step="0.0001" value="0.0022"></label>
+          <label>Campo de visão<input id="fovRange" type="range" min="60" max="100" step="1" value="75"></label>
+          <label>Volume<input id="volumeRange" type="range" min="0" max="1" step="0.05" value="0.7"></label>
+          <label>Controles<select id="ctrlSelect"><option value="auto" selected>Automático</option><option value="touch">Toque (celular)</option><option value="mouse">Teclado e mouse</option></select></label>
+          <label>Radar<select id="radarSelect"><option value="on" selected>Ligado</option><option value="off">Desligado</option></select></label>
+          <label class="touch-only">Sensibilidade do toque<input id="touchSens" type="range" min="0.8" max="3.2" step="0.1" value="1.9"></label>
+          <label class="touch-only">Tamanho dos botões<input id="btnScale" type="range" min="0.8" max="1.35" step="0.05" value="1"></label>
+          <label class="touch-only">Mira assistida<select id="assistSelect"><option value="on" selected>Ligada</option><option value="off">Desligada</option></select></label>
+          <label>Qualidade<select id="qualitySelect"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
+        </div>
+      </details>
+      <details id="careerPanel" class="lobby-card career-panel">
+        <summary>CARREIRA // CONQUISTAS // PERSONALIZAÇÃO</summary>
+        <div id="careerContent"></div>
+      </details>
+    </div>
   </div>
-  <button id="ovBtn" type="button">JOGAR</button>
-  <button id="installBtn" type="button" class="hidden">⬇ BAIXAR / INSTALAR APP</button>
-  <small id="installHint" class="hidden"></small>
-  <small id="appStatus" aria-live="polite"></small>
-  <details id="careerPanel" class="panel career-panel">
-    <summary>CARREIRA // CONQUISTAS // PERSONALIZAÇÃO</summary>
-    <div id="careerContent"></div>
-  </details>
 </div>
 <script src="three.min.js"></script>
 <script src="industrial-materials.js"></script>
