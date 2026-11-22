@@ -1,7 +1,35 @@
-# Relatório atual — Arena FPS v8 · Pacote 22
+# Relatório atual — Arena FPS v8 · Pacote P39
 
-**Data:** 18/11/2026 (p22) — inclui p21, p20, p19 e os pacotes anteriores.  
+**Base de integração:** P38 consolidado + P38 cenário/animação. **Última atualização:** pacote P39 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 39 — Junção P38 consolidado + P38 cenário/animação (22/11/2026)
+
+Junção em três vias (base P37) de dois pacotes P38 independentes: o consolidado (SMG Vespa, Carabina Íon, terminais NEXUS detalhados, slots/HUD com safe-area) e o de cenário/animação (skyline, faixas, ponte, guindaste e neons com brilho no mapa 0; braços e respiração dos inimigos; explosões suaves; hit marker com pop; feed e `prefers-reduced-motion`). `script.js`, `style.css` e `maps.js` uniram sem conflito; o `sw.js` só diferia no nome do cache (`arena-fps-v8-p39`). Suíte automática aprovada; sem playtest visual nem medição de FPS.
+
+## Pacote consolidado P37 — junção dos pacotes recebidos (22/11/2026)
+
+Base de código: P37. Foram preservadas as mudanças de terminal/cyberdeck do P35 e os subsistemas presentes no P34. As melhorias visuais do checkpoint de animação P35 foram incorporadas pela implementação posterior do P37 (câmera, corrida, aterrissagem e arma em primeira pessoa); o checkpoint original fica registrado em `ANIMATIONS_PROGRESS.md`, sem substituir o código mais novo.
+
+O P37 acrescenta agachar/deslizar, inspeção de arma (V), câmera lenta em eventos, placar animado, animação de morte e detalhes ambientais. Os testes automatizados existentes passam; essas mecânicas novas ainda precisam de playtest manual em desktop e celular. O service worker recebeu um identificador de cache novo para clientes já instalados. Documentos P14–P20 e P34/P35 são mantidos junto aos arquivos.
+
+**Limite da consolidação:** não foram fundidas variantes contraditórias de `script.js` como blocos; manteve-se a implementação mais recente do P37, que contém os recursos anteriores e substitui a revisão de câmera do checkpoint.
+
+## Pacote 38 — arsenal, partículas, consoles e responsividade (22/11/2026)
+
+Sobre a base P37 foram integradas duas armas procedurais: **SMG Vespa**, desbloqueada na onda 8, e **Carabina Íon**, desbloqueada na onda 10. Ambas têm stats, modelo, pose, clarão e animação de recarga próprios. A seleção agora contempla dez armas, com a tecla **0** para a décima. Foi acrescentado um efeito curto de motas iônicas com pool reutilizável e limite compartilhado de efeitos.
+
+As telas NEXUS variam a apresentação conforme tipo e estado do terminal, e os consoles receberam detalhes de hardware fundidos às malhas existentes. Ajustes de safe-area, rolagem dos slots touch e indicador/área de rolagem do menu em telas baixas melhoram a leitura sem mexer em colisões ou regras de combate. O service worker usa `arena-fps-v8-p38-arsenal-visual`.
+
+### Validação e limites P38
+
+- `bash test.sh`: aprovado (`core tests`, testes de Incursão/consoles e `syntax checks`).
+- Chromium headless via HTTP: menu renderizado em 1280×720, 844×390 e 320×568; os recursos centrais (`index.html`, CSS, scripts, telas e service worker) responderam HTTP 200. Nenhum erro ou exceção JavaScript foi encontrado nos logs examinados; avisos de DBus e fallback SwiftShader são do ambiente.
+- Em 844×390, as configurações têm rolagem indicada e o botão **JOGAR** permanece visível. Em 320×568 portrait, o jogo mostra intencionalmente o aviso para girar o celular.
+- Não havia `/dev/input` nem joystick acessível no Sandbox. O mapeamento existente Gamepad API/Standard foi revisado, mas controle PlayStation físico, jogabilidade em aparelho real e FPS em GPU/celular não foram testados.
+- Continuam pendentes o playtest humano do fluxo NEXUS nos três prédios e a validação de desempenho em hardware real; ver `TODO.md`.
+
+---
 
 ## Pacote 20 — Modo Incursão: prédio em salas, terminais, escolhas e fuga (18/11/2026)
 
@@ -747,3 +775,29 @@ Testes: `./test.sh` aprovado; Chromium: longe → recusa; perto → hold 0 → 2
 
 Testes: `./test.sh` aprovado; Chromium: câmera 1→0,04 (cabeça 0,53 rad), torreta 1→0,04 (0,58 rad), lente apaga, barra 100%, anel visível (escala 4,8, opacidade 0,66), 0 erros JS. Armas, dano, IA, colisão: intocados.
 **Não feito (p34):** laptop 3D na mão do personagem.
+
+## Pacote 34 — Laptop 3D na mão do personagem (22/11/2026)
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cache `v8-p34`; a arma some enquanto o laptop está na mão (`holder.visible`) | Visibilidade de objetos 3D | Evita arma e laptop se sobrepondo. |
+| Médio | Modelo do laptop só com caixas (base, teclado, touchpad, tampa, tela) e `MeshLambertMaterial` | Composição de `Mesh` simples, pivô na dobradiça | Poucos meshes, sem shader novo pesado; a cor da tela segue o visual Kali/Arch. |
+| Difícil | Animação em fases: sobe (ease-out cúbico) → abre a tampa (smoothstep) → overlay aparece; fechar faz o inverso | Máquina de estados (`deckAnim`, `deckShown`), `camera.add`, interpolação | O loop principal anima mesmo com o jogo congelado; o overlay só aparece com a tampa aberta. |
+| Difícil | `prefers-reduced-motion`: pula a animação | Acessibilidade | Abertura imediata para quem desativa movimento. |
+
+Testes: `./test.sh` aprovado; Chromium: anim 0,61 → 1, tampa de 0,92 → −0,32 rad, overlay só após a tampa abrir, foco no campo, fechar volta a 0 e esconde o laptop, 0 erros JS. Armas, dano, IA, colisão: intocados.
+**Limites:** as mãos digitando não foram feitas (o laptop aparece sozinho, sem mãos); o shell não aparece como textura na tela 3D (o overlay cobre a tela).
+
+## Pacote 35 — Telas dos computadores com terminal (22/11/2026)
+
+Referência enviada: desktop com janela de terminal (prompt `usuario@maquina:~$`, balão de fala e mascote em ASCII).
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Frases do balão (`PHRASES`) e mascote original **BYTE** em ASCII | Dados em lista | O Tux e o dragão do Kali são mascote/logo de marca: não foram desenhados. O BYTE é um robô inventado para o jogo. |
+| Médio | `Arena.drawShellScreen(ctx, W, H, opções)`: barra de título com 3 botões, linhas do shell, balão, mascote, prompt e cursor piscando | Canvas 2D parametrizado (mono ou colorido) | Uma função serve aos monitores (cinza, tingido pelo material) e ao laptop (cores Kali/Arch). |
+| Médio | Monitores em estado ocioso (`standby`) mostram o terminal; detectado/invasão/concluído/negado continuam com o NEXUS | Reuso do pipeline de textura do p25 | A cor de estado continua valendo. |
+| Difícil | Laptop 3D com `CanvasTexture` 320×200 que espelha as últimas linhas do deck (ou o mascote se vazio), repintando a cada comando e no cursor | Sincronizar DOM e textura | A tela do modelo 3D mostra o que o jogador digitou. |
+
+Testes: `./test.sh` aprovado (desenho da tela e terminal ocioso); Chromium: monitor do KVM mostra a janela de terminal, 0 erros JS. Armas, dano, IA, colisão: intocados.
+**Limites:** a tela 3D do console é pequena, então o texto só fica legível de perto; o laptop 3D aparece só durante a subida/descida (depois o overlay cobre).

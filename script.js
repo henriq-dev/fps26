@@ -168,6 +168,12 @@ const stripMat = new THREE.MeshBasicMaterial({ color: 0xff5a4d });
 const cornerLights = [[-ARENA + 3, -ARENA + 3, 0xff6a3d], [ARENA - 3, ARENA - 3, 0x3d9bff], [-ARENA + 3, ARENA - 3, 0xffc857], [ARENA - 3, -ARENA + 3, 0x3ddc84]].map(([x, z, c]) => {
   const l = new THREE.PointLight(c, 1.1, 22); l.userData.baseIntensity = 1.1; l.position.set(x, 3, z); scene.add(l); return l;
 });
+// Cabos pendurados no teto: balançam devagar e dão vida ao cenário (custo quase zero de GPU)
+const hangingCables = [[-ARENA * .55, -ARENA * .7, 0x35d6c8], [ARENA * .6, -ARENA * .5, 0xffb04d], [-ARENA * .4, ARENA * .6, 0x9e7bff], [ARENA * .5, ARENA * .65, 0x4de7ff]].map(([x, z, c], i) => {
+  const pts = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(.35, -1.1, .12), new THREE.Vector3(.18, -2.3, -.08)];
+  const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 10, .02, 5, false), new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: .25 }));
+  const g = new THREE.Group(); g.add(m); g.position.set(x, 7, z); g.userData.phase = i * 1.9; scene.add(g); return g;
+});
 // Céu em gradiente (canvas 1×256 esticado): topo escuro, meio na cor do mapa, horizonte mais claro e arroxeado
 const skyTextureCache = new Map();
 function skyTexture(hex) {
@@ -229,6 +235,65 @@ function addIndustrialSetDressing() {
   cachedIndustrialDressing = group;
   scene.add(group); mapMeshes.push(group);
 }
+// Pacote 38: skyline, faixas, guindaste, ponte e neons com brilho do mapa 0 (só visual: fora de `solids`, não bloqueia tiro nem A*)
+let cachedSkyline = null;
+function addSkylineDressing() {
+  if (cachedSkyline) { scene.add(cachedSkyline); mapMeshes.push(cachedSkyline); return; }
+  const cvTex = (w, h, draw) => {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); if (!g) return null;
+    draw(g, w, h); return new THREE.CanvasTexture(cv);
+  };
+  const towerTex = cvTex(64, 256, (g, w, h) => {
+    g.fillStyle = '#14171f'; g.fillRect(0, 0, w, h);
+    for (let y = 6; y < h - 4; y += 10) for (let x = 5; x < w - 4; x += 9) if (Math.random() < .26) { g.fillStyle = Math.random() < .55 ? '#ff9a4a' : '#59e8ff'; g.fillRect(x, y, 4, 5); }
+  });
+  if (!towerTex) return;                               // sem canvas 2D: mantém só o cenário básico
+  const group = new THREE.Group();
+  towerTex.wrapS = towerTex.wrapT = THREE.RepeatWrapping; towerTex.repeat.set(2, 5);
+  const towerMat = new THREE.MeshBasicMaterial({ map: towerTex, fog: false });   // sem neblina: aparecem como silhuetas contra o céu
+  const dark = new THREE.MeshBasicMaterial({ color: 0x0f1118, fog: false });
+  const add = (geoMat, w, h, d, x, y, z) => { const m = new THREE.Mesh(blockGeo, geoMat); m.scale.set(w, h, d); m.position.set(x, y, z); group.add(m); return m; };
+  let seed = 38; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // sequência fixa: cenário igual a cada partida
+  for (let i = 0; i < 16; i++) {                       // anel de torres além das paredes
+    const a = (i / 16) * Math.PI * 2 + rnd() * .25, r = ARENA + 16 + rnd() * 34, w = 7 + rnd() * 9, h = 24 + rnd() * 46;
+    add(towerMat, w, h, w, Math.cos(a) * r, h / 2, Math.sin(a) * r);
+  }
+  const banner = (lines, x, y, z, ry, w, h, bg, fs, fogOn) => {
+    const tex = cvTex(256, Math.round(256 * h / w), (g, W, H) => {
+      g.fillStyle = bg; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 3; g.strokeRect(6, 6, W - 12, H - 12);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      lines.forEach((t, i) => { const red = t[0] === '#'; g.fillStyle = red ? '#ff5a68' : 'rgba(235,240,250,.88)'; g.font = `700 ${fs}px "Arial Narrow", Arial, sans-serif`; g.fillText(red ? t.slice(1) : t, W / 2, H / 2 + (i - (lines.length - 1) / 2) * fs * 1.12); });
+    });
+    if (!tex) return;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, fog: fogOn, color: 0xd8d8d8 }));
+    m.position.set(x, y, z); m.rotation.y = ry; group.add(m);
+  };
+  const o = ARENA - 0.3;                               // faixas coladas na face interna das paredes
+  banner(['ARENA', '#FPS'], -o, 3.9, 8, Math.PI / 2, 11, 4.2, '#2a2f38', 40, true);
+  banner(['MAIS', 'FORTES', 'SEMPRE'], o, 3.9, -6, -Math.PI / 2, 3.4, 4.2, '#5a1626', 46, true);
+  banner(['TRABALHO', 'COMBATE', 'LIBERDADE'], 0, 3.9, o, Math.PI, 5.6, 4.2, '#2a2230', 36, true);
+  banner(['SETOR', '#B'], 12, 3.9, -o, 0, 4.5, 4.2, '#262b34', 60, true);
+  // torre central com faixa, ponte elevada e guindaste com contêiner suspenso (acima da parede norte)
+  add(towerMat, 16, 44, 12, 0, 22, -(ARENA + 26));
+  banner(['A', 'ARENA', 'FAZ', 'VOCÊ', 'MAIS', 'FORTE'], 0, 16, -(ARENA + 19.8), 0, 5.5, 17, '#2b2150', 56, false);
+  add(dark, 80, .5, 3, 0, 9.5, -(ARENA + 14)); add(dark, 80, .9, .08, 0, 10.2, -(ARENA + 12.6));
+  add(new THREE.MeshBasicMaterial({ color: 0xff4d5e, fog: false }), 80, .12, .2, 0, 9.15, -(ARENA + 14));
+  add(dark, 1.6, 15, 1.6, -4, 7.5, -(ARENA + 8)); add(dark, 34, 1.2, 1.2, 12, 15, -(ARENA + 8)); add(dark, .08, 5.5, .08, 18, 12.2, -(ARENA + 8));
+  add(new THREE.MeshBasicMaterial({ color: 0x3a1f1a, fog: false }), 3, 2.4, 6.4, 18, 8.4, -(ARENA + 8));
+  const lampRed = new THREE.MeshBasicMaterial({ color: 0xff3a4a, fog: false });
+  add(lampRed, .3, .3, .3, 16.8, 9.8, -(ARENA + 5.2)); add(lampRed, .3, .3, .3, 19.2, 9.8, -(ARENA + 10.8));
+  // brilho dos neons (caixas aditivas translúcidas: simulam bloom sem pós-processamento, barato em celular)
+  const halo = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false });
+  const W = ARENA * 2 + 2, redHalo = halo(0xff4d5e), cyanHalo = halo(0x4de7ff), cyanLamp = new THREE.MeshBasicMaterial({ color: 0x4de7ff });
+  [[0, -ARENA, W, .6, .35], [0, ARENA, W, .6, .35], [-ARENA, 0, .35, .6, W], [ARENA, 0, .35, .6, W]].forEach(([x, z, w, h, d]) => add(redHalo, w, h, d, x * .995, 2.2, z * .995));
+  for (const c of [-18, -6, 6, 18]) for (const sgn of [-1, 1]) {          // lâmpadas ciano nas quatro paredes
+    add(cyanLamp, .12, .16, 2.2, sgn * (ARENA - .25), 4.7, c); add(cyanHalo, .5, .7, 3.2, sgn * (ARENA - .3), 4.7, c);
+    add(cyanLamp, 2.2, .16, .12, c, 4.7, sgn * (ARENA - .25)); add(cyanHalo, 3.2, .7, .5, c, 4.7, sgn * (ARENA - .3));
+  }
+  group.userData.decorativeOnly = true;
+  cachedSkyline = group; scene.add(group); mapMeshes.push(group);
+}
 // Monta uma arena: troca cores, apaga a anterior e recria a grade do A*
 function loadMap(index) {
   const inc = index <= -2;                                  // -2/-3/-4 = prédios da Incursão
@@ -274,7 +339,7 @@ function loadMap(index) {
     const m = new THREE.Mesh(blockGeo, stripMat); m.scale.set(w, h, d); m.position.set(x * 0.998, 2.2, z * 0.998);
     scene.add(m); mapMeshes.push(m);
   });
-  if (activeMapLook === 'industrial' && !simpleGfx()) addIndustrialSetDressing();
+  if (activeMapLook === 'industrial' && !simpleGfx()) { addIndustrialSetDressing(); addSkylineDressing(); }
   navGrid = Arena.createGrid(ARENA, 1, boxes, 0.62);   // células de 1 m; 0,62 m = raio do corpo + folga
   if (warmReady) warmScene();                          // compila/aquece a arena durante o banner de transição
   return M;
@@ -511,7 +576,7 @@ function deckSetSkin(id) {
   deckEl.querySelectorAll('[data-skin]').forEach(b => b.classList.toggle('on', b.dataset.skin === id));
   deckPromptEl.innerHTML = (sk.promptTop ? `<span class="top">${sk.promptTop}</span>\n` : '') + sk.prompt;
 }
-function deckPrint(text, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; deckOutEl.appendChild(d); deckOutEl.scrollTop = deckOutEl.scrollHeight; }
+function deckPrint(text, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; deckOutEl.appendChild(d); deckOutEl.scrollTop = deckOutEl.scrollHeight; paintLaptop(); }
 // Saída "digitando": as linhas entram uma a uma (fila). Ao fechar o deck ou limpar, a fila é descartada/esvaziada na hora.
 let deckQueue = [], deckTimer = 0;
 let deckBarCur = null;
@@ -541,18 +606,47 @@ function deckTargets() {                                   // alvos que o "scan"
   const t = incTarget(); list.push({ label: incStage().exit ? 'SAIDA' : 'CONSOLE', dist: d(t.x, t.z) });
   return list;
 }
+// Laptop 3D na mão: sobe de baixo da tela e abre a tampa; só então a tela do shell (overlay) aparece. Ao fechar, o overlay some e o laptop desce.
+const deckRig = new THREE.Group(); deckRig.visible = false; camera.add(deckRig);
+const dkBody = new THREE.MeshLambertMaterial({ color: 0x2a3142 }), dkDark = new THREE.MeshLambertMaterial({ color: 0x121722 }), dkScreen = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const dkCv = document.createElement('canvas'); dkCv.width = 320; dkCv.height = 200; const dkCtx = dkCv.getContext('2d'), dkTex = new THREE.CanvasTexture(dkCv); dkTex.generateMipmaps = false; dkTex.minFilter = THREE.LinearFilter; dkScreen.map = dkTex;
+function paintLaptop() {                              // tela do laptop 3D = shell do deck (últimas linhas) ou mascote quando vazio
+  const lines = []; deckOutEl.querySelectorAll('div').forEach(d => d.textContent.split('\n').forEach(t => lines.push({ t, k: d.className === 'top' ? 'dim' : d.className || 'fg' })));
+  Arena.drawShellScreen(dkCtx, 320, 200, { skin: deckSkin, time: performance.now() / 1000, lines: lines.slice(-12) }); dkTex.needsUpdate = true;
+}
+{
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.018, 0.24), dkBody);
+  const keys = new THREE.Mesh(new THREE.BoxGeometry(0.29, 0.004, 0.12), dkDark); keys.position.set(0, 0.011, 0.025);
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.003, 0.05), dkDark); pad.position.set(0, 0.011, 0.095);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.012), dkBody); lid.position.y = 0.11;
+  const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.185), dkScreen); scr.position.set(0, 0.11, 0.0068);
+  deckRig.userData.lid = new THREE.Group(); deckRig.userData.lid.position.set(0, 0.009, -0.12); deckRig.userData.lid.add(lid, scr);
+  deckRig.add(base, keys, pad, deckRig.userData.lid); deckRig.scale.setScalar(1.35);
+}
+let deckAnim = 0, deckShown = false, deckPaintN = 0;
+const deckReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function updateDeckRig(dt) {
+  deckAnim = Math.min(1, Math.max(0, deckAnim + (deckOpen ? (deckReduced ? 1 : dt / 0.55) : -dt / 0.3)));
+  const rise = 1 - Math.pow(1 - Math.min(1, deckAnim / 0.5), 3), t = Math.max(0, (deckAnim - 0.35) / 0.65), lid = t * t * (3 - 2 * t);
+  deckRig.visible = deckAnim > 0.001; if (deckRig.visible && (++deckPaintN % 12 === 0)) paintLaptop();       // cursor pisca na tela do laptop holder.visible = holder.visible && deckAnim < 0.05;
+  deckRig.position.set(0, -0.8 + rise * 0.52, -0.62); deckRig.rotation.x = 0.3 * rise;
+  deckRig.userData.lid.rotation.x = Math.PI / 2 + (-0.32 - Math.PI / 2) * lid;                 // fechada = deitada sobre o teclado; aberta = levemente inclinada para trás
+  if (deckOpen && !deckShown && deckAnim >= 1) { deckShown = true; showDeckOverlay(); }
+}
+function showDeckOverlay() {
+  deckSetSkin(deckSkin); deckEl.classList.remove('hidden'); deckUpdateChips();
+  if (!deckBooted[deckSkin]) { deckBooted[deckSkin] = true; sfx.deckBoot(); deckEnqueue(Arena.deckBoot(deckSkin).map(t => ({ t, k: 'dim' }))); }
+  setTimeout(() => deckInEl.focus(), 30);
+}
 function openDeck() {
   if (!inc || inc.done || inc.choiceOpen || perkOpen || !alive) return;
   inc.choiceOpen = true; deckOpen = true; locked = false; mouseHeld = false; scoped = false; interactHeld = false;
   for (const k in keys) keys[k] = false;
   if (document.pointerLockElement) document.exitPointerLock();
-  deckSetSkin(deckSkin); deckEl.classList.remove('hidden');
-  sfx.deckOpen(); deckUpdateChips();
-  if (!deckBooted[deckSkin]) { deckBooted[deckSkin] = true; sfx.deckBoot(); deckEnqueue(Arena.deckBoot(deckSkin).map(t => ({ t, k: 'dim' }))); }
-  setTimeout(() => deckInEl.focus(), 30);
+  sfx.deckOpen(); paintLaptop();
 }
 function closeDeck(silent) {
-  deckFlush(); deckOpen = false; deckEl.classList.add('hidden'); deckInEl.blur();
+  deckFlush(); deckOpen = false; deckShown = false; deckEl.classList.add('hidden'); deckInEl.blur();
   if (inc) inc.choiceOpen = false;
   if (!silent && alive) { canvas.requestPointerLock(); setTimeout(() => { if (!locked && alive && !(inc && inc.choiceOpen) && !deckOpen) showOverlay('pause'); }, 400); }
 }
@@ -859,7 +953,8 @@ const FLASH_PROFILES = {
   compact: { rays: 6, length: 0.86, width: 0.7 }, rifle: { rays: 8, length: 1.25, width: 0.72 },
   bloom: { rays: 10, length: 1.3, width: 1.12 }, scatter: { rays: 8, length: 1.62, width: 1.25 },
   needle: { rays: 4, length: 1.85, width: 0.42 }, heavy: { rays: 10, length: 1.45, width: 1.3 },
-  arc: { rays: 6, length: 2.0, width: 0.48 }, pulse: { rays: 8, length: 1.05, width: 1.05 }
+  arc: { rays: 6, length: 2.0, width: 0.48 }, pulse: { rays: 8, length: 1.05, width: 1.05 },
+  burst: { rays: 12, length: 1.15, width: 0.62 }, ion: { rays: 5, length: 1.72, width: 0.52 }
 };
 const flashGlowTex = (() => {   // brilho radial suave do clarão (canvas, sem arquivos)
   const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
@@ -901,8 +996,8 @@ function buildGun(index, muzzleZ, flashSize) {
   activeGunPbr = index === 1;
   const dark = activeGunPbr ? 0x303a3d : 0x202630, steel = activeGunPbr ? 0x6b7a80 : 0x46515e;
   const edge = activeGunPbr ? 0xa0aaac : 0x75818e, grip = activeGunPbr ? 0x35403f : 0x20252a;
-  const accent = [0xffd27a, 0x8be36d, 0xff9d4d, 0xffc857, 0xc7d9ff, 0xff8f5f, 0x59e8ff, 0x35d6c8][index];
-  const glow = [0x6e481c, 0x304d24, 0x6d371b, 0x684d1b, 0x384767, 0x6d3024, 0x14505d, 0x14534d][index];
+  const accent = [0xffd27a, 0x8be36d, 0xff9d4d, 0xffc857, 0xc7d9ff, 0xff8f5f, 0x59e8ff, 0x35d6c8, 0xe68cff, 0x74a4ff][index];
+  const glow = [0x6e481c, 0x304d24, 0x6d371b, 0x684d1b, 0x384767, 0x6d3024, 0x14505d, 0x14534d, 0x4b285e, 0x193a75][index];
   const box = (...a) => gunBox(g, ...a), cyl = (...a) => gunCylinder(g, ...a), ring = (...a) => gunRing(g, ...a);
   const reloadParts = {};
   const makeReloadPart = mesh => ({ mesh, pos: mesh.position.clone(), rot: mesh.rotation.clone(), scale: mesh.scale.clone(), visible: mesh.visible, emissive: mesh.material?.emissiveIntensity || 0 });
@@ -1061,7 +1156,28 @@ function buildGun(index, muzzleZ, flashSize) {
     box(.10,.025,.16,0,-.18,.28,0x343b46); ring(.03,.008,0,.015,-1.02,accent,0x14505d);
     for(const z of [-.36,-.62,-.88]){box(.018,.024,.046,-.083,.015,z,edge);box(.018,.024,.046,.083,.015,z,edge);}
     for(let i=0;i<4;i++)box(.018,.012,.026,0,.157,.02-i*.039,i===0?accent:0x64717f,0,i===0?.08:0); // janela de carga superficial
-  } else { // Lança-granadas: tubo pesado, boca ampla e tambor indexado
+  } else if (index === 8) { // SMG Vespa: corpo compacto, carregador reto e ferrolho exposto
+    gunSoftBox(g,.104,.095,.30,0,.015,-.20,0x3d3446,.018); gunSoftBox(g,.078,.075,.19,0,-.015,.16,0x43394b,.025);
+    box(.087,.024,.29,0,.073,-.22,steel); box(.055,.018,.25,0,.094,-.22,accent,0,glow);
+    gunSoftBox(g,.092,.072,.28,0,.005,-.54,0x514458,.025); box(.10,.014,.30,0,.052,-.54,edge);
+    const mag=new THREE.Group(); mag.position.set(0,-.09,-.06); g.add(mag);
+    gunSoftBox(mag,.074,.22,.10,0,0,0,0x28232e,.035); gunBox(mag,.078,.018,.105,0,-.105,0,steel);
+    gunInstancedBoxes(mag,.004,.012,.075,0x82748b,Array.from({length:6},(_,i)=>[0,-.07+i*.025,.05])); movable('magazine',mag);
+    cyl(.018,.28,0,.015,-.82,steel,12); cyl(.027,.075,0,.015,-.98,edge,12); ring(.028,.006,0,.015,-1.025,accent);
+    box(.034,.035,.065,0,.129,-.25,0x211c28); box(.014,.012,.16,0,.154,-.26,accent,0,glow);
+    for(let i=0;i<5;i++)box(.012,.024,.022,-.058,.018,-.43-i*.045,0xbda9ca);
+    movable('bolt',box(.018,.018,.115,.061,.054,-.20,edge));
+    box(.018,.034,.025,0,-.074,-.035,0x24202a); ring(.043,.005,0,-.06,-.03,edge);
+  } else if (index === 9) { // Carabina Íon: emissor cerâmico e bobinas energizadas
+    gunSoftBox(g,.12,.12,.42,0,.01,-.20,0x293548,.018); gunSoftBox(g,.10,.09,.26,0,-.02,.22,0x344156,.025);
+    box(.16,.032,.57,0,.085,-.39,0x202c3c); box(.025,.044,.64,-.084,.055,-.40,accent,0,0x3151a0); box(.025,.044,.64,.084,.055,-.40,accent,0,0x3151a0);
+    box(.078,.045,.25,0,.112,-.16,0x41536b); box(.052,.027,.17,0,.142,-.16,accent,0,0x3151a0);
+    cyl(.022,.45,0,.018,-.83,0x56677f,12); cyl(.035,.085,0,.018,-1.045,edge,12); ring(.036,.007,0,.018,-1.09,accent);
+    reloadParts.coils=[-.36,-.62,-.87].map((z,i)=>makeReloadPart(gunRing(g,.061,.014,0,.018,z,accent,0x3151a0)));
+    box(.074,.08,.21,0,-.14,.11,0x253143); box(.032,.025,.16,0,-.065,.095,0x596d89);
+    for(let i=0;i<5;i++)box(.014,.018,.032,-.04+i*.02,.16,-.16,edge);
+    box(.019,.024,.05,0,.178,-.58,accent,0,0x5d83ff); ring(.032,.005,0,.018,-.68,edge);
+  } else if (index === 7) { // Lança-granadas: tubo pesado, boca ampla e tambor indexado
     box(.16,.17,.48,0,.01,-.16,0x3c4b37); box(.12,.10,.29,0,.10,-.17,dark);
     cyl(.083,.48,0,.025,-.62,0x536247,10); cyl(.105,.12,0,.025,-.91,dark,10); ring(.10,.012,0,.025,-.98,accent);
     const drum = new THREE.Group(); drum.position.set(0,-.11,.14); g.add(drum);
@@ -1086,7 +1202,8 @@ const HAND_POSES = {
   compact: { left: [-.12,-.12,-.18], right: [.02,-.08,.10] }, carbine: { left: [-.18,-.12,-.38], right: [.02,-.08,.13] },
   'support-heavy': { left: [-.17,-.11,-.40], right: [.02,-.09,.15] }, 'pump-action': { left: [-.20,-.12,-.34], right: [.02,-.08,.12] },
   precision: { left: [-.15,-.13,-.48], right: [.02,-.09,.13] }, 'sidearm-heavy': { left: [-.11,-.13,-.17], right: [.02,-.08,.11] },
-  'energy-rifle': { left: [-.17,-.12,-.47], right: [.02,-.08,.14] }, launcher: { left: [-.17,-.12,-.39], right: [.02,-.09,.14] }
+  'energy-rifle': { left: [-.17,-.12,-.47], right: [.02,-.08,.14] }, launcher: { left: [-.17,-.12,-.39], right: [.02,-.09,.14] },
+  'compact-smg': { left: [-.15,-.12,-.29], right: [.02,-.08,.12] }, 'energy-carbine': { left: [-.18,-.12,-.43], right: [.02,-.08,.14] }
 };
 const handGeoCache = new Map(), handMatCache = new Map(), glovePalmGeo = new THREE.SphereGeometry(1,7,5);
 let activeHandPbr = false;
@@ -1152,7 +1269,8 @@ function buildHandPair(index) {
   activeHandPbr=false;
   return pair;
 }
-const guns = [buildGun(0,-.405,.22),buildGun(1,-1.08,.26),buildGun(2,-1.19,.28),buildGun(3,-1.04,.4),buildGun(4,-1.30,.3),buildGun(5,-.81,.3),buildGun(6,-1.02,.34),buildGun(7,-.98,.4)];
+const gunSetup = [[-.405,.22],[-1.08,.26],[-1.19,.28],[-1.04,.4],[-1.30,.3],[-.81,.3],[-1.02,.34],[-.98,.4],[-1.025,.26],[-1.09,.31]];
+const guns = WEAPONS.map((_,i)=>buildGun(i,...(gunSetup[i]||[-1,.3])));
 const holder = new THREE.Group();            // grupo que recebe balanço, recuo e animações
 const HOLD_BASE = new THREE.Vector3(0.26, -0.24, -0.5);
 guns.forEach(g => holder.add(g));
@@ -1166,6 +1284,7 @@ let time = 0;                       // relógio do jogo (só avança em jogo ati
 let locked = false, alive = false, started = false;
 let px = 0, pz = 0, py = EYE, vx = 0, vz = 0, vy = 0, yaw = 0, pitch = 0;
 let health = 100, maxHealth = 100, score = 0, kills = 0, wave = 0, toSpawn = 0, spawnT = 0, waveDelay = 3;
+let shownScore = 0;                 // placar exibido: sobe suave até alcançar `score` (animação de contagem)
 let best = 0;
 function refreshRecord() {
   const records = career.get().records || {};
@@ -1201,6 +1320,9 @@ let gamepadMove = { x: 0, y: 0 }, gamepadLook = { x: 0, y: 0 }, gamepadFireHeld 
 let perks = {}, stats = Arena.perkStats(perks), perkOpen = false, perkChoices = [];   // upgrades escolhidos e seus multiplicadores
 let crossGap = 16, pathBudget = 0;                                                    // abertura da mira (px) e buscas A* restantes no quadro
 // --- Vindos da versão "Neon Rebellion": combo, créditos/loja, granadas de mão, tremor, regeneração ---
+let crouchT = 0, slideT = 0, sprintT = 0, camLand = 0, camLandV = 0, camBobY = 0, camBobX = 0, inspectT = 0, timeScale = 1, slowMoT = 0, wasCrouch = false;
+const INSPECT_DUR = 2.2, SLOWMO_DUR = 0.9, SLOWMO_SCALE = 0.35;
+function triggerSlowMo(d = SLOWMO_DUR) { slowMoT = Math.max(slowMoT, d); }
 let combo = 1, comboT = 0, maxCombo = 1, shake = 0, lastHurt = 0, beatT = 0, aliveTime = 0, handGrenades = 3, credits = 0;
 let shop = { dmg: 0, hp: 0, dash: 0 };                  // quantas vezes cada item da loja foi comprado
 // Recalcula os multiplicadores: perks (upgrades.js) + compras da loja. Chamar sempre que algum dos dois mudar.
@@ -1241,7 +1363,9 @@ function updateObjectiveHud() {
 // Cria os slots das armas uma única vez
 WEAPONS.forEach((w, i) => {
   const d = document.createElement('div'); d.className = 'slot';
-  d.innerHTML = `<b>${i + 1}</b>${w.name.slice(0, 9)}`;
+  const key = i === 9 ? 0 : i + 1;
+  d.innerHTML = `<b>${key}</b>${w.name.slice(0, 9)}`;
+  d.title = `Arma ${i + 1}: ${w.name}`; d.setAttribute('aria-label', `Arma ${i + 1}: ${w.name}`);
   el.slots.appendChild(d);
 });
 function updateHUD() {
@@ -1250,7 +1374,9 @@ function updateHUD() {
   el.hp.style.width = (hpRatio * 100) + '%';
   el.hp.style.background = hpRatio > 0.5 ? 'var(--ok)' : hpRatio > 0.25 ? 'var(--warn)' : 'var(--accent)';
   el.hpTxt.textContent = Math.ceil(health);
-  el.score.textContent = String(score).padStart(6, '0');
+  if (shownScore > score || score - shownScore > 400) shownScore = score;          // zerou ou salto grande: mostra direto
+  else if (shownScore < score) shownScore += Math.max(1, Math.ceil((score - shownScore) * .22)); // contagem suave
+  el.score.textContent = String(shownScore).padStart(6, '0');
   el.wave.textContent = wave; el.kills.textContent = kills; el.remaining.textContent = enemies.filter(e => !e.dead).length + toSpawn + (bossPending ? 1 : 0); el.best.textContent = best; el.grenades.textContent = handGrenades; el.credits.textContent = credits; el.creditsHud.textContent = credits;
   updateObjectiveHud();
   const weaponColor = '#' + ((w.color || 0x4de7ff) >>> 0).toString(16).padStart(6, '0');
@@ -1260,7 +1386,7 @@ function updateHUD() {
     const open = isUnlocked(i);
     d.classList.toggle('active', i === curW); d.classList.toggle('locked', !open);
     const label = open ? (WEAPONS[i].short || WEAPONS[i].name.slice(0, 9)) : 'bloq. O' + WEAPONS[i].unlock;
-    if (d.dataset.label !== label) { d.dataset.label = label; d.innerHTML = `<b>${i + 1}</b>${label}`; }   // só mexe no DOM se mudou
+    if (d.dataset.label !== label) { d.dataset.label = label; d.innerHTML = `<b>${i === 9 ? 0 : i + 1}</b>${label}`; }   // só mexe no DOM se mudou
   });
 }
 // Feed de abates (canto superior esquerdo): cada item some sozinho depois de ~3 s
@@ -1323,6 +1449,21 @@ const muzzleSmokePool = makePool(() => {
   m.userData.v=new THREE.Vector3();return addHidden(m);
 });
 fxPools.smoke=muzzleSmokePool;
+const ionParticlePool=makePool(()=>{
+  const m=new THREE.Sprite(new THREE.SpriteMaterial({map:flashGlowTex,color:0x74a4ff,transparent:true,opacity:.86,blending:THREE.AdditiveBlending,depthWrite:false}));
+  m.userData.v=new THREE.Vector3();return addHidden(m);
+});
+fxPools.ion=ionParticlePool;
+function spawnIonMotes(origin,color,count=6){
+  if(fx.length>145)return;
+  const n=appliedQuality==='low'?Math.min(3,count):count,forward=new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+  for(let i=0;i<n&&fx.length<155;i++){
+    const m=ionParticlePool.get(),v=m.userData.v,life=.18+Math.random()*.12,size=.035+Math.random()*.025;
+    m.material.color.setHex(color);m.material.opacity=.86;m.position.copy(origin).addScaledVector(forward,.06+Math.random()*.10);
+    v.copy(forward).multiplyScalar(.24+Math.random()*.26);v.x+=(Math.random()-.5)*.65;v.y+=(Math.random()-.5)*.55;v.z+=(Math.random()-.5)*.65;
+    m.scale.setScalar(size);fx.push({kind:'ion',obj:m,life,maxLife:life,v,size});
+  }
+}
 function spawnMuzzleSmoke(origin,color,count=1) {
   if(fx.length>145)return;
   muzzleSmokeDir.set(0,0,-1).applyQuaternion(camera.quaternion);
@@ -1401,11 +1542,15 @@ function updateFx(dt) {
       const k=1-Math.max(f.life,0)/f.maxLife;f.v.y+=.12*dt;f.v.multiplyScalar(Math.max(0,1-dt*1.8));
       f.obj.position.addScaledVector(f.v,dt);f.obj.scale.setScalar(f.size*(1+k*4));f.obj.material.opacity=(f.baseOpacity??.18)*(1-k);
     }
+    if (f.kind === 'ion') {
+      const k=1-Math.max(f.life,0)/f.maxLife;f.obj.position.addScaledVector(f.v,dt);f.v.multiplyScalar(Math.max(0,1-dt*2.2));
+      f.obj.scale.setScalar(f.size*(1-k*.82));f.obj.material.opacity=.86*(1-k);
+    }
     if (f.kind === 'blast') {
-      const k = 1 - Math.max(f.life, 0) / f.dur, { core, ring, flame } = f.obj.userData;
-      core.scale.setScalar(0.2 + k * f.R); ring.scale.setScalar(0.2 + k * f.R * 1.15);
-      core.material.opacity = 0.7 * (1 - k); ring.material.opacity = 0.85 * (1 - k); ring.rotation.z += dt * 1.8;
-      if (f.layered) { flame.visible=appliedQuality!=='low'; flame.scale.set(.18+k*f.R*.88,.15+k*f.R*.62,.18+k*f.R*.88); flame.material.opacity=.58*(1-k)*(flame.visible?1:0); flame.rotation.y+=dt*2.4; }
+      const k = 1 - Math.max(f.life, 0) / f.dur, eased = 1 - Math.pow(1 - k, 2.6), { core, ring, flame } = f.obj.userData;
+      core.scale.setScalar(0.2 + eased * f.R); ring.scale.setScalar(0.2 + eased * f.R * 1.15);
+      core.material.opacity = 0.7 * (1 - k) * (1 - k * 0.18); ring.material.opacity = 0.85 * (1 - k); ring.rotation.z += dt * (1.8 + k * 1.2);
+      if (f.layered) { flame.visible=appliedQuality!=='low'; flame.scale.set(.18+eased*f.R*.88,.15+eased*f.R*.62,.18+eased*f.R*.88); flame.material.opacity=.58*(1-k)*(flame.visible?1:0); flame.rotation.y+=dt*(2.4+k*1.8); }
     }
     if (f.life <= 0) { fxPools[f.kind].put(f.obj); fx.splice(i, 1); }       // devolve ao pool em vez de descartar
   }
@@ -1475,7 +1620,11 @@ function clearSurfaceImpacts() {
   dustPuffs.forEach(p => dustPool.put(p.obj)); dustPuffs.length = 0;
 }
 function updateArenaAtmosphere(dt) {
-  cornerLights.forEach((light, i) => { light.intensity = light.userData.baseIntensity * (0.91 + 0.1 * Math.sin(time * 1.1 + i * 1.7)); });
+  cornerLights.forEach((light, i) => {
+    const falha = Math.sin(time * 13 + i * 5.3) * Math.sin(time * 7.7 + i * 2.1) > 0.93 ? 0.25 : 1; // pisca rápido de vez em quando
+    light.intensity = light.userData.baseIntensity * (0.91 + 0.1 * Math.sin(time * 1.1 + i * 1.7)) * falha;
+  });
+  hangingCables.forEach(g => { const p = g.userData.phase; g.rotation.z = Math.sin(time * .8 + p) * .07; g.rotation.x = Math.cos(time * .6 + p) * .05; });
   ambientSparkT -= dt;
   if (ambientSparkT <= 0 && appliedQuality !== 'low') {
     const side = Math.floor(Math.random() * 4), d = ARENA - 0.03;
@@ -1578,12 +1727,12 @@ function buildRig(key) {
   if (T.shield) { shield = new THREE.Mesh(shieldGeo, shieldMatInstance); shield.position.set(0, 1.1, 0.55); g.add(shield); }
   if (T.healer) { orb = new THREE.Mesh(orbGeo, orbMat); orb.position.set(0, 2.75, 0); g.add(orb); }
   g.scale.setScalar(T.scale);
-  return { g, body, head, mBody, mHead, hpBg, hpBar, legL, legR, shield, shieldMat: shieldMatInstance, orb };
+  return { g, body, head, mBody, mHead, hpBg, hpBar, legL, legR, armL, armR, shield, shieldMat: shieldMatInstance, orb };
 }
 function recycleRig(e) {                              // devolve o modelo ao pool (sem descartar geometria nem material)
   if (e.recycled) return; e.recycled = true;
   scene.remove(e.g);
-  (rigPool[e.key] || (rigPool[e.key] = [])).push({ g: e.g, body: e.body, head: e.head, mBody: e.mBody, mHead: e.mHead, hpBg: e.hpBg, hpBar: e.hpBar, legL: e.legL, legR: e.legR, shield: e.shield, shieldMat: e.shieldMat, orb: e.orb });
+  (rigPool[e.key] || (rigPool[e.key] = [])).push({ g: e.g, body: e.body, head: e.head, mBody: e.mBody, mHead: e.mHead, hpBg: e.hpBg, hpBar: e.hpBar, legL: e.legL, legR: e.legR, armL: e.armL, armR: e.armR, shield: e.shield, shieldMat: e.shieldMat, orb: e.orb });
 }
 
 function spawnEnemy(key) {
@@ -1592,7 +1741,7 @@ function spawnEnemy(key) {
   rig.mBody.emissive.setHex(0); rig.mHead.emissive.setHex(0);            // limpa estado do uso anterior
   if (rig.shieldMat) rig.shieldMat.emissive.setHex(0x223355);
   rig.hpBar.scale.x = 1; rig.hpBar.material.color.setHex(0x3ddc84);
-  rig.legL.rotation.x = 0; rig.legR.rotation.x = 0; rig.body.position.set(0, 1.1, 0); rig.head.position.set(0, 1.82, 0);
+  rig.legL.rotation.x = 0; rig.legR.rotation.x = 0; if (rig.armL) rig.armL.rotation.x = -1.4; if (rig.armR) rig.armR.rotation.x = -1.4; rig.body.position.set(0, 1.1, 0); rig.head.position.set(0, 1.82, 0);
   rig.g.scale.setScalar(T.scale); rig.g.rotation.set(0, 0, 0);
 
   // Ponto de spawn nas bordas, longe do jogador
@@ -1732,6 +1881,7 @@ function shootProjectile(ox, oy, oz, dx, dy, dz, speed, dmg, color, size) {     
   projectiles.push({ m, v: new THREE.Vector3(dx * speed, dy * speed, dz * speed), life: 4, dmg, from: { x: ox, z: oz } });
 }
 function fireEnemyProjectile(e) {                     // mira no jogador
+  e.attackAnim = 0.22;
   const o = e.g.position, oy = e.T.boss ? 1.5 : 1.2;
   let dx = px - o.x, dy = py - oy, dz = pz - o.z; const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
   if (e.T.boss) shootProjectile(o.x, oy, o.z, dx, dy, dz, 9, 16 * Arena.difficultyConfig(currentDifficulty).damage, 0xff3b82, 0.22);
@@ -1828,7 +1978,7 @@ function killEnemy(e, head, silent = false) {           // silent = morte por su
   e.dead = true;
   if (e.T.explodes) detonate(e);                         // kamikaze explode ao morrer
   const p = e.g.position.clone(); p.y = 1.2;
-  e.deathDur = e.T.boss ? 0.82 : 0.48; e.deathT = e.deathDur; e.deathRoll = (Math.random() < 0.5 ? -1 : 1) * (e.T.boss ? 0.48 : 0.85);
+  e.deathDur = e.T.boss ? 1.25 : 0.8; e.deathT = e.deathDur; e.deathRoll = (Math.random() < 0.5 ? -1 : 1) * (e.T.boss ? 0.48 : 0.85);
   const deathColor = e.T.boss ? 0xff4f7b : e.T.shield ? 0x59e8ff : e.T.healer ? 0x44ff99 : e.T.explodes ? 0xffa23a : head ? 0xffd27a : e.T.color;
   debris(p, e.T.color, e.T.boss ? 18 : 7); debris(p, 0xd9b38c, head ? 6 : 3);
   sparkBurst(p, deathColor, e.T.boss ? 12 : 5);
@@ -1841,20 +1991,23 @@ function killEnemy(e, head, silent = false) {           // silent = morte por su
     const pts = (e.T.pts + (head ? 50 : 0)) * combo;
     score += pts; kills++; credits += Math.round(e.T.pts / 10 + (head ? 8 : 0));
     addFeed(`${head ? '☠ ' : ''}${(e.T.label || 'inimigo').toUpperCase()}  +${pts}${combo > 1 ? '  x' + combo : ''}`, head);
-    if (e.T.boss) shake = Math.max(shake, 0.6);
+    if (e.T.boss) { shake = Math.max(shake, 0.6); triggerSlowMo(1.3); }
     if (stats.vamp > 0) health = Math.min(maxHealth, health + stats.vamp);     // upgrade Sede de Sangue
     sfx.kill();
     if (Math.random() < 0.3) dropPickup(p.x, p.z);
   }
-  if (!inc && toSpawn === 0 && enemies.every(x => x.dead)) { banner('ONDA LIMPA'); waveDelay = 3; }
+  if (!inc && toSpawn === 0 && enemies.every(x => x.dead)) { if (!silent) triggerSlowMo(); banner('ONDA LIMPA'); waveDelay = 3; }
   updateHUD();
 }
 function updateDeathAnimations(dt) {
   for (const e of enemies) {
     if (!e.dead || e.deathT <= 0) continue;
     e.deathT -= dt; const k = clamp(1 - e.deathT / e.deathDur, 0, 1);
-    e.g.scale.setScalar(e.T.scale * (1 - k * 0.84)); e.g.position.y = -0.32 * k;
-    e.g.rotation.z = e.deathRoll * k; e.g.rotation.x = 0.18 * k;
+    const fall = Math.min(1, k / 0.55), fe = fall < 1 ? 1 - Math.pow(1 - fall, 3) : 1;     // queda com aceleração
+    const bounce = fall >= 1 ? Math.sin(Math.min(1, (k - 0.55) / 0.15) * Math.PI) * 0.08 * (1 - (k - 0.55) / 0.45) : 0;   // quique ao bater no chão
+    const sink = Math.max(0, (k - 0.7) / 0.3);                                               // dissolve afundando no fim
+    e.g.scale.setScalar(e.T.scale * (1 - sink * 0.85)); e.g.position.y = -0.25 * sink + bounce;
+    e.g.rotation.z = e.deathRoll * 0.35 * fe; e.g.rotation.x = -1.35 * fe + bounce;
   }
   for (const e of enemies) if (e.dead && e.deathT <= 0) recycleRig(e);
 }
@@ -1922,7 +2075,7 @@ function triggerMuzzleFlash(index, color, duration) {
 function currentSpread() {
   const moving = Math.min(1, Math.hypot(vx, vz) / 6.5);
   const precision = scoped ? (curW === 4 ? 0 : 0.35) : 1;
-  return cur().spread * precision * (1 + moving * 0.8) * (py > EYE + 0.05 ? 1.5 : 1);
+  return cur().spread * precision * (1 + moving * 0.8) * (py > EYE + 0.05 ? 1.5 : 1) * (1 - crouchT * 0.3);
 }
 function tryShoot() {
   if (!locked || !alive || reloading || time < nextShot) return;
@@ -2000,6 +2153,7 @@ function tryShoot() {
   pitch += w.recoil * 0.03; yaw += (Math.random() - .5) * w.recoil * 0.02;
   triggerMuzzleFlash(curW, w.color || 0xffd27a, 0.055);
   spawnMuzzleSmoke(_muzzle,w.color||0xffd27a,w.visual?.smoke||1);
+  if(w.visual?.particles==='ion')spawnIonMotes(_muzzle,w.color,6);
   muzzleLight.intensity = w.visual?.flash === 'arc' ? 2.8 : 2.2;
   updateHUD();
 }
@@ -2230,8 +2384,10 @@ function resetGame() {
   perks = {}; shop = { dmg: 0, hp: 0, dash: 0 }; shopBought.buyAmmo = 0; credits = 0; combo = 1; comboT = 0; maxCombo = 1; shake = 0; lastHurt = 0; beatT = 0; aliveTime = 0; handGrenades = 3; machineGunHeat = 0; el.feed.innerHTML = '';
   refreshStats(); perkOpen = false; $('perks').classList.add('hidden');
   ammoState.forEach((s, i) => { s.ammo = WEAPONS[i].mag; s.reserve = WEAPONS[i].reserve; });
+  crouchT = slideT = sprintT = camLand = camLandV = inspectT = slowMoT = 0; timeScale = 1;
+  document.body.classList.remove('spawn-in'); void document.body.offsetWidth; document.body.classList.add('spawn-in');
   px = 0; pz = 0; py = EYE; vx = vz = vy = 0; yaw = 0; pitch = 0; dashQueued = false; dashTime = 0; dashCooldown = 0; adsT = 0;
-  health = maxHealth; score = 0; kills = 0; wave = 0; reloading = false; scoped = false; kick = 0;
+  health = maxHealth; score = 0; shownScore = 0; kills = 0; wave = 0; reloading = false; scoped = false; kick = 0;
   curW = -1; selectWeapon(0);
   alive = true;
   if (currentMode === 'incursion') startIncursion(); else startWave();
@@ -2287,16 +2443,22 @@ function update(dt) {
   if (dashQueued && dashCooldown <= 0) { dashTime = 0.18; dashCooldown = 2.5 * stats.dash; dashQueued = false; sfx.pickup(); }
   dashTime = Math.max(0, dashTime - dt);
   if (dashTime > 0 && len === 0) { mx = -Math.sin(yaw); mz = -Math.cos(yaw); }
-  const sprint = keys.ShiftLeft || (useTouch && inMag > 0.96);   // joystick até o limite = correr
+  const crouchHeld = !!(keys.KeyC || keys.ControlLeft);
+  let sprint = (keys.ShiftLeft || (useTouch && inMag > 0.96)) && !crouchHeld;   // joystick até o limite = correr
+  const grounded = py <= EYE + 0.001;
+  if (crouchHeld && !wasCrouch && grounded && Math.hypot(vx, vz) > 8 && slideT <= 0) { slideT = 0.65; const sv = Math.hypot(vx, vz); vx = vx / sv * 13; vz = vz / sv * 13; }   // correr + agachar = deslizar
+  wasCrouch = crouchHeld; slideT = Math.max(0, slideT - dt);
+  crouchT += ((crouchHeld || slideT > 0 ? 1 : 0) - crouchT) * Math.min(1, dt * 11);
+  sprintT += ((sprint && len > 0 && !scoped ? 1 : 0) - sprintT) * Math.min(1, dt * (sprint ? 5 : 7));
   const operationSlow = terminalInteraction.active ? 0.18 : 1;
-  const spd = dashTime > 0 ? 22 * operationSlow : (sprint ? 10 : 6.5) * (scoped ? 0.45 : 1) * (len > 0 ? inMag : 1) * stats.speed * operationSlow;
-  const k = Math.min(1, dt * 12);                 // suavização da aceleração
+  const spd = dashTime > 0 ? 22 * operationSlow : (sprint ? 10 : 6.5) * (scoped ? 0.45 : 1) * (1 - crouchT * 0.45) * (len > 0 ? inMag : 1) * stats.speed * operationSlow;
+  const k = slideT > 0 ? Math.min(1, dt * 1.6) : Math.min(1, dt * 12);   // suavização (deslizar = quase sem atrito)
   vx += (mx * spd - vx) * k; vz += (mz * spd - vz) * k;
   // Eixos separados = "deslizar" nas paredes em vez de travar
   if (!blocked(px + vx * dt, pz, 0.4)) px += vx * dt;
   if (!blocked(px, pz + vz * dt, 0.4)) pz += vz * dt;
   // Pulo simples
-  if ((keys.Space || gamepadJumpQueued) && py <= EYE + 0.001) vy = 7.5;
+  if ((keys.Space || gamepadJumpQueued) && py <= EYE + 0.001) { vy = 7.5; slideT = 0; camLandV += 0.25; }
   gamepadJumpQueued = false;
   vy -= 22 * dt; py += vy * dt; if (py < EYE) { py = EYE; vy = 0; }
 
@@ -2311,22 +2473,34 @@ function update(dt) {
   }
   pitch = clamp(pitch, -1.5, 1.5);
   const sh = shake * shake;                                       // tremor de tela (explosões, dano): curva quadrática
-  camera.rotation.set(pitch + (Math.random() - 0.5) * sh * 0.12, yaw + (Math.random() - 0.5) * sh * 0.12, (Math.random() - 0.5) * sh * 0.06);
+  // Tremor suave (ruído senoidal) em vez de saltos aleatórios por quadro
+  const shN = time * 38, shX = Math.sin(shN) * 0.6 + Math.sin(shN * 2.3 + 1) * 0.4, shY = Math.sin(shN * 1.7 + 2) * 0.6 + Math.sin(shN * 3.1) * 0.4;
+  // Balanço da câmera: proporcional à velocidade, some no ar e ao mirar
+  const gSpeed = Math.min(1.4, Math.hypot(vx, vz) / 6.5) * (py <= EYE + 0.02 && slideT <= 0 ? 1 : 0) * (1 - adsT * 0.85);
+  camBobY += (Math.sin(bobT * 2) * 0.032 * gSpeed - camBobY) * Math.min(1, dt * 14);
+  camBobX += (Math.sin(bobT) * 0.018 * gSpeed - camBobX) * Math.min(1, dt * 14);
+  // Aterrissagem: mola amortecida
+  if (lastVy < -4 && py <= EYE + 0.02 && Math.abs(vy) < 0.5) camLandV -= Math.min(2.2, -lastVy * 0.16);
+  camLandV += (-camLand * 140 - camLandV * 16) * dt; camLand += camLandV * dt;
+  const sideV = vx * Math.cos(yaw) - vz * Math.sin(yaw);
+  const camRoll = -sideV * 0.0035 * (1 - adsT) + Math.sin(bobT) * 0.004 * gSpeed + slideT * 0.06;
+  camera.rotation.set(pitch + shY * sh * 0.06 + camLand * 0.25 - sprintT * 0.012, yaw + shX * sh * 0.06, shX * sh * 0.03 + camRoll);
   const focusPush = terminalInteraction.focus * .12;
-  camera.position.set(px - Math.sin(yaw) * focusPush, py + terminalInteraction.focus * .035, pz - Math.cos(yaw) * focusPush); shake = Math.max(0, shake - dt * 1.6);
+  const eyeY = py - crouchT * 0.6 + camBobY + camLand;
+  camera.position.set(px - Math.sin(yaw) * focusPush + Math.cos(yaw) * camBobX, eyeY + terminalInteraction.focus * .035, pz - Math.cos(yaw) * focusPush - Math.sin(yaw) * camBobX); shake = Math.max(0, shake - dt * 1.6);
   audio.setListener(px, pz, yaw);
   camera.updateMatrixWorld(true);
 
   /* --- Zoom da sniper --- */
-  const wantFov = scoped ? baseFov / cur().zoom : baseFov - terminalInteraction.focus * 6;
+  const wantFov = scoped ? baseFov / cur().zoom : baseFov - terminalInteraction.focus * 6 + sprintT * 7 + (dashTime > 0 ? 10 : 0) + slideT * 6;
   if (Math.abs(camera.fov - wantFov) > 0.1) {
-    camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 14); camera.updateProjectionMatrix();
+    camera.fov += (wantFov - camera.fov) * Math.min(1, dt * (scoped ? 14 : 7)); camera.updateProjectionMatrix();
   }
   if (useTouch) bAdsEl.classList.toggle('act', scoped);   // botão MIRAR acompanha o estado real (recarga/troca de arma desligam o zoom)
   const scopeOn = scoped && curW === 4;
   el.scope.style.opacity = scopeOn ? 1 : 0;
   el.cross.style.opacity = scopeOn ? 0 : 1;
-  holder.visible = !scopeOn;
+  holder.visible = !scopeOn && deckAnim < 0.05;            // a arma some enquanto o laptop está na mão
 
   /* --- Armas: tiro automático, recarga, animações --- */
   if ((mouseHeld || gamepadFireHeld) && cur().auto) tryShoot();
@@ -2389,6 +2563,20 @@ function update(dt) {
   holder.rotation.x = kick * 1.2 - rp * 0.6 + Math.sin(bobT*.5)*.003*idle + viewPitch + swayY * 0.8 - landDip * 1.5;
   holder.rotation.y = swayX * 0.9;
   holder.rotation.z = Math.sin(bobT*.35)*.003*idle + viewRoll + strafeTilt + swayX * 0.6;
+  // Correr: arma abaixa e gira para o lado; agachar: arma aproxima
+  const sp = sprintT * (1 - adsT), ease = sp * sp * (3 - 2 * sp);
+  holder.position.x += ease * 0.05; holder.position.y -= ease * 0.05 + crouchT * 0.012; holder.rotation.y += ease * 0.55; holder.rotation.x -= ease * 0.18;
+  holder.position.y += Math.sin(bobT * 2) * 0.012 * ease;
+  // Inspeção (tecla V): gira a arma, mostra a lateral e volta
+  if (inspectT > 0) {
+    if (reloading || mouseHeld || scoped || sprintT > 0.5) inspectT = 0;
+    else {
+      inspectT = Math.max(0, inspectT - dt); const u = 1 - inspectT / INSPECT_DUR;
+      const env = Math.sin(Math.min(1, u * 1.25) * Math.PI), e2 = env * env * (3 - 2 * env), tw = Math.sin(u * Math.PI * 2);
+      holder.rotation.y += e2 * 0.9 + tw * 0.15 * e2; holder.rotation.z += e2 * 0.5; holder.rotation.x += e2 * 0.12 - Math.max(0, tw) * 0.2 * e2;
+      holder.position.x -= e2 * 0.09; holder.position.y += e2 * 0.03; holder.position.z += e2 * 0.05;
+    }
+  }
 
   if (flashT > 0 && flashingGun) {   // clarão encolhe e esmaece; luz pisca em vez de apagar seca
     const f = Math.max(0, flashT / flashDur), u = flashingGun.userData;
@@ -2432,6 +2620,7 @@ function update(dt) {
     const dx = px - pos.x, dz = pz - pos.z, dist = Math.hypot(dx, dz);
     e.g.rotation.y = Math.atan2(dx, dz);        // modelo olha para +Z
     e.g.rotation.z += (Math.sin(e.phase) * 0.025 - e.g.rotation.z) * Math.min(1, dt * 5);
+    if (e.attackAnim > 0) { e.attackAnim = Math.max(0, e.attackAnim - dt); }
     if (e.hitReact > 0) {
       e.hitReact = Math.max(0, e.hitReact - dt);
       const react = clamp(e.hitReact / (e.hitReactMax || 0.2), 0, 1);
@@ -2477,14 +2666,29 @@ function update(dt) {
         const px2 = pos.x - dz / dist * e.speed * dt * e.side, pz2 = pos.z + dx / dist * e.speed * dt * e.side;
         if (!blocked(px2, pz2, 0.5)) { pos.x = px2; pos.z = pz2; } else e.side *= -1;
       }
-      e.phase += dt * e.speed * 3;               // animação das pernas
-      e.legL.rotation.x = Math.sin(e.phase) * 0.7; e.legR.rotation.x = -Math.sin(e.phase) * 0.7;
+      e.phase += dt * e.speed * 3;               // ciclo de locomoção
+      const gait = Math.sin(e.phase), gaitOpp = Math.sin(e.phase + Math.PI);
+      e.legL.rotation.x = gait * 0.7; e.legR.rotation.x = gaitOpp * 0.7;
+      if (e.armL && e.armR) { e.armL.rotation.x = -1.4 + gaitOpp * 0.22; e.armR.rotation.x = -1.4 + gait * 0.22; }
+      e.body.position.y = 1.1 + Math.abs(gait) * 0.025;
+      e.g.rotation.z += (clamp(gait * 0.035, -0.035, 0.035) - e.g.rotation.z) * Math.min(1, dt * 7);
     } else if (e.T.strafe && !busy && dist > 6 && dist < 13) {
       const s = e.side * e.speed * 0.72 * dt, sx = -dz / (dist || 1) * s, sz = dx / (dist || 1) * s;
       if (!blocked(pos.x + sx, pos.z, 0.5)) pos.x += sx;
       if (!blocked(pos.x, pos.z + sz, 0.5)) pos.z += sz;
-      e.phase += dt * e.speed * 3; e.legL.rotation.x = Math.sin(e.phase) * 0.7; e.legR.rotation.x = -Math.sin(e.phase) * 0.7;
+      e.phase += dt * e.speed * 3; const gait = Math.sin(e.phase); e.legL.rotation.x = gait * 0.55; e.legR.rotation.x = -gait * 0.55; if (e.armL && e.armR) { e.armL.rotation.x = -1.4 - gait * 0.18; e.armR.rotation.x = -1.4 + gait * 0.18; }
+    } else if (!busy && !usingCover) {
+      // Idle: leve respiração/postura e pernas relaxando, evitando rig congelado.
+      e.phase += dt * 1.35;
+      const idleLeg = Math.sin(e.phase) * 0.035;
+      if (e.armL && e.armR) { const armIdle = Math.sin(e.phase * 0.7) * 0.035; e.armL.rotation.x += (-1.4 + armIdle - e.armL.rotation.x) * Math.min(1, dt * 3); e.armR.rotation.x += (-1.4 - armIdle - e.armR.rotation.x) * Math.min(1, dt * 3); }
+      e.legL.rotation.x += (idleLeg - e.legL.rotation.x) * Math.min(1, dt * 4);
+      e.legR.rotation.x += (-idleLeg - e.legR.rotation.x) * Math.min(1, dt * 4);
+      e.body.position.y = 1.1 + Math.sin(e.phase * 0.65) * 0.018;
+      e.head.position.y = 1.82 + Math.sin(e.phase * 0.65 + 0.3) * 0.012;
     }
+    // Animação de ataque: braços recuam brevemente ao disparar e recuperam de forma amortecida.
+    if (e.attackAnim > 0 && e.armL && e.armR && e.hitReact <= 0) { const attackBlend = clamp(e.attackAnim / 0.22, 0, 1); e.armL.rotation.x += (-1.18 - e.armL.rotation.x) * Math.min(1, dt * 10) * attackBlend; e.armR.rotation.x += (-1.18 - e.armR.rotation.x) * Math.min(1, dt * 10) * attackBlend; }
     // Ação de cada tipo (o chefe age dentro de updateBoss)
     if (e.T.boss) { /* ataques em updateBoss */ }
     else if (e.T.ranged) {                       // atira andando, alcance 16
@@ -2548,6 +2752,8 @@ function update(dt) {
   const low = health / maxHealth < 0.3 ? 0.25 + Math.sin(time * 6) * 0.12 : 0;   // pulsa com vida baixa
   el.vignette.style.opacity = Math.max(vig, low);
   hitT = Math.max(0, hitT - dt); el.hit.style.opacity = hitT > 0 ? 1 : 0;
+  const hitPulse = hitT > 0 ? 0.82 + (1 - hitT / 0.2) * 0.28 : 0.72;   // pop curto ao acertar
+  el.hit.style.transform = `translate(-50%, -50%) scale(${hitPulse})`;
   el.hit.classList.toggle('head', hitHead); el.hit.classList.toggle('shield', hitKind === 'shield');
   if (bannerT > 0) { bannerT -= dt; el.banner.style.opacity = Math.min(1, bannerT); }
   else el.banner.style.opacity = 0;
@@ -2758,14 +2964,15 @@ document.addEventListener('keydown', e => {
   if (!locked || !alive) return;
   if (e.code === 'KeyT' && inc) { e.preventDefault(); openDeck(); return; }          // abre o cyberdeck (só na Incursão)
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyV' && !e.repeat && !reloading && inspectT <= 0) inspectT = INSPECT_DUR;
   if (e.code === 'KeyQ') dashQueued = true;
   if (e.code === 'KeyG') throwHandGrenade();
   if (e.code === 'KeyF') useDrone();
   if (e.code === 'KeyE' && objective && objective.id === 'relay') interactObjective();
-  const n = parseInt(e.key, 10);
-  if (n >= 1 && n <= WEAPONS.length) {
-    if (isUnlocked(n - 1)) selectWeapon(n - 1);
-    else banner('ARMA BLOQUEADA\nLIBERA NA ONDA ' + WEAPONS[n - 1].unlock, 1.4);
+  const n = parseInt(e.key, 10), slot = n === 0 ? 9 : n - 1;
+  if (Number.isInteger(n) && slot >= 0 && slot < WEAPONS.length) {
+    if (isUnlocked(slot)) selectWeapon(slot);
+    else banner('ARMA BLOQUEADA\nLIBERA NA ONDA ' + WEAPONS[slot].unlock, 1.4);
   }
   if (e.code === 'Space') e.preventDefault();
 });
@@ -2868,7 +3075,7 @@ function endPointer(e) {
 addEventListener('pointerup', endPointer);
 addEventListener('pointercancel', endPointer);
 // Bloqueia rolagem/zoom do navegador durante o jogo (exceto dentro do menu)
-document.addEventListener('touchmove', e => { if (useTouch && !e.target.closest('#overlay')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', e => { if (useTouch && !e.target.closest('#overlay, #slots')) e.preventDefault(); }, { passive: false });
 function pauseTouch() {
   if (!useTouch || !alive || !locked) return;
   locked = false; releaseAllTouch(); showOverlay('pause');
@@ -2964,12 +3171,14 @@ function loop(now) {
   requestAnimationFrame(loop);
   const frameMs = Math.max(0, now - last);
   const dt = Math.min(frameMs / 1000, 0.05);   // limita saltos (aba em segundo plano)
-  last = now;
+  last = now; updateDeckRig(dt);
   const portrait = useTouch && innerHeight > innerWidth;   // celular em pé: o jogo espera (mostra "gire o celular")
   let updateMs = 0;
   if (locked && alive && !portrait && (!perfMode || document.visibilityState === 'visible')) {
     const updateStart = perfMode ? performance.now() : 0;
-    time += dt; update(dt);
+    slowMoT = Math.max(0, slowMoT - dt);                  // câmera lenta: entra rápido e volta com suavidade
+    timeScale += ((slowMoT > 0 ? SLOWMO_SCALE : 1) - timeScale) * Math.min(1, dt * (slowMoT > 0 ? 18 : 4));
+    const sdt = dt * timeScale; time += sdt; update(sdt);
     if (perfMode) updateMs = performance.now() - updateStart;
     if (!perfMode && !FLAG.scale) {                 // resolução adaptativa (celular e PC): cai rápido, sobe devagar
       perfAcc += dt; perfN++;

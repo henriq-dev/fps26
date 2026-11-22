@@ -51,6 +51,8 @@
   }
   function buildKvm(g) {
     add(g, box(1.75, .12, .82), mat(frame), 0, 1.03, 0);
+    add(g, box(1.40,.045,.035),mat(steel),0,.965,.414); for(let i=0;i<9;i++)add(g,box(.025,.018,.012),mat(dark),-.52+i*.13,.962,.438);
+    for(const x of [-.70,.70])add(g,box(.045,.12,.07),mat(rubber),x,.94,.34);
     for (const x of [-.72, .72]) for (const z of [-.28, .28]) add(g, box(.08, 1.0, .08), mat(dark), x, .5, z);
     rack(g, 0, 1.08, -.32, .76, 1.65, .34, 0x202b34);
     add(g, box(.82, .06, .06), mat(steel), 0, 1.84, -.10);
@@ -65,6 +67,7 @@
   }
   function buildNetwork(g) {
     add(g, box(1.75, .12, .82), mat(frame), 0, 1.03, 0);
+    add(g,box(1.42,.045,.035),mat(steel),0,.965,.414); for(let i=0;i<8;i++)led(g,-.48+i*.135,.972,.438,i%2?0x3ddc84:0x4de7ff,.018,.018,.01);
     rack(g, 0, 1.08, -.28, 1.04, 2.35, .44, 0x202932);
     add(g, box(.84, .62, .035), mat(0x25343e), 0, 1.72, -.045);
     for (let row = 0; row < 3; row++) for (let col = 0; col < 8; col++) { add(g, box(.055, .055, .018), mat(steel), -.30 + col * .085, 1.85 - row * .16, .0); led(g, -.30 + col * .085, 1.90 - row * .16, .018, (row + col) % 3 === 0 ? 0xffc857 : 0x3ddc84, .018, .018, .01); }
@@ -75,6 +78,7 @@
   }
   function buildDatacenter(g) {
     add(g, box(1.9, .12, .82), mat(frame), 0, 1.03, 0);
+    for(const x of [-.82,.82]){add(g,box(.18,.62,.07),mat(rubber),x,1.47,.32);for(let i=0;i<5;i++)add(g,box(.13,.018,.015),mat(steel),x,1.27+i*.10,.365);}
     for (const x of [-.72, .72]) for (const z of [-.28, .28]) add(g, box(.08, 1.0, .08), mat(dark), x, .5, z);
     rack(g, 0, 1.08, -.36, .70, 1.85, .34, 0x1e2832);
     for (const x of [-.55, 0, .55]) screen(g, x, 1.65, .12, .42, .35, x === 0 ? 0xffc857 : palette.standby);
@@ -108,7 +112,7 @@
     });
   }
   Arena.createIncursionTerminal = function createIncursionTerminal(spec) {
-    const g = new THREE.Group(); g.position.set(spec.x, 0, spec.z); g.rotation.y = spec.rotation || 0; g.userData.terminalId = spec.id || spec.name;
+    const g = new THREE.Group(); g.position.set(spec.x, 0, spec.z); g.rotation.y = spec.rotation || 0; g.userData.terminalId = spec.id || spec.name; g.userData.kind = spec.kind || 'kvm';
     if (spec.kind === 'network') buildNetwork(g); else if (spec.kind === 'datacenter') buildDatacenter(g); else buildKvm(g);
     const own = [...(g.userData.own || new Map()).values()];
     g.userData.screenMats = own.filter(m => m.userData.kind === 'screen'); g.userData.ledMats = own.filter(m => m.userData.kind === 'led');
@@ -123,18 +127,60 @@
   // Desenha o mini NEXUS (grade + grafo de nós + texto). Limitado a ~6 quadros/s por terminal; force = true ignora o limite.
   const NODES = [[.18, .30], [.40, .68], [.62, .26], [.82, .62], [.30, .86], [.74, .88]];
   const SCREEN_TEXT = { standby: 'NEXUS // STANDBY', detected: 'ENLACE DETECTADO', intrusion: 'INTRUSÃO SIM…', committed: 'CONCLUÍDO', locked: 'ACESSO NEGADO' };
+
+  // Tela de "computador": janela de terminal com barra de título, mascote original (BYTE) e balão de fala, ou as últimas linhas do shell.
+  // mono = true → só tons de cinza (a cor vem do material do console); mono = false → cores do visual Kali/Arch (laptop do jogador).
+  const PHRASES = ['Todo sistema tem uma porta.', 'Silêncio é a melhor senha.', 'Cuidado com a câmera.', 'Sem sinal. Chegue perto.'];
+  const BYTE = ['   _|_ ', '  [o_o]', ' /|[=]|\\', '  |___|', '  d   b'];
+  Arena.drawShellScreen = function drawShellScreen(c, W, H, o) {
+    const mono = !!o.mono, skin = o.skin || 'kali', t = o.time || 0;
+    const pal = mono ? { bg: '#000', bar: '#3a3a3a', fg: '#fff', dim: '#9a9a9a', ok: '#fff', warn: '#ddd', err: '#ddd', pr: '#fff' }
+      : skin === 'arch' ? { bg: '#07090c', bar: '#12202b', fg: '#cfd6dd', dim: '#6b7682', ok: '#4be08a', warn: '#ffc857', err: '#ff6b6b', pr: '#1793d1' }
+      : { bg: '#0b1220', bar: '#16233b', fg: '#d7e0ee', dim: '#7b8aa3', ok: '#4be08a', warn: '#ffc857', err: '#ff6b6b', pr: '#5b8def' };
+    const bar = Math.round(H * 0.11), fs = Math.max(7, Math.round(H * 0.075)), lh = fs * 1.15;
+    c.fillStyle = pal.bg; c.fillRect(0, 0, W, H); c.fillStyle = pal.bar; c.fillRect(0, 0, W, bar);
+    ['#ff5f57', '#febc2e', '#28c840'].forEach((col, i) => { c.fillStyle = mono ? '#bbb' : col; c.beginPath(); c.arc(bar * 0.6 + i * bar * 0.7, bar / 2, bar * 0.2, 0, Math.PI * 2); c.fill(); });
+    c.font = `bold ${Math.round(bar * 0.55)}px monospace`; c.textAlign = 'center'; c.fillStyle = pal.fg; c.fillText('operador@deck: ~', W / 2 + bar, bar * 0.7);
+    c.font = `bold ${fs}px monospace`; c.textAlign = 'left';
+    const prompt = !mono && skin === 'kali' ? ['┌──(operador㉿deck)-[~]', '└─$ '] : ['[operador@deck ~]$ '];
+    const bodyTop = bar + fs + 3, maxRows = Math.floor((H - bodyTop - lh * prompt.length) / lh);
+    let y = bodyTop;
+    if (o.lines && o.lines.length) {
+      o.lines.slice(-maxRows).forEach(l => { c.fillStyle = pal[l.k] || pal.fg; c.fillText(String(l.t).slice(0, Math.floor(W / (fs * 0.6))), 5, y); y += lh; });
+    } else {
+      const ph = PHRASES[Math.floor(t / 6 + (o.seed || 0)) % PHRASES.length], w = ph.length + 2;
+      const art = [' ' + '_'.repeat(w), '< ' + ph + ' >', ' ' + '-'.repeat(w), '      \\', ...BYTE.map(l => '       ' + l)];
+      c.fillStyle = pal.fg; art.slice(0, maxRows).forEach(l => { c.fillText(l, 5, y); y += lh; });
+    }
+    y = H - lh * (prompt.length - 1) - 4; c.fillStyle = pal.pr;
+    prompt.forEach((l, i) => { c.fillText(l, 5, y + i * lh); });
+    if (Math.floor(t * 2) % 2 === 0) { c.fillStyle = pal.fg; c.fillRect(5 + c.measureText(prompt[prompt.length - 1]).width, y + (prompt.length - 1) * lh - fs * 0.85, fs * 0.55, fs); }
+  };
   Arena.paintIncursionScreen = function paintIncursionScreen(g, state, time, force) {
     const u = g.userData; if (!u.tctx || (!force && time < u.nextPaint)) return;
     u.nextPaint = time + 0.16; const c = u.tctx, W = 256, H = 128;
+    if (state === 'standby') {
+      Arena.drawShellScreen(c, W, H, { mono: true, time, seed: u.phase || 0 });
+      c.fillStyle='rgba(0,0,0,.72)';c.fillRect(0,H-15,W,15);c.fillStyle='#fff';c.font='bold 8px monospace';c.textAlign='left';
+      c.fillText(`SYS: STANDBY  //  ${String(u.kind).toUpperCase()}  ·  NEXUS LOCAL`,6,H-5);
+      c.fillStyle='rgba(255,255,255,.65)';for(let i=0;i<5;i++)c.fillRect(W-44+i*7,H-10,3,4+(i%2)*3);
+      u.tex.needsUpdate = true; return;
+    }
     c.fillStyle = '#000'; c.fillRect(0, 0, W, H);
     c.strokeStyle = 'rgba(255,255,255,.14)'; c.lineWidth = 1; c.beginPath();
-    for (let x = 0; x <= W; x += 32) { c.moveTo(x, 0); c.lineTo(x, H); } for (let y = 0; y <= H; y += 32) { c.moveTo(0, y); c.lineTo(W, y); } c.stroke();
-    const pos = NODES.map(([x, y], i) => [x * W + Math.sin(time * 1.3 + i * 1.7 + u.phase) * 6, y * H * .8 + 14 + Math.cos(time * 1.1 + i) * 4]);
-    c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 2; c.beginPath();
+    for (let x = 0; x <= W; x += 32) { c.moveTo(x, 22); c.lineTo(x, H); } for (let y = 24; y <= H; y += 24) { c.moveTo(0, y); c.lineTo(W, y); } c.stroke();
+    c.fillStyle='rgba(255,255,255,.10)';c.fillRect(0,0,W,22);c.font='bold 9px monospace';c.textAlign='left';c.fillStyle='#fff';
+    const terminalName=({kvm:'ACCESS KVM',network:'LINK ROUTER',datacenter:'CORE NODE'})[u.kind]||'FIELD NODE';
+    c.fillText(`NEXUS // ${terminalName}`,7,14);c.textAlign='right';c.font='bold 8px monospace';c.fillText((SCREEN_TEXT[state]||'STANDBY').slice(0,18),W-7,14);
+    const pos = NODES.map(([x, y], i) => [x * W + Math.sin(time * 1.3 + i * 1.7 + u.phase) * 6, 28 + y * (H-55) + Math.cos(time * 1.1 + i) * 3]);
+    c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 1.5; c.beginPath();
     pos.forEach((p, i) => { const q = pos[(i + 1) % pos.length], h = pos[2]; c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.moveTo(p[0], p[1]); c.lineTo(h[0], h[1]); }); c.stroke();
-    c.fillStyle = '#fff'; pos.forEach((p, i) => { c.beginPath(); c.arc(p[0], p[1], i === 2 ? 8 : 5, 0, Math.PI * 2); c.fill(); });
-    c.font = 'bold 15px monospace'; c.textAlign = 'left'; c.fillText(SCREEN_TEXT[state] || SCREEN_TEXT.standby, 8, 18);
-    if (state === 'intrusion') { const f = (time * .5) % 1; c.fillRect(8, H - 14, (W - 16) * f, 7); } else if (state === 'committed') c.fillRect(8, H - 14, W - 16, 7);
+    c.fillStyle = '#fff'; pos.forEach((p, i) => { c.beginPath(); c.arc(p[0], p[1], i === 2 ? 6 : 4, 0, Math.PI * 2); c.fill(); });
+    c.textAlign='left';c.font='7px monospace';c.fillText('NODES 06  ·  LINK ENCRYPTED',7,H-18);
+    c.fillStyle='rgba(255,255,255,.2)';c.fillRect(7,H-11,W-14,4);
+    const f=state==='committed'?1:state==='intrusion'?(time*.5)%1:state==='locked'?.16:.42;
+    c.fillStyle='#fff';c.fillRect(7,H-11,(W-14)*f,4);
+    c.textAlign='right';c.font='7px monospace';c.fillText(state==='locked'?'AUTH: DENIED':state==='committed'?'LINK: STABLE':state==='intrusion'?'TRACE: LIVE':'LINK: DETECTED',W-7,H-18);
     u.tex.needsUpdate = true;
   };
   Arena.updateIncursionTerminal = function updateIncursionTerminal(g, state, time) {

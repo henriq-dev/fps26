@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arena-fps-v8-p33';
+const CACHE_NAME = 'arena-fps-v8-p39';
 const CORE = [
   './', './index.html', './style.css', './three.min.js', './script.js',
   './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './deck.js',

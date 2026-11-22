@@ -26,11 +26,13 @@ assert.match(perfProbe.toCSV(), /4,30,4,5,44/);
 perfProbe.reset();
 assert.equal(perfProbe.summary().samples, 0);
 
-assert.equal(A.WEAPONS.length, 8);
+assert.equal(A.WEAPONS.length, 10);
 assert.equal(A.WEAPONS[6].pierce, true);
-assert.equal(new Set(A.WEAPONS.map(w => w.role)).size, 8);
+assert.equal(new Set(A.WEAPONS.map(w => w.role)).size, 10);
 assert.ok(A.WEAPONS.every(w => Number.isInteger(w.color)));
 assert.equal(A.WEAPONS[3].knockback, 2.2);
+assert.equal(A.WEAPONS[8].name, 'SMG Vespa'); assert.equal(A.WEAPONS[8].unlock, 8); assert.equal(A.WEAPONS[8].auto, true);
+assert.equal(A.WEAPONS[9].name, 'Carabina Íon'); assert.equal(A.WEAPONS[9].unlock, 10); assert.equal(A.WEAPONS[9].visual.particles, 'ion');
 const combatFields = ['name','role','unlock','auto','dmg','pellets','rate','mag','reserve','reload','spread','range','falloff','recoil','zoom','pierce','knockback','launcher','radius','shell','shellTime'];
 const combatSnapshot = JSON.parse(JSON.stringify(A.WEAPONS.map(w => Object.fromEntries(combatFields.map(key => [key, w[key] ?? null])))));
 assert.deepEqual(combatSnapshot, [
@@ -41,9 +43,15 @@ assert.deepEqual(combatSnapshot, [
   {name:'Sniper',role:'EXECUÇÃO',unlock:null,auto:false,dmg:140,pellets:1,rate:1.3,mag:5,reserve:25,reload:2.4,spread:.05,range:200,falloff:0,recoil:.22,zoom:4,pierce:null,knockback:null,launcher:null,radius:null,shell:null,shellTime:null},
   {name:'Magnum',role:'ALTO DANO',unlock:2,auto:false,dmg:75,pellets:1,rate:.6,mag:6,reserve:36,reload:1.9,spread:.005,range:90,falloff:.1,recoil:.2,zoom:1.4,pierce:null,knockback:null,launcher:null,radius:null,shell:null,shellTime:null},
   {name:'Railgun',role:'PERFURAÇÃO',unlock:4,auto:false,dmg:90,pellets:1,rate:1.1,mag:4,reserve:20,reload:2.2,spread:.002,range:200,falloff:0,recoil:.12,zoom:2,pierce:true,knockback:null,launcher:null,radius:null,shell:null,shellTime:null},
-  {name:'Lança-granadas',role:'ÁREA',unlock:6,auto:false,dmg:130,pellets:1,rate:1,mag:4,reserve:16,reload:2.6,spread:0,range:60,falloff:0,recoil:.25,zoom:null,pierce:null,knockback:null,launcher:true,radius:4.5,shell:null,shellTime:null}
+  {name:'Lança-granadas',role:'ÁREA',unlock:6,auto:false,dmg:130,pellets:1,rate:1,mag:4,reserve:16,reload:2.6,spread:0,range:60,falloff:0,recoil:.25,zoom:null,pierce:null,knockback:null,launcher:true,radius:4.5,shell:null,shellTime:null},
+  {name:'SMG Vespa',role:'RAJADA',unlock:8,auto:true,dmg:8.5,pellets:1,rate:.075,mag:36,reserve:216,reload:1.45,spread:.028,range:72,falloff:.4,recoil:.028,zoom:1.2,pierce:null,knockback:null,launcher:null,radius:null,shell:null,shellTime:null},
+  {name:'Carabina Íon',role:'SOBRECARGA',unlock:10,auto:false,dmg:52,pellets:1,rate:.58,mag:8,reserve:48,reload:2,spread:.006,range:145,falloff:.05,recoil:.13,zoom:1.8,pierce:null,knockback:null,launcher:null,radius:null,shell:null,shellTime:null}
 ]);
 const gameSource = fs.readFileSync('script.js', 'utf8');
+assert.match(gameSource, /WEAPONS\.map\(\(_,i\)=>buildGun\(i/);
+assert.match(gameSource, /n === 0 \? 9 : n - 1/);
+assert.match(gameSource, /function spawnIonMotes\(/);
+assert.match(gameSource, /fxPools\.ion=ionParticlePool/);
 const materialsSource = fs.readFileSync('industrial-materials.js', 'utf8');
 const reloadStart = gameSource.slice(gameSource.indexOf('function startReload()'), gameSource.indexOf('\nfunction loadShell()'));
 assert.match(reloadStart, /viewKick\s*=\s*0\s*;\s*viewPitch\s*=\s*0\s*;\s*viewRoll\s*=\s*0\s*;/);
@@ -51,9 +59,9 @@ assert.match(reloadStart, /shotPulseT\s*=\s*0/);
 assert.match(reloadStart, /part\.mesh\.material\.emissiveIntensity\s*=\s*part\.emissive/);
 assert.match(reloadStart, /part\.mesh\.scale\.copy\(part\.scale\)/);
 assert.ok(A.WEAPONS.every(w => w.visual && typeof w.visual.flash === 'string'));
-assert.equal(new Set(A.WEAPONS.map(w => w.visual.flash)).size, 8);
-assert.equal(new Set(A.WEAPONS.map(w => w.visual.finish)).size, 8);
-assert.equal(new Set(A.WEAPONS.map(w => w.visual.hands)).size, 8);
+assert.equal(new Set(A.WEAPONS.map(w => w.visual.flash)).size, 10);
+assert.equal(new Set(A.WEAPONS.map(w => w.visual.finish)).size, 10);
+assert.equal(new Set(A.WEAPONS.map(w => w.visual.hands)).size, 10);
 assert.ok(A.WEAPONS.every(w => Number.isInteger(w.visual.smoke) && w.visual.smoke >= 1 && w.visual.smoke <= 3));
 assert.ok(A.WEAPONS.every(w => {
   const p = w.visual.shot;
@@ -61,10 +69,11 @@ assert.ok(A.WEAPONS.every(w => {
 }));
 assert.ok(A.WEAPONS[3].visual.shot.impulse > A.WEAPONS[1].visual.shot.impulse);
 assert.ok(A.WEAPONS[6].visual.shot.coilPulse > 0);
-assert.equal(A.WEAPONS.filter(w => w.visual.shot.coilPulse).length, 1);
-assert.deepEqual(JSON.parse(JSON.stringify(A.WEAPONS.map(w => w.visual.reload))), ['slide','bolt','feed-cover','pump','bolt-action','cylinder','coils','drum']);
-assert.ok(A.WEAPONS.filter(w => w.visual.casing).length >= 6);
+assert.equal(A.WEAPONS.filter(w => w.visual.shot.coilPulse).length, 2);
+assert.deepEqual(JSON.parse(JSON.stringify(A.WEAPONS.map(w => w.visual.reload))), ['slide','bolt','feed-cover','pump','bolt-action','cylinder','coils','drum','bolt','coils']);
+assert.ok(A.WEAPONS.filter(w => w.visual.casing).length >= 7);
 assert.equal(A.WEAPONS[6].visual.casing, null);
+assert.equal(A.WEAPONS[9].visual.casing, null);
 assert.equal(A.pickType(1, () => 0), 'grunt');
 assert.equal(A.pickType(8, () => 0.999), 'healer');
 assert.equal(A.bossPhase(0.8), 1);
@@ -265,7 +274,7 @@ assert.ok(A.holdAllowed({ inRange: true, held: true, lockout: false }));
 assert.ok(!A.holdAllowed({ inRange: true, held: true, lockout: true }), 'com bloqueio (depois de dano) a barra não sobe');
 assert.ok(!A.holdAllowed({ inRange: false, held: true, lockout: false }) && !A.holdAllowed({ inRange: true, held: false, lockout: false }));
 { // consoles: materiais próprios por terminal e poucas malhas (precisa do THREE)
-  const vm2 = require('vm'), calls = [], c2d = new Proxy({}, { get: (t, k) => k in t ? t[k] : (...a) => { calls.push(k); }, set: (t, k, v) => { t[k] = v; return true; } }), ctx = { console, document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) } }; ctx.window = ctx; ctx.self = ctx; vm2.createContext(ctx);
+  const vm2 = require('vm'), calls = [], c2d = new Proxy({}, { get: (t, k) => k in t ? t[k] : k === 'measureText' ? () => ({ width: 30 }) : (...a) => { calls.push(k); }, set: (t, k, v) => { t[k] = v; return true; } }), ctx = { console, document: { createElement: () => ({ width: 0, height: 0, getContext: () => c2d }) } }; ctx.window = ctx; ctx.self = ctx; vm2.createContext(ctx);
   vm2.runInContext(fs.readFileSync('three.min.js', 'utf8'), ctx); vm2.runInContext(fs.readFileSync('terminal-props.js', 'utf8'), ctx);
   const T = ctx.Arena, views = ['kvm', 'network', 'datacenter'].map((kind, i) => T.createIncursionTerminal({ x: i * 5, z: 0, kind, name: kind }));
   views.forEach(v => { let n = 0; v.traverse(o => { if (o.isMesh) n++; }); assert.ok(n <= 24, 'console com poucas malhas (' + n + ')'); });
@@ -275,6 +284,15 @@ assert.ok(!A.holdAllowed({ inRange: false, held: true, lockout: false }) && !A.h
   assert.notStrictEqual(views[0].userData.screenMats[0], views[1].userData.screenMats[0], 'telas não compartilham material');
   assert.equal(col(views[1]), 'ff3b5f', 'bloqueado = vermelho'); assert.equal(col(views[2]), '3ddc84', 'concluído = verde');
 
+  // p35: telas de computador (terminal + mascote original)
+  {
+  const T = ctx.Arena, mark = calls.length;
+  T.drawShellScreen(c2d, 256, 128, { mono: true, time: 1 });
+  assert.ok(calls.length - mark > 20, 'desenha janela, mascote e prompt');
+  T.drawShellScreen(c2d, 320, 200, { skin: 'arch', time: 2, lines: [{ t: 'ola', k: 'ok' }, { t: 'erro', k: 'err' }] });
+  const v = T.createIncursionTerminal({ x: 0, z: 0, kind: 'kvm', name: 'kvm' }); const n = calls.length;
+  T.paintIncursionScreen(v, 'standby', 3, true); assert.ok(calls.length > n, 'terminal ocioso mostra o shell');
+  }
   // p25: tela física com textura própria, UV nas malhas fundidas e repintura limitada
   {
   const T2 = ctx.Arena, v = T2.createIncursionTerminal({ x: 0, z: 0, kind: 'kvm', name: 'kvm' }), n0 = calls.length;
@@ -389,3 +407,4 @@ console.log('p31: detalhes do deck OK');
   assert.ok(!A.deckRun('connect', {}).fx.connect, 'sem contexto = longe');
 }
 console.log('p32: connect OK');
+console.log('consolidado: telas de computador OK');

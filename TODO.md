@@ -1,4 +1,12 @@
-# TODO — Arena FPS v8 · Pacote 23
+# TODO — Arena FPS v8 · Pacote 38
+
+## Pacote 38 — Arsenal, partículas, consoles e responsividade `[x]`
+
+- [x] Implementar duas armas novas com stats, papéis, desbloqueios, modelos 3D, mãos, recarga, slots/HUD e atalhos totalmente integrados; preservar os oito arquétipos anteriores e não deixar armas inacessíveis no teclado.
+- [x] Adicionar partículas energéticas identificáveis e curtas com pooling/reuso, limite de efeitos e limpeza no reset; manter efeitos leves e não alterar colisões, dano/cadência existentes ou estabilidade de frames.
+- [x] Aumentar a riqueza visual dos monitores e consoles físicos sem duplicar telas, usar recursos externos ou inflar draw calls; manter estados legíveis de standby, detecção, invasão, concluído e bloqueado.
+- [x] Rever HUD/controles para 320×568 portrait, 844×390 landscape e 1280×720, incluindo rolagem dos slots e safe-area; revisar o mapeamento Standard de gamepad PlayStation pelo código/API. Não havia dispositivo físico disponível para teste; esse limite está documentado.
+- [x] Atualizar testes de armas/telas/partículas e cache offline; executar `bash test.sh`, verificar carregamento/renderização no Chromium e regenerar/verificar o ZIP consolidado.
 
 ## Pacote 23 — Interface hacker NEXUS `[~]`
 
@@ -10,8 +18,8 @@
 - [x] Adicionar scanline, glitch/grade sutil, pulsos e barras de estado.
 - [x] Reforçar visualmente que não há rede externa, comando real ou sistema operacional acessado.
 - [x] Preservar acessibilidade, contraste, responsividade mobile e `prefers-reduced-motion`.
-- [ ] Integrar uma tela NEXUS menor diretamente aos monitores físicos dos consoles.
-- [ ] Criar vocabulário visual específico por tipo de terminal (`LINK_NODE`, `TRACE_ROUTE`, etc.).
+- [x] Integrar uma tela NEXUS menor diretamente aos monitores físicos dos consoles.
+- [x] Criar vocabulário visual específico por tipo de terminal (`LINK_NODE`, `TRACE_ROUTE`, etc.).
 - [ ] Fazer playtest humano do fluxo completo nos três prédios.
 
 ## Pacote 22 — Interação física em primeira pessoa
@@ -276,3 +284,11 @@
 ## Pacote 33
 - [x] Animações: tampa, chips, glitch, barra, anel de scan, marcadores, câmeras/torretas desligando.
 - [ ] Próximo: laptop 3D na mão (p34).
+
+## Pacote 34
+- [x] Laptop 3D subindo e abrindo na mão.
+- [ ] Ideias: mãos digitando; shell na textura da tela 3D.
+
+## Pacote 35
+- [x] Telas dos computadores com terminal e mascote original.
+- [ ] Ideias de interface: janela de arquivos fictícia, mapa da rede em janela, notificações do sistema, relógio de missão.

@@ -7,7 +7,7 @@
 window.Arena = window.Arena || {};
 
 Arena.MAPS = [
-  { name: 'Hangar', floorTint: 0x959994, theme: 'HANGAR // SETOR DE CARGA', look: 'industrial', strip: 0xd9aa58, sky: 0x151b20, floorA: '#43484a', floorB: '#343a3c', wall: 0x59656a,
+  { name: 'Hangar', floorTint: 0x959994, theme: 'HANGAR // SETOR DE CARGA', look: 'industrial', strip: 0xff4d5e, sky: 0x5a1f2e, floorA: '#43484a', floorB: '#343a3c', wall: 0x59656a,
     blocks: [[-8,-6,3,2,3,0x68736c],[9,-9,2,2,2,0x68736c],[-14,10,4,1.5,2,0x56606f],[12,8,3,3,3,0x56606f],
              [-4,14,2,2,2,0x68736c],[17,-2,2,2.5,5,0x56606f],[0,-16,6,1.5,1.5,0x56606f],[-19,-14,2,3,2,0x68736c],
              [6.5,4,1.6,4,1.6,0x3b4558],[-10,2,1.6,4,1.6,0x3b4558]] },

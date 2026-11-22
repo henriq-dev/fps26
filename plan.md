@@ -1,6 +1,10 @@
-# Plano — Pacote 20
+# Plano — Arena FPS consolidado · Pacote 38
 
-Modo Incursão (ver RELATORIO_ATUAL.md). Próximo: desempenho no aparelho real, portas/torretas/câmeras, segundo bloco do prédio.
+Base consolidada: P37. O Pacote 38 amplia o arsenal e o acabamento visual, mantendo as regras centrais de combate, colisão e navegação; medições de desempenho em aparelho/GPU real continuam pendentes.
+
+## Pacote 38 — Arsenal e legibilidade visual
+
+Reutilizar a identidade neon/industrial existente e a arquitetura clássica Three.js r128. Acrescentar duas armas com modelos procedurais, stats balanceados e perfis visuais próprios, preservando o funcionamento das oito armas atuais; tornar listas, slots e atalhos de teclado dinâmicos para dez armas. Adicionar motas energéticas de vida curta por pool limitado e material/geometria reutilizáveis, sem alterar colisões, raycasts ou dano das armas existentes. Enriquecer a interface desenhada nas telas físicas NEXUS e reforçar a leitura de painéis/terminais sem aumentar desnecessariamente draw calls. Rever o scroll/safe-area dos slots touch e corrigir somente problemas responsivos reproduzíveis; gamepad PlayStation será validado por API/código, sem declarar teste físico quando não houver dispositivo conectado. Estrutura mantida: `script.js` para jogo/input/modelos/FX, `weapons.js` para dados do arsenal, `terminal-props.js` para terminais/telas, `style.css` para HUD e responsividade, `tests/core.test.js` para contratos/regressões e `sw.js` para cache offline versionado.
 
 ## Pacote 21 — Terminais físicos detalhados
 

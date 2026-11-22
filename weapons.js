@@ -43,7 +43,15 @@ Arena.WEAPONS = [
   { name: 'Lança-granadas', short: 'Granada', role: 'ÁREA', color: 0x35d6c8, unlock: 6, auto: false, dmg: 130, pellets: 1, rate: 1.00, mag: 4, reserve: 16, reload: 2.6,
     spread: 0, range: 60, falloff: 0, recoil: 0.25, launcher: true, radius: 4.5,           // launcher = projétil com arco e explosão em área
     snd: { dur: .3, cut: 700, thump: 70, vol: .7 },
-    visual: { flash: 'pulse', reload: 'drum', finish: 'field-oxidized', hands: 'launcher', smoke: 1, shot: { impulse: .075, pitch: .14, roll: .022, recovery: 8 }, casing: null } }
+    visual: { flash: 'pulse', reload: 'drum', finish: 'field-oxidized', hands: 'launcher', smoke: 1, shot: { impulse: .075, pitch: .14, roll: .022, recovery: 8 }, casing: null } },
+  { name: 'SMG Vespa', short: 'Vespa', role: 'RAJADA', color: 0xe68cff, unlock: 8, auto: true, dmg: 8.5, pellets: 1, rate: .075, mag: 36, reserve: 216, reload: 1.45, zoom: 1.2,
+    spread: .028, range: 72, falloff: .40, recoil: .028,
+    snd: { dur: .07, cut: 3600, thump: 190, vol: .26 },
+    visual: { flash: 'burst', reload: 'bolt', finish: 'anodized-violet', hands: 'compact-smg', smoke: 1, shot: { impulse: .012, pitch: .016, roll: .004, recovery: 22 }, casing: { radius: .016, length: .052, color: 0xd3ad68, port: [.106, .055, -.20] } } },
+  { name: 'Carabina Íon', short: 'Íon', role: 'SOBRECARGA', color: 0x74a4ff, unlock: 10, auto: false, dmg: 52, pellets: 1, rate: .58, mag: 8, reserve: 48, reload: 2.0, zoom: 1.8,
+    spread: .006, range: 145, falloff: .05, recoil: .13,
+    snd: { dur: .22, cut: 2800, thump: 150, vol: .42, zap: 1750 },
+    visual: { flash: 'ion', reload: 'coils', finish: 'ion-ceramic', hands: 'energy-carbine', smoke: 1, particles: 'ion', shot: { impulse: .042, pitch: .075, roll: .01, recovery: 10, coilPulse: .62 }, casing: null } }
 ];
 
 })();

@@ -50,9 +50,10 @@ canvas { display: block; }
 #reloadBar { height: 100%; width: 0; background: var(--weapon-color, var(--warn)); box-shadow: 0 0 8px var(--weapon-color, var(--warn)); }
 
 /* Slots de armas (centro inferior) */
-#slots { left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; }
+#slots { left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; gap: 8px; padding: 8px; max-width: min(900px, calc(100vw - 36px)); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+#slots::-webkit-scrollbar { display: none; }
 .slot {
-  width: 66px; padding: 6px 0; text-align: center; border-radius: 8px;
+  flex: 0 0 66px; width: 66px; padding: 6px 0; text-align: center; border-radius: 8px;
   border: 1px solid var(--line); color: var(--muted); font-size: 11px; transition: .15s;
 }
 .slot b { display: block; font-size: 16px; color: var(--ui); }
@@ -69,7 +70,7 @@ canvas { display: block; }
 #crosshair b { position: absolute; width: 3px; height: 3px; left: -1.5px; top: -1.5px; background: var(--weapon-color, var(--accent)); box-shadow: 0 0 7px var(--weapon-color, var(--accent)); }
 
 /* Hitmarker, vinheta de dano, luneta e banner */
-#hitmarker { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; opacity: 0; }
+#hitmarker { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; margin: 0; opacity: 0; transform: translate(-50%, -50%) scale(.72); transition: transform .08s ease-out, opacity .08s linear; will-change: transform, opacity; }
 #hitmarker::before, #hitmarker::after { content: ""; position: absolute; left: 12px; top: -2px; width: 2px; height: 30px; background: #fff; }
 #hitmarker::before { transform: rotate(45deg); } #hitmarker::after { transform: rotate(-45deg); }
 #hitmarker.head::before, #hitmarker.head::after { background: var(--accent); }
@@ -132,7 +133,7 @@ body.touch #touch { display: block; }
 #joyZone { position: absolute; left: 0; top: 0; width: 46%; height: 100%; touch-action: none; }
 #lookZone { position: absolute; right: 0; top: 0; width: 54%; height: 100%; touch-action: none; }
 #joyBase {
-  position: absolute; left: max(36px, env(safe-area-inset-left)); bottom: 36px; width: 124px; height: 124px; border-radius: 50%;
+  position: absolute; left: max(36px, env(safe-area-inset-left)); bottom: max(36px, calc(env(safe-area-inset-bottom) + 18px)); width: 124px; height: 124px; border-radius: 50%;
   border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.06); pointer-events: none; transition: opacity .15s;
 }
 #joyBase.idle { opacity: .55; }
@@ -149,21 +150,21 @@ body.touch #touch { display: block; }
 #bReload { right: calc(max(24px, env(safe-area-inset-right)) + 6px); bottom: 128px; width: 56px; height: 56px; }
 #bJump   { right: calc(max(24px, env(safe-area-inset-right)) + 72px); bottom: 124px; width: 56px; height: 56px; }
 #bDash   { right: calc(max(24px, env(safe-area-inset-right)) + 136px); bottom: 100px; width: 52px; height: 52px; }
-#bPause  { left: max(10px, env(safe-area-inset-left)); top: 82px; width: 38px; height: 38px; font-size: 14px; }
+#bPause  { left: max(10px, env(safe-area-inset-left)); top: max(82px, calc(env(safe-area-inset-top) + 16px)); width: 38px; height: 38px; font-size: 14px; }
 #rotateMsg { position: fixed; inset: 0; z-index: 40; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px; background: var(--bg); text-align: center; padding: 24px; color: var(--ui); letter-spacing: .12em; }
 #rotateMsg span { font-size: 54px; }
 @media (orientation: portrait) { body.touch #rotateMsg { display: flex; } }
 
-body.touch #health { left: max(10px, env(safe-area-inset-left)); top: 10px; bottom: auto; width: 150px; padding: 6px 10px; }
+body.touch #health { left: max(10px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); bottom: auto; width: 150px; padding: 6px 10px; }
 body.touch #hpTxt { font-size: 16px; margin-top: 2px; }
-body.touch #stats { right: max(10px, env(safe-area-inset-right)); top: 10px; min-width: 0; padding: 6px 10px; }
+body.touch #stats { right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); min-width: 0; padding: 6px 10px; }
 body.touch #score { font-size: 18px; }
 body.touch #stats .row { font-size: 11px; gap: 10px; margin-top: 2px; }
 body.touch #stats .row:last-child { display: none; }
-body.touch #weapon { left: 50%; right: auto; bottom: 10px; transform: translateX(-50%); min-width: 0; padding: 6px 14px; text-align: center; pointer-events: auto; touch-action: none; }
+body.touch #weapon { left: 50%; right: auto; bottom: max(10px, env(safe-area-inset-bottom)); transform: translateX(-50%); min-width: 0; padding: 6px 14px; text-align: center; pointer-events: auto; touch-action: none; }
 body.touch #wname { font-size: 12px; } body.touch #ammoLine { font-size: 26px; } body.touch #ammoLine small { font-size: 14px; }
-body.touch #slots { display: flex; top: 10px; bottom: auto; gap: 4px; padding: 5px; pointer-events: auto; touch-action: none; }
-body.touch .slot { width: 30px; padding: 5px 0; font-size: 0; }          /* só o número; o nome fica no painel da arma */
+body.touch #slots { display: flex; top: max(10px, env(safe-area-inset-top)); bottom: auto; gap: 4px; padding: 5px; max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px); pointer-events: auto; touch-action: pan-x; }
+body.touch .slot { flex: 0 0 30px; width: 30px; padding: 5px 0; font-size: 0; }          /* só o número; o nome fica no painel da arma */
 body.touch .slot b { font-size: 14px; }
 body.touch .slot.active { transform: none; }
 body.touch #banner { top: 24%; }
@@ -173,7 +174,7 @@ body.touch #banner { top: 24%; }
 #radar.off { display: none; }
 body.touch #radar { left: calc(max(10px, env(safe-area-inset-left)) + 48px); top: 82px; width: 78px; height: 78px; }   /* ao lado do botão de pausa */
 .settings label.touch-only { display: none; } body.touch .settings label.touch-only { display: grid; }
-#cluster { position: absolute; right: 0; bottom: 0; width: 300px; height: 210px; pointer-events: none; transform: scale(var(--ts, 1)); transform-origin: right bottom; }
+#cluster { position: absolute; right: env(safe-area-inset-right); bottom: max(0px, env(safe-area-inset-bottom)); width: 300px; height: 210px; pointer-events: none; transform: scale(var(--ts, 1)); transform-origin: right bottom; }
 #cluster .tbtn { pointer-events: auto; }
 body.touch:has(#overlay:not(.hidden)) :is(#touch, #crosshair, #hitmarker) { visibility: hidden; }   /* menu aberto: sem botões nem mira por trás */
 
@@ -207,7 +208,7 @@ body.touch:has(#perks:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar, 
 #combo div { width: 80px; height: 3px; margin: 4px auto 0; background: rgba(255,255,255,.15); border-radius: 2px; overflow: hidden; }
 #combo i { display: block; height: 100%; width: 0; background: var(--warn); }
 #feed { position: fixed; left: 20px; top: 196px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
-.feedItem { font-size: 12px; padding: 4px 10px; border-left: 2px solid var(--accent); background: rgba(11,13,18,.6); border-radius: 0 6px 6px 0; animation: feedIn .2s ease-out; transition: opacity .5s, transform .5s; }
+.feedItem { font-size: 12px; padding: 4px 10px; border-left: 2px solid var(--accent); background: rgba(11,13,18,.6); border-radius: 0 6px 6px 0; animation: feedIn .24s cubic-bezier(.18,.75,.25,1); transition: opacity .42s ease, transform .42s cubic-bezier(.2,.7,.25,1); }
 .feedItem.hot { border-color: var(--warn); color: var(--warn); }
 .feedItem.out { opacity: 0; transform: translateX(-12px); }
 @keyframes feedIn { from { opacity: 0; transform: translateX(-16px); } }
@@ -290,7 +291,9 @@ body.touch #bossBar { top: 52px; padding: 5px 10px 7px; } body.touch #bossName {
 #objectiveStatus { margin-top: 5px; min-height: 12px; color: var(--warn); font-size: 9px; letter-spacing: .1em; }
 body.touch #objectivePanel { top: 10px; left: 50%; width: min(260px, 42vw); padding: 7px 9px; }
 body.touch #bossBar { top: 70px; }
-.settings { max-height: min(38vh, 360px); overflow-y: auto; scrollbar-color: var(--cyan) transparent; }
+.settings { max-height: min(38vh, 360px); overflow-y: auto; scrollbar-color: var(--cyan) transparent; scrollbar-width: thin; }
+.settings::-webkit-scrollbar { width: 6px; }
+.settings::-webkit-scrollbar-thumb { background: rgba(77,231,255,.55); border-radius: 4px; }
 .settings label { color: #aab6cc; }
 .settings select { min-height: 30px; padding: 4px 7px; background: #0c1422; color: var(--ui); border: 1px solid rgba(77,231,255,.24); border-radius: 5px; font: inherit; font-size: 11px; }
 .settings select:focus-visible, .settings input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -322,7 +325,7 @@ body[data-skin="aurora"] { --accent: #72d8ff; --cyan: #a5ffe8; --warn: #d7a8ff; 
 @media (max-height: 600px) {
   #objectivePanel { top: 8px; padding: 6px 9px; }
   #objectiveHint { display: none; }
-  .settings { max-height: 34vh; }
+  .settings { max-height: 39vh; }
   .career-panel { max-height: 20vh; }
 }
 
@@ -358,6 +361,18 @@ body.touch #perfPanel pre { max-height: 28vh; overflow: auto; }
 .nexus-console-head { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0 8px; color: #4de7ff; font-size: 9px; letter-spacing: .12em; }.nexus-console-head b { color: #6f8490; font-size: 8px; font-weight: 400; }.nexus-main #incOptions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.nexus-main #incOptions .perk { min-height: 90px; width: auto; padding: 11px; border-radius: 0; border-color: rgba(77,231,255,.22); background: rgba(10,28,40,.8); font-family: inherit; font-size: 10px; }.nexus-main #incOptions .perk:hover, .nexus-main #incOptions .perk:focus-visible { transform: translateY(-2px); border-color: #4de7ff; box-shadow: 0 0 16px rgba(77,231,255,.15); }.nexus-main #incOptions .perk b { color: #ffc857; font-size: 11px; }.nexus-main #incOptions .perk.on { border-color: #ffc857; box-shadow: 0 0 0 1px #ffc857 inset, 0 0 18px rgba(255,200,87,.13); background: rgba(55,43,22,.65); }.nexus-log-wrap { margin-top: 12px; border: 1px solid rgba(77,231,255,.2); background: rgba(2,8,13,.8); }.nexus-log-title { display: flex; justify-content: space-between; padding: 7px 10px; border-bottom: 1px solid rgba(77,231,255,.16); color: #6f9bae; font-size: 8px; letter-spacing: .12em; }.nexus-log-title i { color: #3ddc84; font-style: normal; }.nexus-log-wrap pre { margin: 0; min-height: 41px; padding: 9px 10px; color: #7cf0c1; font: 10px/1.5 inherit; white-space: pre-wrap; }.nexus-disclaimer { margin: 9px 0; color: #55717d; font-size: 8px; }.perk-confirm { display: block; width: 100%; padding: 11px 20px; border: 1px solid rgba(255,200,87,.65); border-radius: 0; font: inherit; font-weight: 700; letter-spacing: .16em; color: #071017; background: linear-gradient(90deg, #ffc857, #4de7ff); cursor: pointer; }.perk-confirm:hover:not(:disabled), .perk-confirm:focus-visible { filter: brightness(1.15); box-shadow: 0 0 20px rgba(77,231,255,.25); outline: none; }.perk-confirm:disabled { opacity: .35; cursor: not-allowed; filter: saturate(.4); }
 @keyframes nexusPulse { 50% { opacity: .45; transform: scale(.7); } } @keyframes nexusScan { from { transform: translateY(0); } to { transform: translateY(520px); } }
 @media (max-width: 700px) { .nexus-layout { grid-template-columns: 1fr; min-height: auto; }.nexus-sidebar { display: none; }.nexus-topbar { padding: 0 10px; gap: 8px; }.nexus-brand span, .nexus-clock { display: none; }.nexus-status { font-size: 8px; }.nexus-main { padding: 16px 12px; }.nexus-main #incOptions { grid-template-columns: 1fr; }.nexus-main #incOptions .perk { min-height: 68px; }.nexus-network { height: 190px; }.nexus-console-head b { display: none; } }
+@media (max-height: 520px) {
+  #incTerm { align-items: flex-start; justify-content: flex-start; padding: 8px; }
+  .nexus-shell { min-height: 0; }
+  .nexus-layout { min-height: 0; grid-template-columns: 150px minmax(0,1fr); }
+  .nexus-sidebar { padding: 10px; }.nexus-node-card { margin: 8px 0 10px; padding: 8px; }
+  .nexus-side-list { margin-top: 8px; }.nexus-ascii { display: none; }
+  .nexus-main { padding: 10px 14px; }.nexus-main > p { min-height: 0; margin: 4px 0 8px; }
+  .nexus-network { height: clamp(95px, 24vh, 140px); }
+  .nexus-console-head { margin: 8px 0 6px; }.nexus-main #incOptions .perk { min-height: 62px; padding: 8px; }
+  .nexus-log-wrap { margin-top: 7px; }.nexus-disclaimer { margin: 5px 0; }.perk-confirm { padding: 8px 12px; }
+}
+@media (max-height: 420px) { .nexus-layout { grid-template-columns: 1fr; }.nexus-sidebar { display: none; }.nexus-network { height: clamp(80px, 21vh, 110px); }.nexus-main { padding: 8px 12px; }.nexus-main #incOptions { gap: 5px; }.nexus-main #incOptions .perk { min-height: 52px; } }
 @media (prefers-reduced-motion: reduce) { .nexus-brand i, .nexus-scanline { animation: none; }.nexus-shell::before { display: none; } }
 body.touch:has(#incTerm:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar, #bossBar, #combo, #feed) { visibility: hidden; }
 
@@ -376,7 +391,7 @@ body.touch:has(#incTerm:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar
 .deck-skins { display: flex; gap: 6px; }
 .deck-bar button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--dim); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
 .deck-skins button.on { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 30%, transparent); }
-.deck-out { flex: 1; min-height: 220px; max-height: 58vh; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.deck-out { flex: 1; min-height: clamp(110px, 32vh, 220px); max-height: 58vh; overflow-y: auto; padding: 12px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
 .deck-out .dim { color: var(--dim); } .deck-out .ok { color: var(--ok); } .deck-out .warn { color: var(--warn); } .deck-out .err { color: var(--err); } .deck-out .top, .deck-in label .top { color: var(--ac); }
 .deck-in { display: flex; align-items: flex-start; gap: 8px; padding: 8px 14px 12px; border-top: 1px solid color-mix(in srgb, var(--ac) 30%, transparent); font-size: 13px; }
 .deck-in label { white-space: pre; color: var(--ok); line-height: 1.5; }
@@ -400,3 +415,45 @@ body.touch:has(#incTerm:not(.hidden)) :is(#touch, #crosshair, #hitmarker, #radar
 .deck-chips i.ready { animation: chipPulse 1.6s ease-in-out infinite; }
 #deck .deck-laptop.glitch { animation: deckGlitch .32s steps(2, end); }
 @media (prefers-reduced-motion: reduce) { #deck:not(.hidden) .deck-laptop, .deck-chips i.ready, #deck .deck-laptop.glitch { animation: none; } }
+
+/* P36 — entrada do jogador e HUD */
+@keyframes spawnFade { 0% { opacity: 1; } 35% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes hudIn { from { opacity: 0; transform: translateY(14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+body::after { content: ""; position: fixed; inset: 0; background: #000; pointer-events: none; opacity: 0; z-index: 40; }
+body.spawn-in::after { animation: spawnFade 1.1s ease-out forwards; }
+body.spawn-in #hud, body.spawn-in #crosshair { animation: hudIn .7s .35s cubic-bezier(.2,.8,.2,1) both; }
+#hitmarker { transition: transform .12s cubic-bezier(.2,1.6,.4,1); }
+
+/* Motion accessibility: disable decorative hit-marker transitions when requested. */
+@media (prefers-reduced-motion: reduce) { #hitmarker { transition: none; } }
+
+/* Accessibility: respect the OS/browser reduced-motion preference across all UI effects. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* P35 animation pass: menu/scene overlay entrance, staggered without touching menu logic. */
+@keyframes overlayContentEnter {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+#overlay:not(.hidden) > * { animation: overlayContentEnter .32s cubic-bezier(.2,.72,.24,1) both; }
+#overlay:not(.hidden) > *:nth-child(2) { animation-delay: .045s; }
+#overlay:not(.hidden) > *:nth-child(3) { animation-delay: .09s; }
+#overlay:not(.hidden) > *:nth-child(4) { animation-delay: .135s; }
+#overlay:not(.hidden) > *:nth-child(5) { animation-delay: .18s; }
+/* Batch 10: reduced-motion hardening — removes stagger delays and residual transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
