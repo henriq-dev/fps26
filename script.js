@@ -778,12 +778,13 @@ function netDraw() {
   incCams.forEach(({ g }, i) => pts.push({ x: g.position.x, z: g.position.z, c: '#ff5a4d', l: `CAM-0${i + 1}` }));
   incTurrets.forEach((tr, i) => { if (!tr.st.dead) pts.push({ x: tr.c.x, z: tr.c.z, c: '#ff8a3d', l: `TORRETA-0${i + 1}` }); });
   const tg = incTarget(); pts.push({ x: tg.x, z: tg.z, c: incStage().exit ? '#3ddc84' : '#4de7ff', l: incStage().exit ? 'SAÍDA' : 'CONSOLE' });
-  const scanning = inc.scanT > 0;
+  const scanning = inc.scanT > 0, placed = [];       // placed: rótulos já desenhados (evita sobreposição)
   pts.forEach(p => {
     const dx = (p.x - px) * K, dz = (p.z - pz) * K, x = Math.max(12, Math.min(W - 12, cx + dx)), y = Math.max(12, Math.min(Hh - 12, cy + dz));
     c.strokeStyle = p.c; c.globalAlpha = .45; c.setLineDash([4, 5]); c.lineDashOffset = -t * 20; c.beginPath(); c.moveTo(cx, cy); c.lineTo(x, y); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
     c.fillStyle = p.c; c.beginPath(); c.arc(x, y, scanning ? 6 + Math.sin(t * 8) * 2 : 5, 0, 7); c.fill();
-    c.font = '11px monospace'; c.textAlign = 'center'; c.fillText(`${p.l} ${Math.round(Math.hypot(p.x - px, p.z - pz))}m`, x, y - 10);
+    let ly = y - 10; while (placed.some(q => Math.abs(q.y - ly) < 12 && Math.abs(q.x - x) < 90) && ly > 12) ly -= 13;   // sobe o rótulo até achar espaço livre
+    placed.push({ x, y: ly }); c.font = '11px monospace'; c.textAlign = 'center'; c.fillText(`${p.l} ${Math.round(Math.hypot(p.x - px, p.z - pz))}m`, x, ly);
   });
   c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, 6, 0, 7); c.fill(); c.font = 'bold 11px monospace'; c.fillText('VOCÊ', cx, cy + 20);
 }
@@ -2277,6 +2278,7 @@ function tryShoot() {
     const hits = ray.intersectObjects(targets, false);         // ordenados do mais perto ao mais longe
     const seen = new Set(); let end = null, stopped = false;
     for (const hit of hits) {
+      if (incDoors.length && Arena.segmentBlockedByDoors(incDoors, camera.position.x, camera.position.z, hit.point.x, hit.point.z)) break;   // porta fechada barra o tiro do jogador
       const ud = hit.object.userData;
         if (ud && ud.enemy) {
           if (ud.enemy.dead) continue;

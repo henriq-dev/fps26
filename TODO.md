@@ -298,3 +298,10 @@
 - [ ] Decisão: tiros do jogador atravessam portas fechadas?
 - [ ] Confirmar balanceamento chutado do deck
 - [ ] Andares/arena maior (após medir desempenho real: `?perf=1`)
+
+## Pacote 56 `[x]`
+- [x] Tiros do jogador barrados por porta fechada (decisão do Henriq: "n")
+- [x] Balanceamento do deck mantido (Henriq: "pode escolher")
+- [x] Sol listrado e rótulos do mapa sem sobreposição
+- [ ] Henriq: medir FPS real (`?perf=1` CSV + `chrome://gpu`)
+- [ ] Andares / arena maior — Henriq disse "sim"; precisa do FPS real e de um desenho (piso 2, rampas/escadas, colisão vertical, IA e pathfinding)

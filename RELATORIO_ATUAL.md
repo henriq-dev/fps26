@@ -1,7 +1,20 @@
-# Relatório atual — Arena FPS v8 · Pacote P55
+# Relatório atual — Arena FPS v8 · Pacote P56
 
 **Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 56 — Portas barram os tiros do jogador + detalhes visuais (22/11/2026)
+
+Decisão do Henriq: tiros do jogador **não** atravessam portas fechadas. Balanceamento do deck mantido como estava (confirmado por ele: "pode escolher").
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Sol do desktop com listras de verdade (`repeating-linear-gradient` em px) | CSS `mask` em camadas | Em % o período era maior que a máscara, então saía sólido. |
+| Médio | Rótulos do mapa de rede sobem até achar espaço livre (`placed`) | Detecção simples de colisão 2D | Torreta e câmera próximas deixavam o texto empilhado. |
+| Difícil | Raio do tiro do jogador para no primeiro acerto cuja trajetória cruza uma porta fechada | Reuso de `Arena.segmentBlockedByDoors` (o mesmo dos inimigos) | Regra única e simétrica; as portas abertas continuam deixando passar. |
+
+Testes: `bash test.sh` aprovado; Chromium: desktop mostra listras, mapa com rótulos separados, 0 erros JS.
+**Limites:** o rastro visual do tiro ainda vai até o alcance máximo (só o dano é barrado). Andares/arena maior **não** entraram: exigem física vertical e dependem do FPS real (ver TODO).
 
 ## Pacote 55 — Mescla P54 + P36 + P37 (22/11/2026)
 

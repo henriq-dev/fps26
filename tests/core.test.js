@@ -481,3 +481,8 @@ console.log('p36: interfaces do deck OK');
 assert.match(gameSource, /function updateDeckHands\(\)/); assert.match(gameSource, /holoPool/); assert.match(gameSource, /WebGLRenderTarget\(256, 160\)/);
 assert.match(gameSource, /let wantFov = /); assert.match(gameSource, /function cineStart\(\)/);
 console.log('p55: mãos, hologramas, drone PiP e cinemática OK');
+
+// ---- p56: tiros do jogador barrados por porta fechada, rótulos do mapa sem sobreposição, sol listrado ----
+assert.match(gameSource, /porta fechada barra o tiro do jogador/); assert.match(gameSource, /placed\.some\(/);
+assert.match(require('fs').readFileSync(require('path').join(__dirname, '..', 'style.css'), 'utf8'), /transparent 8px 12px/);
+console.log('p56: portas barram tiros do jogador e detalhes visuais OK');
