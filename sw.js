@@ -1,5 +1,5 @@
-const VERSION = 'P49';
-const CACHE_NAME = 'arena-fps-v8-p49';
+const VERSION = 'P50';
+const CACHE_NAME = 'arena-fps-v8-p50';
 const CORE = [
   './', './index.html', './style.css', './three.min.js', './script.js', './app.js',
   './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './deck.js',

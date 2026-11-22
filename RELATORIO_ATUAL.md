@@ -1,7 +1,15 @@
-# Relatório atual — Arena FPS v8 · Pacote P49
+# Relatório atual — Arena FPS v8 · Pacote P50
 
-**Base de integração:** P48 + camada de app instalável. **Última atualização:** pacote P49 em 22/11/2026.  
+**Base de integração:** P49 + mira, lobby e instalação. **Última atualização:** pacote P50 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 50 — Mira, primeira pessoa, lobby e instalação (22/11/2026)
+
+- **Mirar não tampa mais o inimigo:** ao mirar, a arma ia para o centro da tela e, com o FOV reduzido pelo zoom, ficava ampliada e cobria o alvo. Agora ela fica no canto inferior (metade do deslocamento lateral, levemente mais baixa) e a escala compensa o zoom.
+- **Primeira pessoa menor:** `VM_SCALE = 0.88` reduz arma e mãos em todo momento (ajuste num único número em `script.js`).
+- **Lobby:** ao fim da partida o botão passa a ser “VOLTAR AO LOBBY”; recomeçar exige ir ao lobby (modo, dificuldade, carreira) e clicar JOGAR.
+- **Instalação:** o botão “BAIXAR / INSTALAR APP” agora aparece sempre (fora do app instalado). Quando o navegador não libera o aviso nativo, mostra o passo a passo para iPhone, Android e computador. O manifest foi verificado no Chrome (`Page.getInstallabilityErrors` vazio).
+- Cache PWA: `arena-fps-v8-p50`.
 
 ## Pacote 49 — App instalável com download e aviso de atualização (22/11/2026)
 

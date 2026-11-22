@@ -6,21 +6,23 @@
   const installBtn = $('installBtn'), hint = $('installHint'), status = $('appStatus'), bar = $('updateBar'), updateBtn = $('updateBtn'), laterBtn = $('updateLater');
   const standalone = () => matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
   const setStatus = t => { if (status) status.textContent = t; };
-  let deferred = null;
+  let deferred = null, hintOpen = false;
 
   // --- Instalar / baixar o app ---
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const refreshInstallUi = () => {
     if (!installBtn) return;
     if (standalone()) { installBtn.classList.add('hidden'); hint && hint.classList.add('hidden'); setStatus('App instalado'); return; }
-    if (deferred) { installBtn.classList.remove('hidden'); hint && hint.classList.add('hidden'); }
-    else if (ios) { installBtn.classList.add('hidden'); if (hint) { hint.textContent = 'Para baixar no iPhone/iPad: toque em Compartilhar e depois em “Adicionar à Tela de Início”.'; hint.classList.remove('hidden'); } }
-    else installBtn.classList.add('hidden');
+    installBtn.classList.remove('hidden');            // P50: o botão sempre aparece; sem o aviso nativo, mostra o passo a passo do navegador
+    if (hint && (deferred || !hintOpen)) hint.classList.add('hidden');
   };
   addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; refreshInstallUi(); });
   addEventListener('appinstalled', () => { deferred = null; refreshInstallUi(); });
   if (installBtn) installBtn.addEventListener('click', async () => {
-    if (!deferred) return;
+    if (!deferred) {
+      if (hint) { hintOpen = true; hint.textContent = ios ? 'iPhone/iPad (Safari): toque em Compartilhar e depois em “Adicionar à Tela de Início”.' : /android/i.test(navigator.userAgent) ? 'Android (Chrome): menu ⋮ → “Instalar app” ou “Adicionar à tela inicial”.' : 'Computador (Chrome/Edge): clique no ícone de instalar na barra de endereço, ou menu ⋮ → “Transmitir, salvar e compartilhar” → “Instalar página como app”.'; hint.classList.remove('hidden'); }
+      return;
+    }
     deferred.prompt();
     try { await deferred.userChoice; } catch (_) {}
     deferred = null; refreshInstallUi();

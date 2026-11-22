@@ -449,3 +449,8 @@ assert.match(gameSource, /cachedSkyline = null; cachedIndustrialDressing = null;
   console.log('p49: app instalavel e aviso de atualizacao OK'); }
 assert.match(gameSource, /const fitInstanced = m =>/);
 assert.ok(!/\w\.computeBoundingSphere\(\)/.test(gameSource.replace(/typeof m\.computeBoundingSphere[^;]*;/, '')), 'P49: nao chamar computeBoundingSphere direto (r128 nao tem)');
+assert.match(gameSource, /const VM_SCALE = 0\.88/);
+assert.match(gameSource, /HOLD_BASE\.x \* \(1 - adsT \* 0\.5\)/);
+assert.match(gameSource, /showOverlay\('lobby'\)/);
+assert.match(gameSource, /VOLTAR AO LOBBY/);
+assert.match(require('fs').readFileSync(require('path').join(__dirname,'..','app.js'),'utf8'), /sempre aparece/);

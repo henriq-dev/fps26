@@ -1309,6 +1309,7 @@ const gunSetup = [[-.405,.22],[-1.08,.26],[-1.19,.28],[-1.04,.4],[-1.30,.3],[-.8
 const guns = WEAPONS.map((_,i)=>buildGun(i,...(gunSetup[i]||[-1,.3])));
 const holder = new THREE.Group();            // grupo que recebe balanço, recuo e animações
 const HOLD_BASE = new THREE.Vector3(0.26, -0.24, -0.5);
+const VM_SCALE = 0.88;   // P50: escala da arma/mãos na primeira pessoa (menor = mais campo de visão livre)
 guns.forEach(g => holder.add(g));
 const handPairs=guns.map((_,i)=>buildHandPair(i));handPairs.forEach((h,i)=>{h.visible=i===0;holder.add(h);});
 camera.add(holder);
@@ -2591,8 +2592,8 @@ function update(dt) {
   if (lastVy < -3 && Math.abs(vy) < 0.5 && py <= EYE + 0.02) landDip = Math.min(0.06, -lastVy * 0.006);
   lastVy = vy; landDip *= Math.exp(-9 * dt);
   holder.position.set(
-    HOLD_BASE.x * (1 - adsT * 0.92) + Math.sin(bobT) * 0.008 * moveRatio * (1 - adsT),   // vai para o centro ao mirar
-    HOLD_BASE.y + adsT * 0.07 + Math.abs(Math.cos(bobT)) * 0.01 * moveRatio * (1 - adsT) + Math.sin(bobT*.45)*.004*idle - rp * 0.2,
+    HOLD_BASE.x * (1 - adsT * 0.5) + Math.sin(bobT) * 0.008 * moveRatio * (1 - adsT),   // P50: ao mirar a arma fica no canto inferior (antes ia ao centro e tampava o inimigo)
+    HOLD_BASE.y - adsT * 0.03 + Math.abs(Math.cos(bobT)) * 0.01 * moveRatio * (1 - adsT) + Math.sin(bobT*.45)*.004*idle - rp * 0.2,
     HOLD_BASE.z + kick * 0.6 + viewKick
   );
   holder.position.x += swayX * 0.35; holder.position.y += swayY * 0.3 - landDip;
@@ -2603,6 +2604,7 @@ function update(dt) {
   const sp = sprintT * (1 - adsT), ease = sp * sp * (3 - 2 * sp);
   holder.position.x += ease * 0.05; holder.position.y -= ease * 0.05 + crouchT * 0.012; holder.rotation.y += ease * 0.55; holder.rotation.x -= ease * 0.18;
   holder.position.y += Math.sin(bobT * 2) * 0.012 * ease;
+  { const zm = (WEAPONS[curW] && WEAPONS[curW].zoom) || 1, k = (1 + (1 / zm - 1) * adsT * 0.9) * VM_SCALE; holder.scale.setScalar(k); holder.position.x *= k; holder.position.y *= k; }   // P50: cancela a ampliação do FOV reduzido, senão a arma enche a tela ao mirar
   // Inspeção (tecla V): gira a arma, mostra a lateral e volta
   if (inspectT > 0) {
     if (reloading || mouseHeld || scoped || sprintT > 0.5) inspectT = 0;
@@ -3175,19 +3177,22 @@ function showOverlay(mode, keepHidden = false) {
   if (mode === 'menu') {
     el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
     if (perfMode) { el.text.innerHTML += '<br><b>DIAGNÓSTICO P19:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
+  } else if (mode === 'lobby') {
+    el.title.innerHTML = 'LOBBY'; el.text.innerHTML = helpText(); el.btn.textContent = 'JOGAR';   // P50: depois do fim de partida, recomeçar passa pelo lobby (modo, dificuldade, carreira)
   } else if (mode === 'pause') {
     el.title.innerHTML = 'PAUSADO'; el.text.innerHTML = helpText() + (perkSummary() ? `\n<b>Upgrades:</b> ${perkSummary()}` : ''); el.btn.textContent = 'CONTINUAR';
   } else {
     el.title.innerHTML = incVictory ? 'MISSÃO <span>CUMPRIDA</span>' : 'GAME <span>OVER</span>';
     el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão · ' + incData().name : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
-    el.btn.textContent = 'JOGAR NOVAMENTE';
+    el.btn.textContent = 'VOLTAR AO LOBBY';
   }
   el.btn.dataset.mode = mode;
   refreshCareerUI();
 }
 el.btn.addEventListener('click', () => {
   audio.init();                                   // áudio só pode iniciar após um clique
-  if (!started || el.btn.dataset.mode === 'over') {
+  if (el.btn.dataset.mode === 'over') { showOverlay('lobby'); return; }
+  if (!started || el.btn.dataset.mode === 'lobby') {
     started = true;
     if (perfMode) { $('modeSelect').value = 'survival'; $('difficultySelect').value = 'normal'; }
     resetGame(); if (perfMode) startPerfScenario();
@@ -3302,7 +3307,7 @@ showOverlay('menu');
 loadPrefs(); applyPrefs();                          // restaura ajustes salvos (modo, dificuldade, controles e qualidade)
 applySkin(); if (!perfMode) career.beginDay(); refreshCareerUI(); syncRunSelection();
 applyControlMode();                                 // detecta celular (pointer: coarse) e ajusta HUD e ajuda
-if (urlParams.get('test') === '1') window.__arenaTest = { loadMap, setQuality: q => { prefEls.quality.value = q; applyPrefs(); }, frame: () => { renderer.info.reset(); renderer.render(scene, camera); return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, objs: mapMeshes.length }; } };   // P49: gancho só para tests/e2e-smoke.py
+if (urlParams.get('test') === '1') window.__arenaTest = { loadMap, setAds: on => { locked = true; scoped = on && WEAPONS[curW].zoom > 1; }, start: () => { started = true; resetGame(); locked = true; el.overlay.classList.add('hidden'); }, select: i => selectWeapon(i), setQuality: q => { prefEls.quality.value = q; applyPrefs(); }, frame: () => { renderer.info.reset(); renderer.render(scene, camera); return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, objs: mapMeshes.length }; } };   // P49: gancho só para tests/e2e-smoke.py
 requestAnimationFrame(loop);
 
 })();
