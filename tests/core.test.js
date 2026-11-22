@@ -463,3 +463,21 @@ assert.match(require('fs').readFileSync(require('path').join(__dirname,'..','app
   assert.match(idx, /id="downloadBtn"/); assert.match(app, /buildSingleFile/); assert.match(app, /a\.download = 'arena-fps\.html'/);
   console.log('p52: download em arquivo unico OK'); }
 assert.match(require('fs').readFileSync(require('path').join(__dirname, '..', 'sw.js'), 'utf8'), /new Request\(url, \{ cache: 'reload' \}\)/);
+
+// ---- p36: arquivos, avisos, login ----
+{
+  assert.ok(A.DECK_FILES.length >= 4 && A.DECK_FILES.every(f => f.name && typeof f.content === 'function'), 'arquivos fictícios');
+  assert.ok(A.deckFile('briefing.txt', { status: { mission: 'REDE', stage: 2 } })[0].t.includes('REDE'), 'briefing usa a missão');
+  assert.equal(A.deckFile('inexistente.txt'), null);
+  const run = (l, c = {}) => A.deckRun(l, { skin: 'kali', ...c });
+  assert.ok(run('ls').lines[0].t.includes('briefing.txt'), 'ls lista os arquivos'); assert.ok(run('cat briefing.txt').lines.length >= 3, 'cat lê arquivo');
+  assert.equal(run('cat xxx').lines[0].k, 'err');
+  assert.equal(run('avisos').lines[0].t, 'nenhum aviso ainda.'); assert.ok(run('avisos', { notes: [{ t: 'teste', k: 'warn', at: '00:05' }] }).lines[0].t.includes('[T+00:05] teste'));
+  assert.ok(A.deckBoot('kali').some(t => t.startsWith('login:')) && A.deckBoot('arch').some(t => t.startsWith('Password:')), 'login no boot');
+}
+console.log('p36: interfaces do deck OK');
+
+// ---- p55 (mescla p54 + p36 + p37): mãos, hologramas, drone com câmera própria e cinemática ----
+assert.match(gameSource, /function updateDeckHands\(\)/); assert.match(gameSource, /holoPool/); assert.match(gameSource, /WebGLRenderTarget\(256, 160\)/);
+assert.match(gameSource, /let wantFov = /); assert.match(gameSource, /function cineStart\(\)/);
+console.log('p55: mãos, hologramas, drone PiP e cinemática OK');

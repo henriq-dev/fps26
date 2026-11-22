@@ -292,3 +292,9 @@
 ## Pacote 35
 - [x] Telas dos computadores com terminal e mascote original.
 - [ ] Ideias de interface: janela de arquivos fictícia, mapa da rede em janela, notificações do sistema, relógio de missão.
+
+## Pacote 55 — Mescla P54 + P36 + P37 `[x]`
+- [x] Mesclar P36/P37 sobre o P54; mãos, hologramas, drone PiP, cinemática
+- [ ] Decisão: tiros do jogador atravessam portas fechadas?
+- [ ] Confirmar balanceamento chutado do deck
+- [ ] Andares/arena maior (após medir desempenho real: `?perf=1`)

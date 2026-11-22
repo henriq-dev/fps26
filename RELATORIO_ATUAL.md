@@ -1,7 +1,24 @@
-# Relatório atual — Arena FPS v8 · Pacote P54
+# Relatório atual — Arena FPS v8 · Pacote P55
 
 **Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 55 — Mescla P54 + P36 + P37 (22/11/2026)
+
+**Mescla:** base = seu P54 (lobby, BAIXAR/INSTALAR, 10 armas, cache do SW). Entrou por mesclagem de três vias tudo o que a minha linha tinha de P35→P37. Três conflitos resolvidos à mão (FOV da cinemática com sprint/dash do P54; monitores do P38 mantidos + pacotes de dados; testes mantidos dos dois lados).
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cache `v8-p55`, título e versão do lobby | Versionamento de PWA | Força atualização do service worker. |
+| Fácil | Login no boot, janela de arquivos, mapa de rede, notificações, relógio/taskbar, desktop (P36) | DOM + Canvas 2D | Deck vira um mini desktop fictício. |
+| Fácil | Flash na borda ao fim do scan, chuva de código no shell, linha tracejada laptop→console, pacotes de dados no NEXUS (P36) | CSS `animation`, Canvas, `setInterval` | Efeitos baratos, respeitam `prefers-reduced-motion`. |
+| Médio | Mãos do personagem no laptop: balançam devagar parado e rápido ao digitar (`deckLastKey`) | Animação por tempo + estado de entrada | Poucas caixas, sem material novo. |
+| Médio | Cinemática ao vencer um console: barras de cinema + zoom de FOV por 1,5 s | `Math.sin` como curva, tempo real (`performance.now`) | Em tempo real para não travar em quadros lentos; pulada com movimento reduzido. |
+| Difícil | Hologramas: contornos (`EdgesGeometry`) de inimigos, torretas, câmeras e console, vistos através das paredes durante o scan | Pool de 16 objetos pré-criados, `depthTest:false`, `renderOrder` | Zero alocação em jogo e sem luz dinâmica. |
+| Difícil | Drone 3D atrás do jogador com câmera própria numa janelinha (PiP) | `WebGLRenderTarget` 256×160, render a cada 3 quadros, esconder PiP/arma/laptop durante o render | Evita feedback do próprio PiP e custo extra constante e baixo. |
+
+Testes: `bash test.sh` aprovado; Chromium (SwiftShader): scan → 6 hologramas, drone + PiP visíveis, cinemática liga e desliga, 0 erros JS. Armas, dano, IA, colisão, balanceamento: intocados.
+**Limites:** FPS real não medido (SwiftShader); valores de balanceamento do deck (scan 8 s/20 s, jam 12 s/40 s, connect +50%) seguem como chute para você confirmar.
 
 ## Pacote 54 — Diagnóstico de instalação (22/11/2026)
 

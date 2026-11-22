@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi · P54</title>
+<title>Arena FPS — Industrial Sci-Fi · P55</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -76,6 +76,9 @@
   <button class="tbtn" id="bPause" type="button" aria-label="Pausar">II</button>
 </div>
 <div id="rotateMsg"><span>⟳</span>GIRE O CELULAR<br>PARA O MODO HORIZONTAL</div>
+<div id="cineTop" class="cine" aria-hidden="true"></div><div id="cineBot" class="cine" aria-hidden="true"></div>
+<div id="sysNotes" aria-live="polite"></div>
+<div id="scanFlash" aria-hidden="true"></div>
 <button id="deckBtn" class="hidden" type="button" aria-label="Abrir o cyberdeck (tecla T)">⌨ DECK [T]</button>
 <div id="deck" class="hidden deck-kali" role="dialog" aria-label="Cyberdeck (simulação, sem rede real)">
   <div class="deck-laptop">
@@ -83,8 +86,37 @@
       <div class="deck-chips" aria-live="off"><i id="deckChipScan">SCAN</i><i id="deckChipJam">JAM</i></div>
       <div class="deck-skins" role="group" aria-label="Visual do shell"><button type="button" data-skin="kali">KALI</button><button type="button" data-skin="arch">ARCH</button></div>
       <button id="deckClose" type="button" aria-label="Fechar o deck">✕</button></header>
-    <div id="deckOut" class="deck-out" role="log" aria-live="polite"></div>
-    <form id="deckForm" class="deck-in" autocomplete="off"><label id="deckPrompt" for="deckInput"></label><input id="deckInput" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Comando"></form>
+    <div class="deck-panes">
+      <section id="paneShell" class="deck-pane on" aria-label="Shell">
+        <canvas id="deckRain" aria-hidden="true"></canvas>
+        <div id="deckOut" class="deck-out" role="log" aria-live="polite"></div>
+        <form id="deckForm" class="deck-in" autocomplete="off"><label id="deckPrompt" for="deckInput"></label><input id="deckInput" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Comando"></form>
+      </section>
+      <section id="paneFiles" class="deck-pane" aria-label="Arquivos (fictícios)">
+        <div class="files-wrap"><ul id="filesList" class="files-list"></ul><pre id="filesView" class="files-view">Escolha um arquivo.</pre></div>
+      </section>
+      <section id="paneNet" class="deck-pane" aria-label="Mapa da rede">
+        <canvas id="deckNet" width="640" height="320"></canvas>
+      </section>
+      <section id="paneDesk" class="deck-pane" aria-label="Área de trabalho">
+        <div class="desk-sun" aria-hidden="true"></div>
+        <div class="desk-icons">
+          <button type="button" data-pane="paneShell"><i>▮_</i>Terminal</button>
+          <button type="button" data-pane="paneFiles"><i>▤</i>Arquivos</button>
+          <button type="button" data-pane="paneNet"><i>◎</i>Rede</button>
+        </div>
+      </section>
+    </div>
+    <footer class="deck-task">
+      <div class="deck-tabs" role="tablist">
+        <button type="button" data-pane="paneDesk" title="Área de trabalho">▣</button>
+        <button type="button" data-pane="paneShell" class="on">TERMINAL</button>
+        <button type="button" data-pane="paneFiles">ARQUIVOS</button>
+        <button type="button" data-pane="paneNet">REDE</button>
+      </div>
+      <span id="deckClock" class="deck-clock">T+00:00</span>
+      <button id="deckBell" type="button" class="deck-bell" aria-label="Avisos do sistema">🔔 <b id="deckBellN">0</b></button>
+    </footer>
   </div>
 </div>
 <div id="incTerm" class="hidden" role="dialog" aria-label="Terminal NEXUS de invasão (cenográfico)">

@@ -542,3 +542,41 @@ body:has(#overlay:not(.hidden)[data-view="over"]) :is(#hud, #crosshair, #hitmark
 }
 
 #installHint { white-space: pre-line; text-align: left; padding: 8px 10px; border: 1px solid rgba(255,200,87,.35); border-radius: 8px; background: rgba(255,200,87,.06); color: var(--ui); opacity: .95; }
+/* ===== P36: desktop do deck (painéis, barra de tarefas, notificações, flash, chuva de código) ===== */
+.deck-panes { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.deck-pane { display: none; flex: 1; min-height: 240px; max-height: 58vh; position: relative; flex-direction: column; overflow: hidden; }
+.deck-pane.on { display: flex; }
+#deckRain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .16; pointer-events: none; }
+#paneShell .deck-out, #paneShell .deck-in { position: relative; }
+.files-wrap { display: grid; grid-template-columns: 190px 1fr; flex: 1; min-height: 0; }
+.files-list { list-style: none; margin: 0; padding: 8px; border-right: 1px solid color-mix(in srgb, var(--ac) 30%, transparent); overflow-y: auto; }
+.files-list li button { width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--fg); background: transparent; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.files-list li button:hover, .files-list li button.on { background: color-mix(in srgb, var(--ac) 25%, transparent); }
+.files-view { margin: 0; padding: 12px 14px; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--fg); white-space: pre-wrap; overflow-y: auto; }
+#deckNet { width: 100%; height: 100%; display: block; background: color-mix(in srgb, var(--bg) 85%, #000); }
+#paneDesk { background: linear-gradient(180deg, #14072e 0%, #3b1559 55%, #c2307a 100%); align-items: center; justify-content: center; }
+.desk-sun { position: absolute; left: 50%; top: 30%; width: 38%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: linear-gradient(180deg, #ffd166, #ff3d8b); -webkit-mask: repeating-linear-gradient(180deg, #000 0 60%, transparent 60% 66%) bottom/100% 55% no-repeat, linear-gradient(#000 0 0) top/100% 45% no-repeat; mask: linear-gradient(#000 0 0) top/100% 45% no-repeat, repeating-linear-gradient(180deg, #000 0 60%, transparent 60% 66%) bottom/100% 55% no-repeat; opacity: .9; }
+.desk-icons { position: relative; display: flex; gap: 22px; margin-top: 30%; }
+.desk-icons button { width: 84px; display: grid; gap: 6px; justify-items: center; font: 600 12px ui-monospace, monospace; color: #fff; background: rgba(0,0,0,.28); border: 1px solid rgba(255,255,255,.25); border-radius: 12px; padding: 12px 6px; cursor: pointer; }
+.desk-icons button:hover { background: rgba(255,255,255,.16); }
+.desk-icons i { font-style: normal; font-size: 24px; }
+.deck-task { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: color-mix(in srgb, var(--ac) 14%, #000); border-top: 1px solid color-mix(in srgb, var(--ac) 35%, transparent); font-size: 12px; }
+.deck-tabs { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+.deck-task button { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--dim); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.deck-tabs button.on { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 30%, transparent); }
+.deck-clock { color: var(--dim); font-variant-numeric: tabular-nums; }
+.deck-bell b { font-weight: 700; color: var(--warn); }
+#sysNotes { position: fixed; top: 168px; left: 14px; z-index: 7; width: min(280px, 70vw); display: grid; gap: 6px; pointer-events: none; font: 600 12px ui-monospace, Menlo, Consolas, monospace; }
+#sysNotes .note { padding: 8px 10px; border-radius: 8px; background: rgba(8,16,28,.86); border-left: 3px solid #4de7ff; color: #d7e9ff; animation: noteIn .25s ease-out; }
+#sysNotes .note.warn { border-left-color: #ffc857; } #sysNotes .note.ok { border-left-color: #4be08a; }
+@keyframes noteIn { from { transform: translateX(-16px); opacity: 0; } to { transform: none; opacity: 1; } }
+#scanFlash { position: fixed; inset: 0; z-index: 5; pointer-events: none; opacity: 0; box-shadow: inset 0 0 90px 24px rgba(77,231,255,.55); }
+#scanFlash.go { animation: scanFlash .6s ease-out; } #scanFlash.end { box-shadow: inset 0 0 70px 16px rgba(255,200,87,.45); animation: scanFlash .5s ease-out; }
+@keyframes scanFlash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { #sysNotes .note, #scanFlash.go, #scanFlash.end { animation: none; } #deckRain { display: none; } }
+@media (max-width: 560px) { .files-wrap { grid-template-columns: 1fr; } .files-list { border-right: 0; border-bottom: 1px solid var(--dim); max-height: 90px; } }
+
+/* P37: barras de cinema na cinemática de acesso */
+.cine { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 8; pointer-events: none; transition: height .35s ease-out; }
+#cineTop { top: 0; } #cineBot { bottom: 0; } .cine.on { height: 9vh; }
+@media (prefers-reduced-motion: reduce) { .cine { transition: none; } }

@@ -20,6 +20,15 @@ Arena.DECK_SKINS = {
 // Ferramentas reais que o jogo NÃO executa (só avisa). Mantém o deck seguro e cenográfico.
 const REAL_TOOLS = ['hydra', 'msfconsole', 'sqlmap', 'aircrack-ng', 'john', 'hashcat', 'ssh', 'ping', 'curl', 'wget', 'nc', 'netcat', 'metasploit', 'burpsuite', 'wireshark', 'ettercap'];
 const o = (t, k = 'out') => ({ t, k });
+// Sistema de arquivos FICTÍCIO do deck (nada é lido do computador do jogador). content(ctx) devolve as linhas do arquivo.
+Arena.DECK_FILES = [
+  { name: 'briefing.txt', content: c => [`MISSÃO: ${(c.status && c.status.mission) || 'INCURSÃO'} (setor ${(c.status && c.status.stage) || 1}/4)`, 'Objetivo: invadir os consoles na ordem e escapar.', 'Câmeras e torretas vigiam os corredores.', 'Use scan para ver os alvos e jam para silenciar a vigilância.'] },
+  { name: 'notas.txt', content: () => ['dica: "scan" marca inimigos, câmeras e torretas; "jam" silencia câmeras e torretas. Ambos têm recarga.', 'dica: "connect" perto do console adianta 50% da barra de E.'] },
+  { name: 'mapa.txt', content: () => ['Blocos conectados por portas. Portas fechadas barram tiros.', 'Consoles ficam nas paredes dos fundos; a saída fica perto do ponto de partida.'] },
+  { name: 'scan.log', content: c => [`último scan: ${(c.scanCd || 0) > 0 ? 'há pouco (em resfriamento)' : 'nenhum recente'}`, 'faixa de rede fictícia: 192.0.2.0/24'] },
+  { name: 'jammer.sh', content: () => ['#!/bin/sh', '# (fictício) interferência local — use o comando "jam" no deck'] }
+];
+Arena.deckFile = (name, ctx = {}) => { const f = Arena.DECK_FILES.find(x => x.name === name); return f ? f.content(ctx).map(t => ({ t, k: 'out' })) : null; };
 
 // ctx = { skin, scanCd, jamCd, targets: [{ label, dist }] }  →  { lines: [{t,k}], fx: { scan?, jam?, skin?, clear?, exit? } }
 Arena.deckRun = (line, ctx = {}) => {
@@ -38,7 +47,7 @@ Arena.deckRun = (line, ctx = {}) => {
       o('  connect   (perto do console) prepara a invasão: adianta 50% da barra de E'),
       o('  theme     troca o visual: theme kali | theme arch'),
       o('  neofetch  mostra o sistema do deck   ·   uname, whoami, ls, cat notas.txt'),
-      o('  status    mostra recargas, câmeras, alarme   ·   date, uptime, ip a, history'),
+      o('  status    mostra recargas, câmeras, alarme   ·   avisos, date, uptime, ip a, history'),
       o('  Tab completa o comando   ·   ↑/↓ histórico   ·   clear limpa   ·   exit (ou Esc) fecha'));
   } else if (cmd === 'clear' || cmd === 'cls') { fx.clear = true; }
   else if (cmd === 'exit' || cmd === 'quit') { fx.exit = true; }
@@ -68,8 +77,9 @@ Arena.deckRun = (line, ctx = {}) => {
   else if (cmd === 'motd') L.push(...Arena.deckBoot(skin.id).slice(-2).map(t => o(t, 'dim')));
   else if (cmd === 'pwd') L.push(o('/home/operador'));
   else if (cmd === 'uname') L.push(o(args[0] === '-a' ? `Linux deck ${skin.kernel} #1 SMP PREEMPT (simulado) x86_64 GNU/Linux` : 'Linux'));
-  else if (cmd === 'ls') L.push(o('notas.txt  scan.log  jammer.sh', 'dim'));
-  else if (cmd === 'cat') L.push(args[0] === 'notas.txt' ? o('dica: "scan" marca inimigos, câmeras e torretas; "jam" silencia câmeras e torretas. Ambos têm recarga.', 'ok') : o(`cat: ${args[0] || ''}: arquivo não encontrado`, 'err'));
+  else if (cmd === 'ls') L.push(o(Arena.DECK_FILES.map(f => f.name).join('  '), 'dim'));
+  else if (cmd === 'cat') { const f = Arena.deckFile(args[0] || '', ctx); if (f) L.push(...f); else L.push(o(`cat: ${args[0] || ''}: arquivo não encontrado`, 'err')); }
+  else if (cmd === 'avisos' || cmd === 'notify') { const n = (ctx.notes || []).slice(-8); if (!n.length) L.push(o('nenhum aviso ainda.', 'dim')); else n.forEach(x => L.push(o(`[T+${x.at}] ${x.t}`, x.k === 'warn' ? 'warn' : 'out'))); }
   else if (cmd === 'neofetch' || cmd === 'fastfetch') L.push(o(`operador@deck`), o('-------------'), o(`OS:      ${skin.os}`), o(`Kernel:  ${skin.kernel}`), o(`Shell:   ${skin.shell}`), o('Máquina: CYBERDECK CX-7 (fictício)'), o('Rede:    NENHUMA (modo offline)'));
   else if (cmd === 'theme' || cmd === 'skin') {
     const id = (args[0] || '').toLowerCase();
@@ -96,7 +106,7 @@ Arena.deckRun = (line, ctx = {}) => {
 };
 
 // Lista de comandos (para o autocompletar com Tab)
-Arena.DECK_COMMANDS = ['help', 'scan', 'nmap', 'jam', 'connect', 'status', 'theme', 'neofetch', 'uname', 'whoami', 'id', 'pwd', 'ls', 'cat', 'date', 'uptime', 'ip', 'echo', 'history', 'motd', 'clear', 'exit'];
+Arena.DECK_COMMANDS = ['help', 'scan', 'nmap', 'jam', 'connect', 'status', 'theme', 'neofetch', 'uname', 'whoami', 'id', 'pwd', 'ls', 'cat', 'avisos', 'date', 'uptime', 'ip', 'echo', 'history', 'motd', 'clear', 'exit'];
 // Tab: completa o 1º termo (ou o argumento de "theme"). Devolve { line, options } — options só quando há mais de uma opção.
 Arena.deckComplete = (line) => {
   const m = /^(\s*)(\S*)$/.exec(line), t = /^(\s*theme\s+)(\S*)$/i.exec(line);
@@ -113,6 +123,6 @@ Arena.deckComplete = (line) => {
 };
 // Sequência de "boot" por skin (texto fictício)
 Arena.deckBoot = (id) => id === 'arch'
-  ? ['CYBERDECK CX-7 · firmware 3.1 (fictício)', 'Montando /dev/deck0 ........ [ OK ]', 'Carregando módulos de rádio local ... [ OK ]', 'Iniciando bash 5.x (simulado) ........ [ OK ]', 'Arch Linux (simulado) — digite "help"']
-  : ['CYBERDECK CX-7 · firmware 3.1 (fictício)', 'Verificando integridade .......... [ OK ]', 'Carregando ferramentas de varredura (cenográficas) [ OK ]', 'Iniciando zsh 5.x (simulado) ....... [ OK ]', 'Kali GNU/Linux (simulado) — digite "help"'];
+  ? ['CYBERDECK CX-7 · firmware 3.1 (fictício)', 'Montando /dev/deck0 ........ [ OK ]', 'Carregando módulos de rádio local ... [ OK ]', 'Iniciando bash 5.x (simulado) ........ [ OK ]', 'login: operador', 'Password: ********', 'Arch Linux (simulado) — digite "help"']
+  : ['CYBERDECK CX-7 · firmware 3.1 (fictício)', 'Verificando integridade .......... [ OK ]', 'Carregando ferramentas de varredura (cenográficas) [ OK ]', 'Iniciando zsh 5.x (simulado) ....... [ OK ]', 'login: operador', 'Password: ********', 'Kali GNU/Linux (simulado) — digite "help"'];
 })();

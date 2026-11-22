@@ -545,7 +545,7 @@ function startIncursion() {
   enterIncStage(0);
 }
 function enterIncStage(i) {
-  const prevWave = wave; inc.stage = i; inc.hold = 0; inc.spawned = 0; inc.spawnT = 2.2; wave = 2 + 2 * i;
+  const prevWave = wave; inc.stage = i; inc.hold = 0; inc.spawned = 0; inc.spawnT = 2.2; wave = 2 + 2 * i; if (i > 0) sysNote(`Setor ${i + 1}/4 · ${incStage().title}`, 'ok');
   if (i > 0) { health = Math.min(maxHealth, health + 30); ammoState.forEach((s, k) => { s.reserve += Math.ceil(WEAPONS[k].reserve * 0.3); }); addFeed('SETOR LIMPO · +30 VIDA · MUNIÇÃO', false); }
   WEAPONS.forEach((w, k) => { const u = w.unlock || 1; if (u > prevWave && u <= wave) addFeed(`NOVA ARMA: ${w.name.toUpperCase()} [${k + 1}]`, false); });
   const st = incStage(), t = incTarget();
@@ -575,7 +575,7 @@ function updateIncursionHud() {
 // P25: marcadores do drone. Canvas 2D por cima da cena; só desenha com o drone ativo (custo zero fora disso)
 const droneEl = $('droneOverlay'), dctx = droneEl.getContext('2d'); let droneDrawn = false; let markT0 = 0; const _dv = new THREE.Vector3();
 function drawDroneMarks() {
-  const on = !!(inc && !inc.done && (inc.droneT > 0 || inc.scanT > 0)); if (!on) markT0 = 0;       // drone (F) ou scan do deck (T)
+  const on = !!(inc && !inc.done && (inc.droneT > 0 || inc.scanT > 0 || inc.linkT > 0)); if (!on) markT0 = 0;       // drone (F) ou scan do deck (T)
   if (!on && !droneDrawn) return;
   const W = innerWidth, Hh = innerHeight, nowMs = performance.now(); if (!markT0) markT0 = nowMs; const age = (nowMs - markT0) / 1000;      // idade dos marcadores: eles "travam" no alvo
   if (droneEl.width !== W || droneEl.height !== Hh) { droneEl.width = W; droneEl.height = Hh; }
@@ -594,6 +594,11 @@ function drawDroneMarks() {
   const t = incTarget(); mark(t.x, t.z, 1.4, incStage().exit ? '#3ddc84' : '#4de7ff', incStage().exit ? 'SAÍDA' : 'CONSOLE', true);
   for (const t of incTurrets) if (!t.st.dead) mark(t.c.x, t.c.z, 1.2, '#ff8a3d', 'TORRETA', false);
   for (const { g } of incCams) mark(g.position.x, g.position.z, g.position.y, '#ff5a4d', 'CÂM', false);
+  if (inc.linkT > 0) {                                                  // connect: linha tracejada ligando o laptop (base da tela) ao console
+    const tg = incTarget(); _dv.set(tg.x, 1.3, tg.z).project(camera); const pos = Arena.droneScreenPos(_dv.x, _dv.y, _dv.z, W, Hh);
+    if (pos) { dctx.globalAlpha = Math.min(1, inc.linkT); dctx.strokeStyle = '#4de7ff'; dctx.lineWidth = 2; dctx.setLineDash([10, 8]); dctx.lineDashOffset = -nowMs / 25;
+      dctx.beginPath(); dctx.moveTo(W / 2, Hh - 24); dctx.quadraticCurveTo(W / 2, (Hh + pos.y) / 2, pos.x, pos.y); dctx.stroke(); dctx.setLineDash([]); }
+  }
   dctx.globalAlpha = 1;
 }
 // ---- P30: CYBERDECK (laptop com shell Kali/Arch). Tudo simulado: a lógica está em deck.js ----
@@ -602,7 +607,7 @@ let scanWave = null; const scanRing = new THREE.Mesh(new THREE.RingGeometry(0.97
 scanRing.rotation.x = -Math.PI / 2; scanRing.position.y = 0.07; scanRing.visible = false; scene.add(scanRing);
 function updateScanWave(dt) {                          // anel azul que cresce pelo chão a partir de onde o scan foi dado
   if (!scanWave) return; scanWave.t += dt; const k = scanWave.t / 1.2;
-  if (k >= 1) { scanWave = null; scanRing.visible = false; return; }
+  if (k >= 1) { scanWave = null; scanRing.visible = false; holoPool.forEach(h => h.visible = false); pipPlane.visible = false; droneG.visible = false; return; }
   scanRing.visible = true; scanRing.position.x = scanWave.x; scanRing.position.z = scanWave.z; scanRing.scale.setScalar(1 + k * 30); scanRing.material.opacity = 0.75 * (1 - k);
 }
 let deckOpen = false, deckSkin = 'kali'; const deckBooted = {}; const deckHist = []; let deckHistIdx = 0;
@@ -615,7 +620,7 @@ function deckSetSkin(id) {
 function deckPrint(text, cls) { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; deckOutEl.appendChild(d); deckOutEl.scrollTop = deckOutEl.scrollHeight; paintLaptop(); }
 // Saída "digitando": as linhas entram uma a uma (fila). Ao fechar o deck ou limpar, a fila é descartada/esvaziada na hora.
 let deckQueue = [], deckTimer = 0;
-let deckBarCur = null;
+let deckBarCur = null, deckTyping = null;
 function deckGlitch() { const lp = deckEl.querySelector('.deck-laptop'); lp.classList.remove('glitch'); void lp.offsetWidth; lp.classList.add('glitch'); setTimeout(() => lp.classList.remove('glitch'), 340); }
 function deckBarText(l, n) { return `${l.t.padEnd(13)} [${'█'.repeat(n)}${'░'.repeat(10 - n)}] ${n * 10}%`; }
 function deckPump() {
@@ -626,11 +631,14 @@ function deckPump() {
       if (n < 10) deckTimer = setTimeout(step, 55); else { deckBarCur = null; deckTimer = setTimeout(deckPump, 70); } };
     step(); return;
   }
-  deckPrint(l.t, l.k); if (l.k === 'err') { sfx.deckErr(); deckGlitch(); } else if (l.k === 'ok') sfx.deckKey();
-  if (deckQueue.length) deckTimer = setTimeout(deckPump, l.k === 'dim' ? 90 : 38);
+  if (l.k === 'err') { sfx.deckErr(); deckGlitch(); } else if (l.k === 'ok') sfx.deckKey();
+  const d = document.createElement('div'); if (l.k) d.className = l.k; deckOutEl.appendChild(d); let i = 0; deckTyping = { d, l };      // digitação: trechos de 3–8 letras, pausas variáveis
+  const type = () => { i = Math.min(l.t.length, i + 3 + (Math.random() * 6 | 0)); d.textContent = l.t.slice(0, i); deckOutEl.scrollTop = deckOutEl.scrollHeight; paintLaptop(); if (i % 2) sfx.deckKey(); deckLastKey = performance.now();
+    if (i < l.t.length) deckTimer = setTimeout(type, 10 + Math.random() * 24 + (Math.random() < .08 ? 90 : 0)); else { deckTyping = null; if (deckQueue.length) deckTimer = setTimeout(deckPump, l.k === 'dim' ? 70 : 30); } };
+  type();
 }
 function deckEnqueue(lines) { deckQueue.push(...lines); if (!deckTimer) deckPump(); }
-function deckFlush() { clearTimeout(deckTimer); deckTimer = 0; if (deckBarCur) { deckBarCur.d.textContent = deckBarText(deckBarCur.l, 10); deckBarCur = null; } deckQueue.forEach(l => deckPrint(l.t, l.k)); deckQueue = []; }
+function deckFlush() { clearTimeout(deckTimer); deckTimer = 0; if (deckBarCur) { deckBarCur.d.textContent = deckBarText(deckBarCur.l, 10); deckBarCur = null; } if (deckTyping) { deckTyping.d.textContent = deckTyping.l.t; deckTyping = null; } deckQueue.forEach(l => deckPrint(l.t, l.k)); deckQueue = []; }
 function deckUpdateChips() {                              // chips no topo mostram pronto / ativo / recarga
   const set = (id, name, t, cd) => { const c = $(id); c.className = t > 0 ? 'active' : cd > 0 ? '' : 'ready'; c.textContent = t > 0 ? `${name} ${Math.ceil(t)}s` : cd > 0 ? `${name} ${Math.ceil(cd)}s` : `${name} pronto`; };
   if (inc) { set('deckChipScan', 'SCAN', inc.scanT, inc.scanCd); set('deckChipJam', 'JAM', inc.jamT, inc.jamCd); }
@@ -664,13 +672,13 @@ const deckReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function updateDeckRig(dt) {
   deckAnim = Math.min(1, Math.max(0, deckAnim + (deckOpen ? (deckReduced ? 1 : dt / 0.55) : -dt / 0.3)));
   const rise = 1 - Math.pow(1 - Math.min(1, deckAnim / 0.5), 3), t = Math.max(0, (deckAnim - 0.35) / 0.65), lid = t * t * (3 - 2 * t);
-  deckRig.visible = deckAnim > 0.001; if (deckRig.visible && (++deckPaintN % 12 === 0)) paintLaptop();       // cursor pisca na tela do laptop holder.visible = holder.visible && deckAnim < 0.05;
+  deckRig.visible = deckAnim > 0.001; if (deckRig.visible) updateDeckHands(); if (deckRig.visible && (++deckPaintN % 12 === 0)) paintLaptop();       // cursor pisca na tela do laptop holder.visible = holder.visible && deckAnim < 0.05;
   deckRig.position.set(0, -0.8 + rise * 0.52, -0.62); deckRig.rotation.x = 0.3 * rise;
   deckRig.userData.lid.rotation.x = Math.PI / 2 + (-0.32 - Math.PI / 2) * lid;                 // fechada = deitada sobre o teclado; aberta = levemente inclinada para trás
   if (deckOpen && !deckShown && deckAnim >= 1) { deckShown = true; showDeckOverlay(); }
 }
 function showDeckOverlay() {
-  deckSetSkin(deckSkin); deckEl.classList.remove('hidden'); deckUpdateChips();
+  deckSetSkin(deckSkin); deckEl.classList.remove('hidden'); deckUpdateChips(); deckShowPane('paneShell'); deckUnread = 0; deckBellN.textContent = 0; deckTick(); rainStart();
   if (!deckBooted[deckSkin]) { deckBooted[deckSkin] = true; sfx.deckBoot(); deckEnqueue(Arena.deckBoot(deckSkin).map(t => ({ t, k: 'dim' }))); }
   setTimeout(() => deckInEl.focus(), 30);
 }
@@ -682,7 +690,7 @@ function openDeck() {
   sfx.deckOpen(); paintLaptop();
 }
 function closeDeck(silent) {
-  deckFlush(); deckOpen = false; deckShown = false; deckEl.classList.add('hidden'); deckInEl.blur();
+  deckFlush(); rainStop(); deckOpen = false; deckShown = false; deckEl.classList.add('hidden'); deckInEl.blur();
   if (inc) inc.choiceOpen = false;
   if (!silent && alive) { canvas.requestPointerLock(); setTimeout(() => { if (!locked && alive && !(inc && inc.choiceOpen) && !deckOpen) showOverlay('pause'); }, 400); }
 }
@@ -692,18 +700,21 @@ function deckConnectState() {                              // o que o comando "c
   if (inc.primedStage === inc.stage) return { state: 'primed' };
   return { state: inc.inRange ? 'ready' : 'far', name: t ? t.name : 'CONSOLE' };
 }
+function deckCtx() {                                       // tudo que o deck precisa saber do jogo
+  const st = incStage(), cams = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
+  return { skin: deckSkin, scanCd: inc.scanCd, jamCd: inc.jamCd, targets: deckTargets(), history: deckHist, time: inc.time, connect: deckConnectState(), notes: deckNotes,
+    status: { stage: inc.stage + 1, mission: st.title, camsOff: cams, alarm: inc.alarmT, threats: cams ? 0 : incCams.length + incTurrets.filter(t => !t.st.dead).length } };
+}
 function deckSubmit(line) {
   const sk = Arena.DECK_SKINS[deckSkin]; sfx.deckEnter(); deckFlush();
   deckPrint((sk.promptTop ? sk.promptTop + '\n' : '') + sk.prompt + ' ' + line, 'top');
   if (line.trim()) { deckHist.push(line); deckHistIdx = deckHist.length; }
-  const st = incStage(), cams = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
-  const r = Arena.deckRun(line, { skin: deckSkin, scanCd: inc.scanCd, jamCd: inc.jamCd, targets: deckTargets(), history: deckHist, time: inc.time, connect: deckConnectState(),
-    status: { stage: inc.stage + 1, mission: st.title, camsOff: cams, alarm: inc.alarmT, threats: cams ? 0 : incCams.length + incTurrets.filter(t => !t.st.dead).length } });
+  const r = Arena.deckRun(line, deckCtx());
   const fx = r.fx;
   if (fx.clear) { deckQueue = []; deckOutEl.textContent = ''; }
   if (fx.skin) { deckSetSkin(fx.skin); if (!deckBooted[fx.skin]) { deckBooted[fx.skin] = true; r.lines.push(...Arena.deckBoot(fx.skin).map(t => ({ t, k: 'dim' }))); } }
-  if (fx.scan) { inc.scanT = fx.scan; inc.scanCd = Arena.DECK.scan.cd; sfx.deckScan(); scanWave = { t: 0, x: px, z: pz }; }
-  if (fx.connect) { inc.hold = Math.max(inc.hold, st.hold * 0.5); inc.primedStage = inc.stage; sfx.deckBoot(); }
+  if (fx.scan) { inc.scanT = fx.scan; inc.scanCd = Arena.DECK.scan.cd; sfx.deckScan(); scanWave = { t: 0, x: px, z: pz }; scanFlash('go'); }
+  if (fx.connect) { inc.hold = Math.max(inc.hold, st.hold * 0.5); inc.primedStage = inc.stage; inc.linkT = 3.2; sfx.deckBoot(); }
   if (fx.jam) { inc.jamT = fx.jam; inc.jamCd = Arena.DECK.jam.cd; sfx.deckJam(); deckGlitch(); }
   deckEnqueue(r.lines); deckUpdateChips();
   if (fx.exit) closeDeck();
@@ -713,14 +724,129 @@ $('deckClose').addEventListener('click', () => closeDeck());
 deckBtnEl.addEventListener('click', openDeck); deckOutEl.addEventListener('click', () => deckInEl.focus());
 $('deckForm').addEventListener('submit', e => { e.preventDefault(); const v = deckInEl.value; deckInEl.value = ''; deckSubmit(v); });
 function deckKey(e) {                                          // Esc fecha, Tab completa, setas navegam no histórico; o resto digita no campo
-  if (e.code === 'Tab') {
+  if (e.code === 'Tab' && document.activeElement === deckInEl) {
     e.preventDefault(); const r = Arena.deckComplete(deckInEl.value); deckInEl.value = r.line;
     if (r.options.length) deckPrint(r.options.join('   '), 'hint');
-  } else if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) sfx.deckKey();
+  } else if (e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey) { sfx.deckKey(); deckLastKey = performance.now(); }
   if (e.code === 'Escape') { e.preventDefault(); closeDeck(); }
   else if (e.code === 'ArrowUp' && deckHist.length) { e.preventDefault(); deckHistIdx = Math.max(0, deckHistIdx - 1); deckInEl.value = deckHist[deckHistIdx] || ''; }
   else if (e.code === 'ArrowDown' && deckHist.length) { e.preventDefault(); deckHistIdx = Math.min(deckHist.length, deckHistIdx + 1); deckInEl.value = deckHist[deckHistIdx] || ''; }
 }
+
+// ---- P36: desktop do deck (painéis), notificações do sistema, flash do scan, chuva de código e mapa da rede ----
+const sysNotesEl = $('sysNotes'), scanFlashEl = $('scanFlash'), deckClockEl = $('deckClock'), deckBellN = $('deckBellN'), filesListEl = $('filesList'), filesViewEl = $('filesView');
+const deckNotes = []; let deckUnread = 0;
+function sysNote(text, kind) {                              // aviso do "sistema" (canto da tela) + histórico para o sino e o comando "avisos"
+  const at = inc ? Math.floor(inc.time / 60).toString().padStart(2, '0') + ':' + Math.floor(inc.time % 60).toString().padStart(2, '0') : '00:00';
+  deckNotes.push({ t: text, k: kind || 'info', at }); if (deckNotes.length > 30) deckNotes.shift(); if (!deckOpen) { deckUnread++; deckBellN.textContent = deckUnread; }
+  const d = document.createElement('div'); d.className = 'note ' + (kind || ''); d.textContent = text; sysNotesEl.appendChild(d);
+  while (sysNotesEl.children.length > 4) sysNotesEl.firstChild.remove();
+  setTimeout(() => d.remove(), 4200);
+}
+function scanFlash(kind) { scanFlashEl.className = ''; void scanFlashEl.offsetWidth; scanFlashEl.className = kind; }
+function deckShowPane(id) {                                 // troca de "janela" no deck
+  document.querySelectorAll('.deck-pane').forEach(p => p.classList.toggle('on', p.id === id));
+  document.querySelectorAll('.deck-tabs button').forEach(b => b.classList.toggle('on', b.dataset.pane === id));
+  if (id === 'paneFiles') deckFillFiles(); if (id === 'paneShell') setTimeout(() => deckInEl.focus(), 20);
+}
+document.querySelectorAll('[data-pane]').forEach(b => b.addEventListener('click', () => deckShowPane(b.dataset.pane)));
+$('deckBell').addEventListener('click', () => { deckUnread = 0; deckBellN.textContent = 0; deckShowPane('paneShell'); deckSubmit('avisos'); });
+function deckFillFiles() {
+  if (filesListEl.childElementCount) return;
+  Arena.DECK_FILES.forEach(f => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = '▤ ' + f.name;
+    b.addEventListener('click', () => { filesListEl.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); filesViewEl.textContent = Arena.deckFile(f.name, deckCtx()).map(l => l.t).join('\n'); sfx.deckKey(); });
+    li.appendChild(b); filesListEl.appendChild(li); });
+}
+// chuva de código (fundo do terminal): colunas de dígitos hexadecimais, só com o deck aberto e sem "reduzir movimento"
+const rainEl = $('deckRain'), rainCtx = rainEl.getContext('2d'); let rainCols = [], rainTimer = 0;
+function rainStep() {
+  const W = rainEl.clientWidth, Hh = rainEl.clientHeight; if (!W) return;
+  if (rainEl.width !== W) { rainEl.width = W; rainEl.height = Hh; rainCols = Array.from({ length: Math.floor(W / 14) }, () => Math.random() * Hh / 14); }
+  rainCtx.fillStyle = 'rgba(0,0,0,.16)'; rainCtx.fillRect(0, 0, W, Hh); rainCtx.fillStyle = deckSkin === 'arch' ? '#1793d1' : '#4be08a'; rainCtx.font = '12px monospace';
+  rainCols.forEach((y, i) => { rainCtx.fillText('0123456789ABCDEF'[Math.random() * 16 | 0], i * 14, y * 14); rainCols[i] = y * 14 > Hh && Math.random() > .96 ? 0 : y + 1; });
+}
+function rainStart() { if (deckReduced || rainTimer) return; rainTimer = setInterval(rainStep, 70); }
+function rainStop() { clearInterval(rainTimer); rainTimer = 0; }
+// mapa da rede: vista de cima com o jogador no centro; câmeras, torretas e console/saída nas posições reais
+let netTimer = 0;
+function netDraw() {
+  const cv = $('deckNet'), c = cv.getContext('2d'), W = cv.width, Hh = cv.height, cx = W / 2, cy = Hh / 2, K = 5.2, t = performance.now() / 1000;
+  c.clearRect(0, 0, W, Hh); c.strokeStyle = 'rgba(160,200,255,.14)'; c.lineWidth = 1;
+  for (const r of [10, 20, 30]) { c.beginPath(); c.arc(cx, cy, r * K, 0, 7); c.stroke(); }
+  c.beginPath(); c.moveTo(cx, 0); c.lineTo(cx, Hh); c.moveTo(0, cy); c.lineTo(W, cy); c.stroke();
+  const pts = [];
+  incCams.forEach(({ g }, i) => pts.push({ x: g.position.x, z: g.position.z, c: '#ff5a4d', l: `CAM-0${i + 1}` }));
+  incTurrets.forEach((tr, i) => { if (!tr.st.dead) pts.push({ x: tr.c.x, z: tr.c.z, c: '#ff8a3d', l: `TORRETA-0${i + 1}` }); });
+  const tg = incTarget(); pts.push({ x: tg.x, z: tg.z, c: incStage().exit ? '#3ddc84' : '#4de7ff', l: incStage().exit ? 'SAÍDA' : 'CONSOLE' });
+  const scanning = inc.scanT > 0;
+  pts.forEach(p => {
+    const dx = (p.x - px) * K, dz = (p.z - pz) * K, x = Math.max(12, Math.min(W - 12, cx + dx)), y = Math.max(12, Math.min(Hh - 12, cy + dz));
+    c.strokeStyle = p.c; c.globalAlpha = .45; c.setLineDash([4, 5]); c.lineDashOffset = -t * 20; c.beginPath(); c.moveTo(cx, cy); c.lineTo(x, y); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    c.fillStyle = p.c; c.beginPath(); c.arc(x, y, scanning ? 6 + Math.sin(t * 8) * 2 : 5, 0, 7); c.fill();
+    c.font = '11px monospace'; c.textAlign = 'center'; c.fillText(`${p.l} ${Math.round(Math.hypot(p.x - px, p.z - pz))}m`, x, y - 10);
+  });
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, 6, 0, 7); c.fill(); c.font = 'bold 11px monospace'; c.fillText('VOCÊ', cx, cy + 20);
+}
+function deckTick() {                                          // relógio, chips e mapa enquanto o deck está aberto
+  if (!deckOpen || !inc) return;
+  deckClockEl.textContent = 'T+' + Math.floor(inc.time / 60).toString().padStart(2, '0') + ':' + Math.floor(inc.time % 60).toString().padStart(2, '0');
+  deckUpdateChips(); if ($('paneNet').classList.contains('on')) netDraw();
+}
+setInterval(deckTick, 250);
+
+// ---- P37: mãos digitando, hologramas do scan, drone 3D com câmera própria (PiP) e cinemática de acesso ----
+let deckLastKey = 0;
+{
+  const glove = new THREE.MeshLambertMaterial({ color: 0x1b212c }), hand = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.025, 0.085), glove);
+  const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.02, 0.04), glove); thumb.position.set(0.035, 0, -0.01); hand.add(thumb);
+  const hL = hand.clone(), hR = hand.clone(); hL.position.set(-0.07, 0.03, 0.045); hR.position.set(0.07, 0.03, 0.045); hR.children[0].position.x = -0.035;
+  deckRig.add(hL, hR); deckRig.userData.hands = [hL, hR];
+}
+function updateDeckHands() {                                  // mãos mexem devagar parado e rápido enquanto você digita
+  const hs = deckRig.userData.hands, t = performance.now() / 1000, typing = performance.now() - deckLastKey < 220;
+  hs.forEach((h, i) => { const a = typing ? 1 : 0.15; h.position.y = 0.03 + Math.abs(Math.sin(t * (typing ? 30 : 3) + i * 1.7)) * 0.012 * a; h.position.z = 0.045 + Math.sin(t * 17 + i) * 0.01 * a; });
+}
+// hologramas: contornos (só linhas) por cima de tudo, vistos através das paredes durante o scan
+const holoGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), holoMats = {}, holoPool = [];
+for (const [k, c] of Object.entries({ e: 0xffd166, t: 0xff8a3d, c: 0xff5a4d, k: 0x4de7ff })) holoMats[k] = new THREE.LineBasicMaterial({ color: c, transparent: true, depthTest: false });
+for (let i = 0; i < 16; i++) { const h = new THREE.LineSegments(holoGeo, holoMats.e); h.renderOrder = 999; h.frustumCulled = false; h.visible = false; scene.add(h); holoPool.push(h); }
+function holoAt(i, kind, x, y, z, sx, sy, sz) { const h = holoPool[i]; if (!h) return; h.material = holoMats[kind]; h.position.set(x, y, z); h.scale.set(sx, sy, sz); h.visible = true; }
+function updateHolo() {
+  let n = 0; const on = inc && !inc.done && inc.scanT > 0, t = performance.now() / 1000;
+  if (on) {
+    for (const m of Object.values(holoMats)) m.opacity = 0.55 + 0.35 * Math.sin(t * 6);
+    for (const e of enemies) if (!e.dead && n < 10) holoAt(n++, 'e', e.g.position.x, 0.95, e.g.position.z, 0.9, 1.9, 0.9);
+    for (const tr of incTurrets) if (!tr.st.dead) holoAt(n++, 't', tr.c.x, 0.8, tr.c.z, 0.7, 1.6, 0.7);
+    for (const { g } of incCams) holoAt(n++, 'c', g.position.x, g.position.y, g.position.z, 0.6, 0.5, 0.9);
+    const tg = incTarget(); holoAt(n++, 'k', tg.x, 0.8, tg.z, 1.9, 1.6, 1.2);
+  }
+  for (let i = n; i < holoPool.length; i++) holoPool[i].visible = false;
+}
+// drone 3D: modelo pairando atrás do jogador + câmera própria renderizada numa textura pequena (1 quadro a cada 3)
+const pipRT = new THREE.WebGLRenderTarget(256, 160), pipCam = new THREE.PerspectiveCamera(70, 256 / 160, 0.1, 120); pipCam.rotation.order = 'YXZ';
+const pipPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.29), new THREE.MeshBasicMaterial({ map: pipRT.texture, depthTest: false }));
+pipPlane.position.set(-0.78, -0.12, -0.8); pipPlane.renderOrder = 1000; pipPlane.visible = false; camera.add(pipPlane);
+const pipEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.46, 0.29)), new THREE.LineBasicMaterial({ color: 0x4de7ff, depthTest: false })); pipEdge.renderOrder = 1001; pipPlane.add(pipEdge);
+const droneG = new THREE.Group(); droneG.visible = false; scene.add(droneG);
+{
+  const body = new THREE.Mesh(blockGeo, new THREE.MeshLambertMaterial({ color: 0x2a3142 })); body.scale.set(0.5, 0.12, 0.5); droneG.add(body);
+  const led = new THREE.Mesh(blockGeo, new THREE.MeshBasicMaterial({ color: 0xff3b5f })); led.scale.set(0.08, 0.05, 0.08); led.position.set(0, 0, -0.27); droneG.add(led);
+  droneG.userData.rotors = [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]].map(([x, z]) => { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.012, 12), new THREE.MeshBasicMaterial({ color: 0x8aa0c0, transparent: true, opacity: 0.55 })); r.position.set(x, 0.08, z); droneG.add(r); return r; });
+}
+let pipN = 0;
+function updateDronePip() {
+  const on = !!(inc && !inc.done && inc.droneT > 0); pipPlane.visible = on; droneG.visible = on; if (!on) return;
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw), dx = px - fx * 1.6, dz = pz - fz * 1.6, hy = 2.9 + Math.sin(inc.time * 3) * 0.06;
+  droneG.position.set(dx, hy, dz); droneG.rotation.y = yaw; droneG.userData.rotors.forEach((r, i) => r.rotation.y += 0.9 * (i % 2 ? 1 : -1));
+  if (++pipN % 3) return;
+  pipCam.position.set(dx, hy - 0.1, dz); pipCam.rotation.set(-0.35, yaw, 0);
+  const vis = [pipPlane.visible, holder.visible, deckRig.visible, droneG.visible]; pipPlane.visible = holder.visible = deckRig.visible = droneG.visible = false;   // não se enxerga a si mesmo
+  const prev = renderer.getRenderTarget(); renderer.setRenderTarget(pipRT); renderer.render(scene, pipCam); renderer.setRenderTarget(prev);
+  [pipPlane.visible, holder.visible, deckRig.visible, droneG.visible] = vis;
+}
+// cinemática curta quando um console é vencido: zoom no alvo e barras de cinema
+let cine = null; const cineBars = [$('cineTop'), $('cineBot')];
+function cineStart() { if (deckReduced) return; cine = { t0: performance.now() }; cineBars.forEach(b => b.classList.add('on')); }
 function useDrone() {
   if (!inc || inc.done) return;
   if (inc.droneT > 0 || inc.droneCd > 0) { addFeed('DRONE EM RECARGA', false); return; }
@@ -733,8 +859,13 @@ function updateIncursion(dt) {
   const st = incStage();
   if (inc.marker) { inc.marker.userData.ring.rotation.z += dt * 1.5; inc.marker.userData.core.rotation.y += dt * 1.8; }
   inc.droneT = Math.max(0, inc.droneT - dt); inc.droneCd = Math.max(0, inc.droneCd - dt);
-  inc.scanT = Math.max(0, inc.scanT - dt); inc.scanCd = Math.max(0, inc.scanCd - dt); inc.jamT = Math.max(0, inc.jamT - dt); inc.jamCd = Math.max(0, inc.jamCd - dt);
-  deckBtnEl.classList.toggle('hidden', !!inc.done); updateScanWave(dt); updateIncDoors(dt); updateIncCameras(dt); updateIncTurrets(dt); drawDroneMarks();
+  const pScanT = inc.scanT, pScanCd = inc.scanCd, pJamT = inc.jamT, pJamCd = inc.jamCd;
+  inc.scanT = Math.max(0, inc.scanT - dt); inc.scanCd = Math.max(0, inc.scanCd - dt); inc.jamT = Math.max(0, inc.jamT - dt); inc.jamCd = Math.max(0, inc.jamCd - dt); inc.linkT = Math.max(0, (inc.linkT || 0) - dt);
+  if (pScanT > 0 && inc.scanT <= 0) { scanFlash('end'); sysNote('Scan terminou: marcadores desligados', 'info'); }
+  if (pScanCd > 0 && inc.scanCd <= 0) sysNote('SCAN pronto (tecla T)', 'ok');
+  if (pJamT > 0 && inc.jamT <= 0) sysNote('Jammer terminou: câmeras e torretas religadas', 'warn');
+  if (pJamCd > 0 && inc.jamCd <= 0) sysNote('JAM pronto', 'ok');
+  deckBtnEl.classList.toggle('hidden', !!inc.done); updateScanWave(dt); updateHolo(); updateDronePip(); updateIncDoors(dt); updateIncCameras(dt); updateIncTurrets(dt); drawDroneMarks();
   if (inc.alarmT > 0) {                                                        // alarme: só troca cores (não mexe em luzes = sem recompilar shader)
     inc.alarmT -= dt; const f = (Math.sin(inc.time * 7) + 1) / 2;
     stripMat.color.setRGB(0.6 + 0.4 * f, 0.1, 0.08); if (scene.fog) scene.fog.color.setRGB(0.12 + 0.1 * f, 0.02, 0.02);
@@ -755,7 +886,7 @@ function updateIncursion(dt) {
     const contested = enemies.some(e => !e.dead && Math.hypot(e.g.position.x - t.x, e.g.position.z - t.z) < 4);   // inimigo perto atrasa a invasão
     if (Arena.holdAllowed({ inRange: inc.inRange, held: keys.KeyE || interactHeld, lockout: terminalInteraction.lockout })) inc.hold = Math.min(st.hold, inc.hold + dt * (contested ? 0.55 : 1));
     else inc.hold = Math.max(0, inc.hold - dt * 0.25);
-    if (inc.hold >= st.hold) { if (st.choose) openIncChoice(st); else { banner('ACESSO CONCEDIDO\nPRÓXIMO SETOR', 2); sfx.objective(); enterIncStage(inc.stage + 1); } }
+    if (inc.hold >= st.hold) { if (st.choose) openIncChoice(st); else { cineStart(); banner('ACESSO CONCEDIDO\nPRÓXIMO SETOR', 2); sfx.objective(); enterIncStage(inc.stage + 1); } }
   }
   updateIncursionHud();
 }
@@ -776,14 +907,14 @@ function updateIncCameras(dt) {
     const ang = Arena.cameraAngle(c, inc.time, i); g.rotation.y = off ? c.dir : ang; g.rotation.x = (1 - cam.power) * 0.55;   // desligada: cabeça cai
     lamp.visible = cam.power > 0.92 || (cam.power > 0.05 && Math.sin(inc.time * 40) > 0);   // pisca ao apagar
     if (!off && !inc.done && inc.camCd <= 0 && Arena.cameraSees(c, ang, px, pz) && Arena.lineClear(navGrid, c.x, c.z, px, pz)) {
-      inc.camCd = 20; inc.alertT = 12; inc.camHits++; banner('CÂMERA DETECTOU VOCÊ\nREFORÇOS A CAMINHO', 2.2);
+      inc.camCd = 20; inc.alertT = 12; inc.camHits++; banner('CÂMERA DETECTOU VOCÊ\nREFORÇOS A CAMINHO', 2.2); sysNote('Câmera detectou você: reforços a caminho', 'warn');
       for (let k = 0; k < 2; k++) spawnEnemy(pickType());
     }
   });
 }
 function destroyTurret(t) {                           // explosão pequena, some o modelo, ganha 50 pontos
   blastFx(t.c.x, 1.1, t.c.z, 1.1, 0xff8a3d, 0.3); debris(new THREE.Vector3(t.c.x, 1, t.c.z), 0x666f7a, 8); sfx.shieldBreak();
-  t.g.visible = false; score += 50; addFeed('TORRETA DESTRUÍDA  +50', false);
+  t.g.visible = false; score += 50; addFeed('TORRETA DESTRUÍDA  +50', false); sysNote('Torreta destruída (+50)', 'ok');
 }
 function updateIncTurrets(dt) {                       // torretas: giram para o jogador, carregam (lente acende) e atiram projéteis fracos
   if (!incTurrets.length) return;
@@ -853,7 +984,7 @@ function applyIncChoice() {
     if (sel.includes('destruir')) { [[20, 1.6, 18], [14, 1.6, 24], [24, 1.6, 12]].forEach(([x, y, z]) => blastFx(x, y, z, 3.2, 0xff6a3d, 0.7)); shake = Math.max(shake, 0.7); }
     if (inc.fx.score) addFeed(`OBJETIVO FINAL  +${inc.fx.score}${inc.fx.credits ? ' · +' + inc.fx.credits + '¢' : ''}`, false);
   }
-  closeIncTerm(); inc.choiceOpen = false; inc.hold = 0; sfx.objective(); enterIncStage(inc.stage + 1);
+  closeIncTerm(); inc.choiceOpen = false; inc.hold = 0; sfx.objective(); cineStart(); enterIncStage(inc.stage + 1);
   if (useTouch) locked = true;
   else { canvas.requestPointerLock(); setTimeout(() => { if (!locked && alive && !(inc && inc.choiceOpen)) showOverlay('pause'); }, 400); }
 }
@@ -2529,7 +2660,9 @@ function update(dt) {
   camera.updateMatrixWorld(true);
 
   /* --- Zoom da sniper --- */
-  const wantFov = scoped ? baseFov / cur().zoom : baseFov - terminalInteraction.focus * 6 + sprintT * 7 + (dashTime > 0 ? 10 : 0) + slideT * 6;
+  let wantFov = scoped ? baseFov / cur().zoom : baseFov - terminalInteraction.focus * 6 + sprintT * 7 + (dashTime > 0 ? 10 : 0) + slideT * 6;
+  if (cine) {   // tempo real: não depende de quadros lentos
+    const ct = (performance.now() - cine.t0) / 1000, k = Math.sin(Math.min(1, ct / 1.5) * Math.PI);  wantFov *= 1 - 0.38 * k; if (ct >= 1.5) { cine = null; cineBars.forEach(b => b.classList.remove('on')); } }
   if (Math.abs(camera.fov - wantFov) > 0.1) {
     camera.fov += (wantFov - camera.fov) * Math.min(1, dt * (scoped ? 14 : 7)); camera.updateProjectionMatrix();
   }

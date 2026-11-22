@@ -176,6 +176,8 @@
     c.strokeStyle = 'rgba(255,255,255,.65)'; c.lineWidth = 1.5; c.beginPath();
     pos.forEach((p, i) => { const q = pos[(i + 1) % pos.length], h = pos[2]; c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.moveTo(p[0], p[1]); c.lineTo(h[0], h[1]); }); c.stroke();
     c.fillStyle = '#fff'; pos.forEach((p, i) => { c.beginPath(); c.arc(p[0], p[1], i === 2 ? 6 : 4, 0, Math.PI * 2); c.fill(); });
+    pos.forEach((p, i) => { const h = pos[2], f = (time * (state === 'intrusion' ? 1.6 : 0.7) + i * 0.19) % 1;      // pacotes de dados percorrendo as ligações (mais rápidos na invasão)
+      c.beginPath(); c.arc(p[0] + (h[0] - p[0]) * f, p[1] + (h[1] - p[1]) * f, 2.8, 0, Math.PI * 2); c.fill(); });
     c.textAlign='left';c.font='7px monospace';c.fillText('NODES 06  ·  LINK ENCRYPTED',7,H-18);
     c.fillStyle='rgba(255,255,255,.2)';c.fillRect(7,H-11,W-14,4);
     const f=state==='committed'?1:state==='intrusion'?(time*.5)%1:state==='locked'?.16:.42;
