@@ -1,5 +1,5 @@
-const VERSION = 'P52';
-const CACHE_NAME = 'arena-fps-v8-p52';
+const VERSION = 'P53';
+const CACHE_NAME = 'arena-fps-v8-p53';
 const CORE = [
   './', './index.html', './style.css', './three.min.js', './script.js', './app.js',
   './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './deck.js',
@@ -9,7 +9,8 @@ const CORE = [
 
 // P49: a nova versão instala em segundo plano e fica "waiting" até o jogador aceitar o aviso (sem trocar no meio da partida).
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE)));
+  // P53: 'reload' ignora o cache HTTP do GitHub Pages (10 min); sem isso o app cacheava CSS/JS antigos junto do HTML novo.
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(CORE.map(url => new Request(url, { cache: 'reload' })))));
 });
 
 self.addEventListener('message', event => {

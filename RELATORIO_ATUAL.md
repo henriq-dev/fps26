@@ -1,7 +1,13 @@
-# Relatório atual — Arena FPS v8 · Pacote P52
+# Relatório atual — Arena FPS v8 · Pacote P53
 
-**Base de integração:** P51 + download em arquivo único. **Última atualização:** pacote P52 em 22/11/2026.  
+**Base de integração:** P52 + correção do cache do service worker. **Última atualização:** pacote P53 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 53 — Correção do cache do service worker (22/11/2026)
+
+**Bug (P49–P52):** o GitHub Pages serve os arquivos com `Cache-Control: max-age=600`. O `cache.addAll()` do service worker passava pelo cache HTTP do navegador e podia guardar `style.css`/`app.js` antigos junto do `index.html` novo; como o SW responde primeiro do cache, a página ficava com HTML novo, CSS antigo (lobby sem estilo) e botão de baixar sem o JS correspondente. Reproduzido em teste com servidor de `max-age=600`: SW antigo cacheou a versão A, o corrigido cacheou a B.
+**Correção:** o install agora busca cada arquivo com `new Request(url, { cache: 'reload' })`. Cache PWA: `arena-fps-v8-p53`.
+**Quem já está com cache preso:** ao abrir, aparece “Nova versão disponível” → ATUALIZAR; ou DevTools → Application → Storage → Clear site data.
 
 ## Pacote 52 — Download do jogo em arquivo único (22/11/2026)
 
