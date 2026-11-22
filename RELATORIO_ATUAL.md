@@ -1,7 +1,14 @@
-# Relatório atual — Arena FPS v8 · Pacote P51
+# Relatório atual — Arena FPS v8 · Pacote P52
 
-**Base de integração:** P50 + lobby redesenhado. **Última atualização:** pacote P51 em 22/11/2026.  
+**Base de integração:** P51 + download em arquivo único. **Última atualização:** pacote P52 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 52 — Download do jogo em arquivo único (22/11/2026)
+
+O botão “BAIXAR / INSTALAR APP” dependia do aviso nativo do navegador (`beforeinstallprompt`), que o Chrome não dispara se o app já foi instalado ou se a sessão não cumpre os critérios dele; sem aviso, o botão só mostrava instruções e nada era baixado. Agora há dois botões independentes:
+- **⬇ BAIXAR O JOGO (arquivo único):** monta no navegador um único `arena-fps.html` (HTML + CSS + todos os scripts embutidos, ~1 MB) e o baixa. Abre com duplo clique, sem internet, sem instalar nada. Testado: o arquivo baixado abre via `file://`, inicia a partida, sem erros e sem requisições externas.
+- **📲 INSTALAR APP:** continua usando a instalação PWA quando o navegador oferece, ou mostra o passo a passo.
+Na versão baixada (`file://`) ambos os botões se escondem. Cache PWA: `arena-fps-v8-p52`.
 
 ## Pacote 51 — Lobby redesenhado (22/11/2026)
 

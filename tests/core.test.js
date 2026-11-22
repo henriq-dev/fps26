@@ -459,3 +459,6 @@ assert.match(require('fs').readFileSync(require('path').join(__dirname,'..','app
     assert.ok(idx.includes(`id="${id}"`), 'lobby: falta #' + id);
   assert.match(gameSource, /el\.overlay\.dataset\.view = mode/);
   console.log('p51: lobby redesenhado OK'); }
+{ const fs = require('fs'), path = require('path'); const app = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8'), idx = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(idx, /id="downloadBtn"/); assert.match(app, /buildSingleFile/); assert.match(app, /a\.download = 'arena-fps\.html'/);
+  console.log('p52: download em arquivo unico OK'); }
