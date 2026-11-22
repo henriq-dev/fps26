@@ -8,6 +8,24 @@
   const setStatus = t => { if (status) status.textContent = t; };
   let deferred = null, hintOpen = false;
 
+  // P54: quando o Chrome não oferece o aviso nativo, descobre e mostra o motivo em vez de só dar instruções genéricas.
+  const diagnoseInstall = async () => {
+    const lines = [];
+    if (standalone()) return 'Você já está usando o app instalado. Para jogar de novo, abra-o pelo atalho.';
+    const secure = window.isSecureContext;
+    if (!secure) lines.push('• A página não está em HTTPS: o navegador só instala apps em conexão segura.');
+    let swOk = false; try { const r = await navigator.serviceWorker.getRegistration(); swOk = !!(r && r.active); } catch (_) {}
+    if (secure && !swOk) lines.push('• O modo offline ainda não terminou de preparar. Aguarde alguns segundos e tente de novo.');
+    let manifestOk = false; try { const m = await (await fetch('manifest.json', { cache: 'no-cache' })).json(); manifestOk = !!(m.icons && m.icons.length); } catch (_) {}
+    if (!manifestOk) lines.push('• Não consegui ler o manifest do app.');
+    let installed = false;
+    try { if (navigator.getInstalledRelatedApps) installed = (await navigator.getInstalledRelatedApps()).length > 0; } catch (_) {}
+    if (installed) lines.unshift('✔ O app JÁ ESTÁ INSTALADO neste navegador. Abra-o pelo atalho (Menu Iniciar, área de trabalho ou chrome://apps). O Chrome não oferece instalar de novo.');
+    else if (secure && swOk && manifestOk) lines.push('• Tudo certo no jogo; o Chrome não ofereceu a instalação automática. Provavelmente o app já foi instalado antes (abra por chrome://apps ou pelo atalho) ou o Chrome está esperando mais alguns segundos.');
+    const how = ios ? 'iPhone/iPad (Safari): Compartilhar → “Adicionar à Tela de Início”.' : /android/i.test(navigator.userAgent) ? 'Android (Chrome): menu ⋮ → “Instalar app”.' : 'Computador: ícone de instalar (⊕ ou monitor com seta) no fim da barra de endereço, ou menu ⋮ → “Transmitir, salvar e compartilhar” → “Instalar página como app”.';
+    return lines.join('\n') + '\n' + how + '\nAlternativa sem instalar: use o botão BAIXAR O JOGO.';
+  };
+
   // --- Instalar / baixar o app ---
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const refreshInstallUi = () => {
@@ -21,7 +39,10 @@
   addEventListener('appinstalled', () => { deferred = null; refreshInstallUi(); });
   if (installBtn) installBtn.addEventListener('click', async () => {
     if (!deferred) {
-      if (hint) { hintOpen = true; hint.textContent = ios ? 'iPhone/iPad (Safari): toque em Compartilhar e depois em “Adicionar à Tela de Início”.' : /android/i.test(navigator.userAgent) ? 'Android (Chrome): menu ⋮ → “Instalar app” ou “Adicionar à tela inicial”.' : 'Computador (Chrome/Edge): clique no ícone de instalar na barra de endereço, ou menu ⋮ → “Transmitir, salvar e compartilhar” → “Instalar página como app”.'; hint.classList.remove('hidden'); }
+      if (hint) {
+        hintOpen = true; hint.classList.remove('hidden'); hint.textContent = 'Verificando a instalação…';
+        diagnoseInstall().then(t => { hint.textContent = t; });
+      }
       return;
     }
     deferred.prompt();

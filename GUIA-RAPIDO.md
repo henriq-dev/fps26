@@ -1,4 +1,4 @@
-# Guia rápido — Arena FPS P53
+# Guia rápido — Arena FPS P54
 
 ## 1. Requisitos
 

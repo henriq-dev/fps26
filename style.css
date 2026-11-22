@@ -540,3 +540,5 @@ body:has(#overlay:not(.hidden)[data-view="over"]) :is(#hud, #crosshair, #hitmark
   .lobby-setup #ovBtn { position: static; padding: 10px; }
   .seg button { padding: 6px 4px; } .seg button i { display: none; }
 }
+
+#installHint { white-space: pre-line; text-align: left; padding: 8px 10px; border: 1px solid rgba(255,200,87,.35); border-radius: 8px; background: rgba(255,200,87,.06); color: var(--ui); opacity: .95; }

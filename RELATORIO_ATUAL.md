@@ -1,7 +1,11 @@
-# Relatório atual — Arena FPS v8 · Pacote P53
+# Relatório atual — Arena FPS v8 · Pacote P54
 
-**Base de integração:** P52 + correção do cache do service worker. **Última atualização:** pacote P53 em 22/11/2026.  
+**Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 54 — Diagnóstico de instalação (22/11/2026)
+
+Sem o aviso nativo (`beforeinstallprompt`), o botão INSTALAR APP mostrava só instruções genéricas. Agora, ao clicar, ele checa HTTPS, service worker, manifest e `getInstalledRelatedApps()` e informa o motivo concreto (por exemplo, “o app já está instalado: abra pelo atalho ou chrome://apps”). Se estiver rodando dentro do app, avisa isso. O manifest ganhou `related_applications` (webapp) para essa detecção. Cache PWA: `arena-fps-v8-p54`.
 
 ## Pacote 53 — Correção do cache do service worker (22/11/2026)
 
