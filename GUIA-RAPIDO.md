@@ -1,4 +1,4 @@
-# Guia rápido — Arena FPS P38 consolidado
+# Guia rápido — Arena FPS P48
 
 ## 1. Requisitos
 

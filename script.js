@@ -211,13 +211,17 @@ function addIndustrialSetDressing() {
   stripes.count = stripeIndex; stripes.instanceMatrix.needsUpdate = true; group.add(stripes);
 
   const longRail = new THREE.BoxGeometry(ARENA * 2, 0.07, 0.07);
-  for (const z of [-27.82, 27.82]) {
-    const rail = new THREE.Mesh(longRail, railMat); rail.position.set(0, 2.72, z); group.add(rail);
+  const longRails = new THREE.InstancedMesh(longRail, railMat, 2); // P45: os dois trilhos longitudinais em uma chamada
+  for (const [i, z] of [-27.82, 27.82].entries()) {
+    dummy.position.set(0, 2.72, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); longRails.setMatrixAt(i, dummy.matrix);
   }
+  longRails.instanceMatrix.needsUpdate = true; longRails.computeBoundingSphere(); group.add(longRails);
   const sideRail = new THREE.BoxGeometry(0.07, 0.07, ARENA * 2);
-  for (const x of [-27.82, 27.82]) {
-    const rail = new THREE.Mesh(sideRail, railMat); rail.position.set(x, 2.72, 0); group.add(rail);
+  const sideRails = new THREE.InstancedMesh(sideRail, railMat, 2); // P45: os dois trilhos transversais em uma chamada
+  for (const [i, x] of [-27.82, 27.82].entries()) {
+    dummy.position.set(x, 2.72, 0); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); sideRails.setMatrixAt(i, dummy.matrix);
   }
+  sideRails.instanceMatrix.needsUpdate = true; sideRails.computeBoundingSphere(); group.add(sideRails);
 
   const panelGeo = new THREE.BoxGeometry(2.6, 0.50, 0.045);
   const panels = new THREE.InstancedMesh(panelGeo, panelMat, 12);
@@ -244,9 +248,10 @@ function addSkylineDressing() {
     const g = cv.getContext('2d'); if (!g) return null;
     draw(g, w, h); return new THREE.CanvasTexture(cv);
   };
+  let seed = 40; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // P40: cenário visual reproduzível
   const towerTex = cvTex(64, 256, (g, w, h) => {
     g.fillStyle = '#14171f'; g.fillRect(0, 0, w, h);
-    for (let y = 6; y < h - 4; y += 10) for (let x = 5; x < w - 4; x += 9) if (Math.random() < .26) { g.fillStyle = Math.random() < .55 ? '#ff9a4a' : '#59e8ff'; g.fillRect(x, y, 4, 5); }
+    for (let y = 6; y < h - 4; y += 10) for (let x = 5; x < w - 4; x += 9) if (rnd() < .26) { g.fillStyle = rnd() < .55 ? '#ff9a4a' : '#59e8ff'; g.fillRect(x, y, 4, 5); }
   });
   if (!towerTex) return;                               // sem canvas 2D: mantém só o cenário básico
   const group = new THREE.Group();
@@ -254,11 +259,14 @@ function addSkylineDressing() {
   const towerMat = new THREE.MeshBasicMaterial({ map: towerTex, fog: false });   // sem neblina: aparecem como silhuetas contra o céu
   const dark = new THREE.MeshBasicMaterial({ color: 0x0f1118, fog: false });
   const add = (geoMat, w, h, d, x, y, z) => { const m = new THREE.Mesh(blockGeo, geoMat); m.scale.set(w, h, d); m.position.set(x, y, z); group.add(m); return m; };
-  let seed = 38; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;   // sequência fixa: cenário igual a cada partida
-  for (let i = 0; i < 16; i++) {                       // anel de torres além das paredes
-    const a = (i / 16) * Math.PI * 2 + rnd() * .25, r = ARENA + 16 + rnd() * 34, w = 7 + rnd() * 9, h = 24 + rnd() * 46;
-    add(towerMat, w, h, w, Math.cos(a) * r, h / 2, Math.sin(a) * r);
+  const ringCount = appliedQuality === 'high' ? 16 : 8; // P41: Média reduz silhuetas distantes; Alta preserva o skyline completo
+  const towers = new THREE.InstancedMesh(blockGeo, towerMat, ringCount + 1); const towerDummy = new THREE.Object3D();
+  const putTower = (i, w, h, d, x, y, z) => { towerDummy.position.set(x, y, z); towerDummy.scale.set(w, h, d); towerDummy.rotation.set(0, 0, 0); towerDummy.updateMatrix(); towers.setMatrixAt(i, towerDummy.matrix); };
+  for (let i = 0; i < ringCount; i++) {                // anel de torres além das paredes
+    const a = (i / ringCount) * Math.PI * 2 + rnd() * .25, r = ARENA + 16 + rnd() * 34, w = 7 + rnd() * 9, h = 24 + rnd() * 46;
+    putTower(i, w, h, w, Math.cos(a) * r, h / 2, Math.sin(a) * r);
   }
+  putTower(ringCount, 16, 44, 12, 0, 22, -(ARENA + 26)); towers.instanceMatrix.needsUpdate = true; towers.computeBoundingSphere(); group.add(towers);
   const banner = (lines, x, y, z, ry, w, h, bg, fs, fogOn) => {
     const tex = cvTex(256, Math.round(256 * h / w), (g, W, H) => {
       g.fillStyle = bg; g.fillRect(0, 0, W, H); g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 3; g.strokeRect(6, 6, W - 12, H - 12);
@@ -275,22 +283,45 @@ function addSkylineDressing() {
   banner(['TRABALHO', 'COMBATE', 'LIBERDADE'], 0, 3.9, o, Math.PI, 5.6, 4.2, '#2a2230', 36, true);
   banner(['SETOR', '#B'], 12, 3.9, -o, 0, 4.5, 4.2, '#262b34', 60, true);
   // torre central com faixa, ponte elevada e guindaste com contêiner suspenso (acima da parede norte)
-  add(towerMat, 16, 44, 12, 0, 22, -(ARENA + 26));
   banner(['A', 'ARENA', 'FAZ', 'VOCÊ', 'MAIS', 'FORTE'], 0, 16, -(ARENA + 19.8), 0, 5.5, 17, '#2b2150', 56, false);
-  add(dark, 80, .5, 3, 0, 9.5, -(ARENA + 14)); add(dark, 80, .9, .08, 0, 10.2, -(ARENA + 12.6));
+  const darkStructures = new THREE.InstancedMesh(blockGeo, dark, 5); // P46: ponte e guindaste em uma chamada
+  [[80, .5, 3, 0, 9.5, -(ARENA + 14)], [80, .9, .08, 0, 10.2, -(ARENA + 12.6)], [1.6, 15, 1.6, -4, 7.5, -(ARENA + 8)], [34, 1.2, 1.2, 12, 15, -(ARENA + 8)], [.08, 5.5, .08, 18, 12.2, -(ARENA + 8)]].forEach(([w, h, d, x, y, z], i) => {
+    towerDummy.position.set(x, y, z); towerDummy.scale.set(w, h, d); towerDummy.rotation.set(0, 0, 0); towerDummy.updateMatrix(); darkStructures.setMatrixAt(i, towerDummy.matrix);
+  });
+  darkStructures.instanceMatrix.needsUpdate = true; darkStructures.computeBoundingSphere(); group.add(darkStructures);
   add(new THREE.MeshBasicMaterial({ color: 0xff4d5e, fog: false }), 80, .12, .2, 0, 9.15, -(ARENA + 14));
-  add(dark, 1.6, 15, 1.6, -4, 7.5, -(ARENA + 8)); add(dark, 34, 1.2, 1.2, 12, 15, -(ARENA + 8)); add(dark, .08, 5.5, .08, 18, 12.2, -(ARENA + 8));
   add(new THREE.MeshBasicMaterial({ color: 0x3a1f1a, fog: false }), 3, 2.4, 6.4, 18, 8.4, -(ARENA + 8));
   const lampRed = new THREE.MeshBasicMaterial({ color: 0xff3a4a, fog: false });
-  add(lampRed, .3, .3, .3, 16.8, 9.8, -(ARENA + 5.2)); add(lampRed, .3, .3, .3, 19.2, 9.8, -(ARENA + 10.8));
+  const redLamps = new THREE.InstancedMesh(blockGeo, lampRed, 2); // P44: duas lâmpadas do guindaste em uma chamada
+  [[16.8, -(ARENA + 5.2)], [19.2, -(ARENA + 10.8)]].forEach(([x, z], i) => {
+    towerDummy.position.set(x, 9.8, z); towerDummy.scale.set(.3, .3, .3); towerDummy.updateMatrix(); redLamps.setMatrixAt(i, towerDummy.matrix);
+  });
+  redLamps.instanceMatrix.needsUpdate = true; redLamps.computeBoundingSphere(); group.add(redLamps);
   // brilho dos neons (caixas aditivas translúcidas: simulam bloom sem pós-processamento, barato em celular)
   const halo = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false });
   const W = ARENA * 2 + 2, redHalo = halo(0xff4d5e), cyanHalo = halo(0x4de7ff), cyanLamp = new THREE.MeshBasicMaterial({ color: 0x4de7ff });
-  [[0, -ARENA, W, .6, .35], [0, ARENA, W, .6, .35], [-ARENA, 0, .35, .6, W], [ARENA, 0, .35, .6, W]].forEach(([x, z, w, h, d]) => add(redHalo, w, h, d, x * .995, 2.2, z * .995));
-  for (const c of [-18, -6, 6, 18]) for (const sgn of [-1, 1]) {          // lâmpadas ciano nas quatro paredes
-    add(cyanLamp, .12, .16, 2.2, sgn * (ARENA - .25), 4.7, c); add(cyanHalo, .5, .7, 3.2, sgn * (ARENA - .3), 4.7, c);
-    add(cyanLamp, 2.2, .16, .12, c, 4.7, sgn * (ARENA - .25)); add(cyanHalo, 3.2, .7, .5, c, 4.7, sgn * (ARENA - .3));
+  const redHalos = new THREE.InstancedMesh(blockGeo, redHalo, 4); // P44: quatro faixas lineares em uma chamada
+  [[0, -ARENA, W, .6, .35], [0, ARENA, W, .6, .35], [-ARENA, 0, .35, .6, W], [ARENA, 0, .35, .6, W]].forEach(([x, z, w, h, d], i) => {
+    towerDummy.position.set(x * .995, 2.2, z * .995); towerDummy.scale.set(w, h, d); towerDummy.updateMatrix(); redHalos.setMatrixAt(i, towerDummy.matrix);
+  });
+  redHalos.instanceMatrix.needsUpdate = true; redHalos.computeBoundingSphere(); group.add(redHalos);
+  const neonColumns = appliedQuality === 'high' ? [-18, -6, 6, 18] : [-18, 6]; // P42: Média reduz transparências/overdraw sem apagar a leitura do Hangar
+  const neonCount = neonColumns.length * 2; // P43: quatro orientações/materiais instanciados, dois lados por coluna
+  const cyanLampVertical = new THREE.InstancedMesh(blockGeo, cyanLamp, neonCount);
+  const cyanLampHorizontal = new THREE.InstancedMesh(blockGeo, cyanLamp, neonCount);
+  const cyanHaloVertical = new THREE.InstancedMesh(blockGeo, cyanHalo, neonCount);
+  const cyanHaloHorizontal = new THREE.InstancedMesh(blockGeo, cyanHalo, neonCount);
+  const neonMeshes = [cyanLampVertical, cyanLampHorizontal, cyanHaloVertical, cyanHaloHorizontal];
+  neonMeshes.forEach(m => group.add(m));
+  let neonIndex = 0;
+  for (const c of neonColumns) for (const sgn of [-1, 1]) {          // lâmpadas ciano nas quatro paredes
+    towerDummy.position.set(sgn * (ARENA - .25), 4.7, c); towerDummy.scale.set(.12, .16, 2.2); towerDummy.updateMatrix(); cyanLampVertical.setMatrixAt(neonIndex, towerDummy.matrix);
+    towerDummy.position.set(sgn * (ARENA - .3), 4.7, c); towerDummy.scale.set(.5, .7, 3.2); towerDummy.updateMatrix(); cyanHaloVertical.setMatrixAt(neonIndex, towerDummy.matrix);
+    towerDummy.position.set(c, 4.7, sgn * (ARENA - .25)); towerDummy.scale.set(2.2, .16, .12); towerDummy.updateMatrix(); cyanLampHorizontal.setMatrixAt(neonIndex, towerDummy.matrix);
+    towerDummy.position.set(c, 4.7, sgn * (ARENA - .3)); towerDummy.scale.set(3.2, .7, .5); towerDummy.updateMatrix(); cyanHaloHorizontal.setMatrixAt(neonIndex, towerDummy.matrix);
+    neonIndex++;
   }
+  neonMeshes.forEach(m => { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); });
   group.userData.decorativeOnly = true;
   cachedSkyline = group; scene.add(group); mapMeshes.push(group);
 }
@@ -335,10 +366,12 @@ function loadMap(index) {
   });
   ceilingMesh.visible = !!M.ceiling; if (M.ceiling) ceilingMesh.position.y = M.ceiling;   // teto só nos mapas internos
   stripMat.color.setHex(M.strip);                      // faixas luminosas (só visual: não entram em solids, não bloqueiam tiro)
-  [[0, -ARENA, W, .08, .05], [0, ARENA, W, .08, .05], [-ARENA, 0, .05, .08, W], [ARENA, 0, .05, .08, W]].forEach(([x, z, w, h, d]) => {
-    const m = new THREE.Mesh(blockGeo, stripMat); m.scale.set(w, h, d); m.position.set(x * 0.998, 2.2, z * 0.998);
-    scene.add(m); mapMeshes.push(m);
+  const wallStrips = new THREE.InstancedMesh(blockGeo, stripMat, 4); // P47: quatro faixas perimetrais em uma chamada
+  [[0, -ARENA, W, .08, .05], [0, ARENA, W, .08, .05], [-ARENA, 0, .05, .08, W], [ARENA, 0, .05, .08, W]].forEach(([x, z, w, h, d], i) => {
+    const stripDummy = new THREE.Object3D(); stripDummy.scale.set(w, h, d); stripDummy.position.set(x * 0.998, 2.2, z * 0.998); stripDummy.updateMatrix(); wallStrips.setMatrixAt(i, stripDummy.matrix);
   });
+  wallStrips.instanceMatrix.needsUpdate = true; wallStrips.computeBoundingSphere();
+  scene.add(wallStrips); mapMeshes.push(wallStrips);
   if (activeMapLook === 'industrial' && !simpleGfx()) { addIndustrialSetDressing(); addSkylineDressing(); }
   navGrid = Arena.createGrid(ARENA, 1, boxes, 0.62);   // células de 1 m; 0,62 m = raio do corpo + folga
   if (warmReady) warmScene();                          // compila/aquece a arena durante o banner de transição
@@ -3099,6 +3132,7 @@ function applyPrefs() {                              // aplica o valor atual dos
     cornerLights.forEach(l => { l.userData.baseIntensity = lite ? 0 : 1.1; l.intensity = l.userData.baseIntensity; l.visible = !lite; });
     explosionLight.visible = !lite;
     if (FLAG.noLights) [muzzleLight, vmKey, vmRim].forEach(l => { l.visible = false; });
+    cachedSkyline = null; cachedIndustrialDressing = null;   // P48: skyline e neons dependem da qualidade; o cache velho ficava preso até recarregar
     if (curMap !== -1) loadMap(curMap);                  // refaz materiais da arena e reaquece (acontece no menu, nunca no combate)
   }
   TOUCH_LOOK = +prefEls.touchSens.value; assistOn = prefEls.assist.value === 'on';

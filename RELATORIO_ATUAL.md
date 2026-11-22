@@ -1,7 +1,155 @@
-# Relatório atual — Arena FPS v8 · Pacote P39
+# Relatório atual — Arena FPS v8 · Pacote P48
 
-**Base de integração:** P38 consolidado + P38 cenário/animação. **Última atualização:** pacote P39 em 22/11/2026.  
+**Base de integração:** P47 final, com correção do cache de skyline/neons ao trocar a qualidade. **Última atualização:** pacote P48 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 48 — Cache do cenário ao trocar a qualidade (22/11/2026)
+
+`cachedSkyline` e `cachedIndustrialDressing` eram criados uma vez e nunca invalidados, então as versões adaptativas do P41 e P42 (torres e neons por qualidade) só valiam após recarregar a página. Agora ambos são zerados quando a qualidade muda, antes do `loadMap`, e o cenário é refeito com a quantidade correta. Nenhuma outra mudança; gameplay intacto. Cache PWA: `arena-fps-v8-p48`.
+
+Limite: sem teste visual em navegador; validado por `bash test.sh`.
+
+## Pacote 47 — Faixas luminosas perimetrais (22/11/2026)
+
+As quatro faixas luminosas das paredes, presentes nos mapas e alteradas pelo estado visual da Incursão, agora usam um único `THREE.InstancedMesh`. A cor continua sendo aplicada pelo mesmo `stripMat`, de modo que o alarme e os estados de alerta preservam seu comportamento. As matrizes mantêm as posições e escalas anteriores; `instanceMatrix.needsUpdate` e `computeBoundingSphere()` são executados após o preenchimento.
+
+A alteração é exclusivamente de renderização. Não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos Sobrevivência, Operações e Incursão. As otimizações de cenário dos pacotes P41–P46 permanecem ativas.
+
+### Validação P47
+
+- `bash test.sh`: aprovado, incluindo checks do `wallStrips` instanciado.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P47 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P47
+
+- O ganho efetivo de draw calls e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana dos estados normal e de alerta da Incursão continua recomendada.
+
+## Pacote 46 — Estrutura escura da ponte e do guindaste (22/11/2026)
+
+Os cinco blocos estruturais escuros que compõem a ponte elevada e o guindaste do Hangar agora usam um único `THREE.InstancedMesh`. As matrizes preservam exatamente posições, escalas e material da composição anterior. O `instanceMatrix` é atualizado e o bounding sphere é recalculado após o preenchimento, reduzindo cinco meshes decorativas para uma chamada de desenho.
+
+A alteração é exclusivamente de renderização. Não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos Sobrevivência, Operações e Incursão. As otimizações de skyline, neons, luzes vermelhas e trilhos dos pacotes P41–P45 permanecem ativas.
+
+### Validação P46
+
+- `bash test.sh`: aprovado, incluindo checks da estrutura escura instanciada.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P46 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P46
+
+- O ganho efetivo de draw calls e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana da ponte e do guindaste continua recomendada para confirmar o alinhamento dos cinco blocos.
+
+## Pacote 45 — Instanciamento dos trilhos perimetrais (22/11/2026)
+
+Os quatro trilhos metálicos do dressing industrial — dois longitudinais e dois transversais — agora usam dois `THREE.InstancedMesh`, um por orientação. As geometrias e o material de aço permanecem os mesmos; as matrizes preservam as posições e escalas originais. Os bounds são recalculados após o preenchimento, reduzindo quatro meshes decorativas para duas chamadas de desenho.
+
+A alteração é exclusivamente de renderização. Não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos Sobrevivência, Operações e Incursão. As otimizações de skyline, neons e luzes vermelhas dos pacotes P41–P44 permanecem ativas.
+
+### Validação P45
+
+- `bash test.sh`: aprovado, incluindo checks dos trilhos longitudinais/transversais instanciados.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P45 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P45
+
+- O ganho efetivo de draw calls e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana do alinhamento dos trilhos continua recomendada em diferentes resoluções.
+
+## Pacote 44 — Instanciamento das luzes vermelhas do Hangar (22/11/2026)
+
+Os quatro halos vermelhos lineares das paredes e as duas lâmpadas vermelhas do guindaste agora usam `THREE.InstancedMesh`: um grupo para os halos e outro para as lâmpadas. As matrizes preservam as posições, escalas e materiais existentes, reduzindo seis meshes decorativas para duas chamadas de desenho. Os bounds são recalculados após o preenchimento.
+
+A alteração é exclusivamente de renderização. Não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos Sobrevivência, Operações e Incursão. As otimizações adaptativas de skyline e neons dos pacotes P41–P43 permanecem ativas.
+
+### Validação P44
+
+- `bash test.sh`: aprovado, incluindo checks dos halos e lâmpadas instanciados.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P44 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P44
+
+- O ganho efetivo de draw calls, overdraw e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana do Hangar continua recomendada para confirmar a preservação dos halos e das lâmpadas vermelhas.
+
+## Pacote 43 — Instanciamento dos neons do Hangar (22/11/2026)
+
+Os pontos ciano e seus halos transparentes agora são agrupados em quatro `THREE.InstancedMesh`: lâmpada vertical, lâmpada horizontal, halo vertical e halo horizontal. A quantidade de instâncias continua adaptativa ao P42 — Alta usa quatro colunas por parede e Média usa duas —, mas cada grupo de orientação/material passa a consumir uma chamada de desenho em vez de uma malha por ponto.
+
+As matrizes preservam as posições, escalas, cores e o comportamento visual anterior. Os bounds das quatro instâncias são recalculados após o preenchimento. A alteração é exclusivamente de renderização e não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos existentes.
+
+### Validação P43
+
+- `bash test.sh`: aprovado, incluindo checks dos quatro `InstancedMesh`, capacidade adaptativa e bounds.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P43 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P43
+
+- O ganho efetivo de draw calls, overdraw e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana das qualidades Alta e Média continua recomendada para confirmar que as matrizes instanciadas mantêm a leitura dos neons.
+
+## Pacote 42 — Overdraw adaptativo dos neons do Hangar (22/11/2026)
+
+O dressing industrial do Hangar agora reduz a quantidade de pontos ciano e halos transparentes na qualidade **Média**: são usados dois pontos por lado (`[-18, 6]`) em vez de quatro (`[-18, -6, 6, 18]`) na qualidade **Alta**. Os halos lineares das paredes e a leitura cromática principal permanecem preservados. A qualidade **Baixa** e `?simples=1` continuam sem o dressing industrial, conforme o comportamento anterior.
+
+Essa redução limita meshes transparentes e overdraw, especialmente em dispositivos móveis, sem alterar materiais de gameplay, colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos existentes.
+
+### Validação P42
+
+- `bash test.sh`: aprovado, incluindo checks da amostragem de neons e das otimizações de skyline P41.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P42 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P42
+
+- O ganho de overdraw, draw calls e FPS precisa ser medido em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana das qualidades Alta e Média continua recomendada para confirmar a leitura das paredes em diferentes telas.
+
+## Pacote 41 — Skyline adaptativo por qualidade (22/11/2026)
+
+O skyline exterior do Hangar mantém o `THREE.InstancedMesh`, mas agora adapta a quantidade de silhuetas à qualidade selecionada: **Alta** preserva 16 torres no anel mais a torre central; **Média** usa 8 torres no anel mais a torre central. A qualidade Baixa e `?simples=1` continuam seguindo o comportamento existente de desligar o skyline. A torre central permanece em todas as variantes ativas, e a esfera de bounds é recalculada explicitamente após a atualização das instâncias.
+
+A alteração é visual e de orçamento de renderização apenas: não modifica colisão, navegação, spawn, combate, armas, IA, progressão ou regras dos modos Sobrevivência, Operações e Incursão.
+
+### Validação P41
+
+- `bash test.sh`: aprovado, incluindo checks de `ringCount`, capacidade `ringCount + 1`, distinção Alta/Média e `computeBoundingSphere()`.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P41 carregado sem exceções JavaScript da aplicação.
+- ZIP final inspecionado, com os arquivos diretamente na raiz e sem dependências de build.
+
+### Limites P41
+
+- A redução de draw calls/FPS precisa ser medida em GPU e celular reais; o headless usa renderização por software.
+- A validação visual humana do skyline em Alta e Média continua recomendada.
+
+## Pacote 40 — Otimização do Hangar e robustez de release (22/11/2026)
+
+O skyline do Hangar agora usa um `THREE.InstancedMesh` para as 16 torres exteriores e a torre central, reduzindo draw calls sem alterar colisão, navegação ou gameplay. A textura de janelas passou a usar um gerador pseudoaleatório determinístico, mantendo a mesma composição visual entre carregamentos. Foram adicionados checks estáticos para proteger a otimização e o cache PWA foi versionado para `arena-fps-v8-p40`.
+
+### Validação P40
+
+- `bash test.sh`: aprovado, incluindo checks de `InstancedMesh`, esfera de bounds e seed determinística.
+- `node --check` dos scripts: aprovado.
+- Smoke test HTTP/headless: recursos principais em HTTP 200 e título P40 carregado sem exceções JavaScript da aplicação.
+- O balanceamento, armas, IA, progressão, Incursão e controles foram preservados.
+
+### Limites P40
+
+- Ainda é necessário medir draw calls e FPS em GPU/celular real para quantificar o ganho.
+- A validação visual humana do Hangar continua recomendada após a otimização.
 
 ## Pacote 39 — Junção P38 consolidado + P38 cenário/animação (22/11/2026)
 
