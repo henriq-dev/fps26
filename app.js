@@ -14,15 +14,39 @@
     if (standalone()) return 'Você já está usando o app instalado. Para jogar de novo, abra-o pelo atalho.';
     const secure = window.isSecureContext;
     if (!secure) lines.push('• A página não está em HTTPS: o navegador só instala apps em conexão segura.');
-    let swOk = false; try { const r = await navigator.serviceWorker.getRegistration(); swOk = !!(r && r.active); } catch (_) {}
-    if (secure && !swOk) lines.push('• O modo offline ainda não terminou de preparar. Aguarde alguns segundos e tente de novo.');
-    let manifestOk = false; try { const m = await (await fetch('manifest.json', { cache: 'no-cache' })).json(); manifestOk = !!(m.icons && m.icons.length); } catch (_) {}
-    if (!manifestOk) lines.push('• Não consegui ler o manifest do app.');
+    let swOk = false;
+    if (!('serviceWorker' in navigator)) lines.push('• Modo offline: este navegador não oferece suporte a Service Worker; não foi possível preparar o cache offline.');
+    else {
+      try {
+        const r = await navigator.serviceWorker.getRegistration();
+        swOk = !!(r && r.active);
+        if (!r) lines.push('• Modo offline: o Service Worker ainda não foi registrado nesta página. Recarregue com internet para preparar o cache.');
+        else if (!swOk) lines.push('• Modo offline: o Service Worker existe, mas ainda não está ativo. Aguarde o preparo do cache.');
+      } catch (_) { lines.push('• Modo offline: não foi possível verificar o Service Worker nesta página.'); }
+    }
+    let manifestOk = false;
+    try {
+      const link = document.querySelector('link[rel~="manifest"]');
+      if (!link || !link.href) throw new Error('a página não aponta para o manifest do app.');
+      const response = await fetch(link.href, { cache: 'no-cache' });
+      if (!response.ok) throw new Error('o arquivo manifest.json não foi encontrado (HTTP ' + response.status + ').');
+      const m = await response.json();
+      if (!(m.name || m.short_name) || !m.start_url) throw new Error('faltam nome/short_name ou start_url.');
+      const displays = [m.display, ...(Array.isArray(m.display_override) ? m.display_override : [])];
+      if (!displays.some(x => ['standalone', 'fullscreen', 'minimal-ui'].includes(x))) throw new Error('o manifest não define um modo de exibição de app.');
+      const icons = Array.isArray(m.icons) ? m.icons : [];
+      const hasSize = size => icons.some(icon => icon.type === 'image/png' && String(icon.sizes || '').split(/\s+/).includes(size + 'x' + size));
+      if (!hasSize(192) || !hasSize(512)) throw new Error('faltam ícones PNG nos tamanhos 192×192 e 512×512.');
+      manifestOk = true;
+    } catch (e) { lines.push('• Manifest do app: ' + (e.message || 'não foi possível validar o arquivo.')); }
     let installed = false;
     try { if (navigator.getInstalledRelatedApps) installed = (await navigator.getInstalledRelatedApps()).length > 0; } catch (_) {}
-    if (installed) lines.unshift('✔ O app JÁ ESTÁ INSTALADO neste navegador. Abra-o pelo atalho (Menu Iniciar, área de trabalho ou chrome://apps). O Chrome não oferece instalar de novo.');
-    else if (secure && swOk && manifestOk) lines.push('• Tudo certo no jogo; o Chrome não ofereceu a instalação automática. Provavelmente o app já foi instalado antes (abra por chrome://apps ou pelo atalho) ou o Chrome está esperando mais alguns segundos.');
-    const how = ios ? 'iPhone/iPad (Safari): Compartilhar → “Adicionar à Tela de Início”.' : /android/i.test(navigator.userAgent) ? 'Android (Chrome): menu ⋮ → “Instalar app”.' : 'Computador: ícone de instalar (⊕ ou monitor com seta) no fim da barra de endereço, ou menu ⋮ → “Transmitir, salvar e compartilhar” → “Instalar página como app”.';
+    if (installed) return '✔ O navegador confirmou que o app já está instalado. Abra-o pelo ícone na tela inicial, área de trabalho ou menu de aplicativos; não é preciso instalar novamente.';
+    if (secure && manifestOk) {
+      lines.push('✓ HTTPS e manifest com nome, start_url, modo de app e ícones PNG 192/512: verificações de instalação visíveis à página concluídas.');
+      lines.push('• O Chrome não informa à página o motivo interno pelo qual não enviou “beforeinstallprompt”. Portanto, não dá para confirmar que já está instalado nem que está apenas aguardando.');
+    } else lines.push('• Corrija os problemas de HTTPS/manifest apontados acima e recarregue. Mesmo assim, o Chrome pode aplicar outros critérios que não informa à página.');
+    const how = ios ? 'iPhone/iPad (Safari): Compartilhar → “Adicionar à Tela de Início”.' : /android/i.test(navigator.userAgent) ? 'Android (Chrome): menu ⋮ → “Instalar app” ou “Adicionar à tela inicial”.' : /edg\//i.test(navigator.userAgent) ? 'Microsoft Edge: menu ⋯ → Aplicativos → Instalar este site como aplicativo (se disponível).' : 'Chrome no computador: menu ⋮ → “Transmitir, salvar e compartilhar” → “Instalar página como app”, se essa opção estiver disponível.';
     return lines.join('\n') + '\n' + how + '\nAlternativa sem instalar: use o botão BAIXAR O JOGO.';
   };
 
