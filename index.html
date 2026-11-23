@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi · P56</title>
+<title>Arena FPS — Industrial Sci-Fi · P63</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -33,13 +33,15 @@
   <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
   <div id="terminalPrompt" class="hidden" aria-live="polite"><b> E · OPERAR TERMINAL </b><small>SEGURE PARA INVADIR</small></div>
   <div id="hitmarker"></div>
+  <div id="qualityVignette" aria-hidden="true"></div>
   <div id="banner"></div>
+  <div id="waveSplash" aria-hidden="true"></div>
   <div id="damageDirection">▲</div>
   <div id="combo"><b id="comboN">x1</b><span>COMBO</span><div><i id="comboBar"></i></div></div>
   <div id="feed"></div>
   <section class="panel" id="health" aria-label="Vida do jogador">
     <div class="label">Vida</div>
-    <div class="bar"><div id="hpFill"></div></div>
+    <div class="bar"><div id="hpGhost"></div><div id="hpFill"></div></div>
     <div id="hpTxt">100</div>
   </section>
   <section class="panel" id="stats" aria-label="Estatísticas da partida">
@@ -84,6 +86,7 @@
   <div class="deck-laptop">
     <header class="deck-bar"><b>CYBERDECK CX-7</b><span>SIMULAÇÃO · SEM REDE REAL</span>
       <div class="deck-chips" aria-live="off"><i id="deckChipScan">SCAN</i><i id="deckChipJam">JAM</i></div>
+      <button id="deckCrt" type="button" class="deck-crt" aria-pressed="true" title="Efeito de monitor antigo">CRT</button>
       <div class="deck-skins" role="group" aria-label="Visual do shell"><button type="button" data-skin="kali">KALI</button><button type="button" data-skin="arch">ARCH</button></div>
       <button id="deckClose" type="button" aria-label="Fechar o deck">✕</button></header>
     <div class="deck-panes">
@@ -100,6 +103,8 @@
       </section>
       <section id="paneDesk" class="deck-pane" aria-label="Área de trabalho">
         <div class="desk-sun" aria-hidden="true"></div>
+        <div class="desk-win desk-mon" aria-label="Monitor do sistema"><b>sysmon</b><canvas id="deckMon" width="240" height="120"></canvas></div>
+        <div class="desk-win desk-log" aria-label="Registro do sistema"><b>journal</b><pre id="deckLog"></pre></div>
         <div class="desk-icons">
           <button type="button" data-pane="paneShell"><i>▮_</i>Terminal</button>
           <button type="button" data-pane="paneFiles"><i>▤</i>Arquivos</button>
@@ -202,6 +207,10 @@
           <label class="touch-only">Sensibilidade do toque<input id="touchSens" type="range" min="0.8" max="3.2" step="0.1" value="1.9"></label>
           <label class="touch-only">Tamanho dos botões<input id="btnScale" type="range" min="0.8" max="1.35" step="0.05" value="1"></label>
           <label class="touch-only">Mira assistida<select id="assistSelect"><option value="on" selected>Ligada</option><option value="off">Desligada</option></select></label>
+          <label>Estilo da mira<select id="crossStyle"><option value="cross" selected>Cruz</option><option value="dot">Ponto</option><option value="circle">Círculo</option></select></label>
+          <label>Cor da mira<select id="crossColor"><option value="weapon" selected>Cor da arma</option><option value="#ffffff">Branca</option><option value="#3ddc84">Verde</option><option value="#4de7ff">Ciano</option><option value="#ffd166">Amarela</option><option value="#ff5a4d">Vermelha</option></select></label>
+          <label>Espessura da mira<input id="crossThick" type="range" min="1" max="4" step="0.5" value="2"></label>
+          <label>Reduzir tremores e flashes<select id="fxReduce"><option value="off" selected>Não</option><option value="on">Sim (tela, flashes e CRT)</option></select></label>
           <label>Qualidade<select id="qualitySelect"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
         </div>
       </details>

@@ -553,7 +553,7 @@ body:has(#overlay:not(.hidden)[data-view="over"]) :is(#hud, #crosshair, #hitmark
 .files-list li button { width: 100%; text-align: left; font: inherit; font-size: 13px; color: var(--fg); background: transparent; border: 0; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
 .files-list li button:hover, .files-list li button.on { background: color-mix(in srgb, var(--ac) 25%, transparent); }
 .files-view { margin: 0; padding: 12px 14px; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--fg); white-space: pre-wrap; overflow-y: auto; }
-#deckNet { width: 100%; height: 100%; display: block; background: color-mix(in srgb, var(--bg) 85%, #000); }
+#deckNet { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: color-mix(in srgb, var(--bg) 85%, #000); }
 #paneDesk { background: linear-gradient(180deg, #14072e 0%, #3b1559 55%, #c2307a 100%); align-items: center; justify-content: center; }
 .desk-sun { position: absolute; left: 50%; top: 30%; width: 38%; aspect-ratio: 1; transform: translateX(-50%); border-radius: 50%; background: linear-gradient(180deg, #ffd166, #ff3d8b); -webkit-mask: repeating-linear-gradient(180deg, #000 0 8px, transparent 8px 12px) bottom/100% 55% no-repeat, linear-gradient(#000 0 0) top/100% 45% no-repeat; mask: linear-gradient(#000 0 0) top/100% 45% no-repeat, repeating-linear-gradient(180deg, #000 0 8px, transparent 8px 12px) bottom/100% 55% no-repeat; opacity: .9; }
 .desk-icons { position: relative; display: flex; gap: 22px; margin-top: 30%; }
@@ -580,3 +580,73 @@ body:has(#overlay:not(.hidden)[data-view="over"]) :is(#hud, #crosshair, #hitmark
 .cine { position: fixed; left: 0; right: 0; height: 0; background: #000; z-index: 8; pointer-events: none; transition: height .35s ease-out; }
 #cineTop { top: 0; } #cineBot { bottom: 0; } .cine.on { height: 9vh; }
 @media (prefers-reduced-motion: reduce) { .cine { transition: none; } }
+
+/* P58: modo hack mais real — efeito CRT, janelas do desktop (monitor e journal) */
+#deck.crt .deck-laptop::before { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: 12px; background: radial-gradient(ellipse at center, transparent 58%, rgba(0,0,0,.42) 100%); box-shadow: inset 0 0 38px rgba(0,0,0,.55); }
+#deck.crt .deck-out, #deck.crt .files-view { text-shadow: 0 0 5px color-mix(in srgb, var(--fg) 55%, transparent), -.7px 0 rgba(255,60,60,.28), .7px 0 rgba(60,200,255,.28); }
+#deck.crt .deck-panes { animation: crtFlicker 5s infinite steps(1, end); }
+#deck.crt .deck-laptop::after { background: repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0 1px, rgba(0,0,0,.14) 1px 3px); animation: crtRoll 7s linear infinite; background-size: 100% 3px; }
+.deck-crt { font: inherit; color: var(--fg); background: transparent; border: 1px solid var(--dim); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.deck-crt[aria-pressed="true"] { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 30%, transparent); }
+@keyframes crtFlicker { 0%, 92%, 100% { opacity: 1; } 93% { opacity: .93; } 95% { opacity: .98; } }
+@keyframes crtRoll { from { background-position: 0 0; } to { background-position: 0 60px; } }
+.desk-win { position: absolute; top: 12px; padding: 6px 8px 8px; background: rgba(8,10,22,.72); border: 1px solid rgba(255,255,255,.22); border-radius: 8px; backdrop-filter: blur(3px); color: #cfe; font: 11px ui-monospace, monospace; }
+.desk-win b { display: block; font-size: 10px; letter-spacing: .14em; color: #9fb4ff; text-transform: uppercase; margin-bottom: 4px; }
+.desk-mon { left: 12px; } .desk-mon canvas { width: min(240px, 36vw); height: auto; display: block; }
+.desk-log { right: 12px; width: min(250px, 38vw); } .desk-log pre { margin: 0; height: 96px; overflow: hidden; white-space: pre-wrap; line-height: 1.35; color: #9be9b0; }
+@media (prefers-reduced-motion: reduce) { #deck.crt .deck-panes, #deck.crt .deck-laptop::after { animation: none; } }
+@media (max-width: 560px) { .desk-log { display: none; } }
+
+/* P59: mira personalizável, hitmarker de abate, barra de vida animada, fundo do aviso, modo conforto */
+#crosshair { --cc: var(--cross-color, var(--weapon-color, #fff)); --ct: 2px; filter: drop-shadow(0 0 1px rgba(0,0,0,.9)); }
+#crosshair i { background: var(--cc); box-shadow: 0 0 4px rgba(0,0,0,.75); }
+#crosshair i:nth-child(1), #crosshair i:nth-child(2) { width: var(--ct); left: calc(var(--ct) / -2); }
+#crosshair i:nth-child(3), #crosshair i:nth-child(4) { height: var(--ct); top: calc(var(--ct) / -2); }
+#crosshair b { background: var(--cc); }
+#crosshair[data-style="dot"] i { display: none; } #crosshair[data-style="dot"] b { width: calc(var(--ct) + 3px); height: calc(var(--ct) + 3px); left: calc((var(--ct) + 3px) / -2); top: calc((var(--ct) + 3px) / -2); border-radius: 50%; }
+#crosshair[data-style="circle"] i { display: none; } #crosshair[data-style="circle"] b { width: calc(var(--gap) * 2); height: calc(var(--gap) * 2); left: calc(var(--gap) * -1); top: calc(var(--gap) * -1); border-radius: 50%; background: transparent; border: var(--ct) solid var(--cc); box-shadow: 0 0 4px rgba(0,0,0,.75), inset 0 0 4px rgba(0,0,0,.5); box-sizing: border-box; }
+#hitmarker.kill { width: 40px; height: 40px; }
+#hitmarker.kill::before, #hitmarker.kill::after { background: #ff4d4d; box-shadow: 0 0 10px #ff2d2d; height: 46px; top: -8px; left: 19px; }
+.bar { position: relative; }
+#hpGhost { position: absolute; inset: 0 auto 0 0; width: 100%; background: rgba(255,255,255,.55); transition: width .9s ease-out .35s; }
+#hpFill { position: relative; }
+.bar.low #hpFill { animation: hpPulse .8s ease-in-out infinite; }
+@keyframes hpPulse { 50% { filter: brightness(1.7); } }
+#banner { padding: 10px 34px; background: linear-gradient(90deg, transparent, rgba(8,10,20,.66) 16%, rgba(8,10,20,.66) 84%, transparent); border-radius: 6px; }
+body.reduce-fx #scanFlash, body.reduce-fx #vignette { display: none; }
+body.reduce-fx #deck .deck-panes, body.reduce-fx #deck .deck-laptop::after { animation: none; }
+body.reduce-fx #deck .deck-laptop::before, body.reduce-fx #deck .deck-laptop::after { display: none; }
+body.reduce-fx #deck .deck-out, body.reduce-fx #deck .files-view { text-shadow: none; }
+body.reduce-fx * { animation-duration: .001s !important; animation-iteration-count: 1 !important; }
+@media (prefers-reduced-motion: reduce) { .bar.low #hpFill { animation: none; } #hpGhost { transition: none; } }
+
+/* P60: transições do HUD */
+#ammo.tick { animation: ammoTick .18s ease-out; }
+@keyframes ammoTick { from { transform: scale(1.18); color: var(--accent); } to { transform: scale(1); } }
+#banner { transition: opacity .35s ease, transform .35s ease; }
+#objective, #missionCard { transition: opacity .4s ease, transform .4s ease; }
+@media (prefers-reduced-motion: reduce) { #ammo.tick { animation: none; } }
+
+/* P61: fases do chefe, numeral da onda e telas de fim com identidade */
+#bossFill { transition: width .12s, background .4s; }
+body[data-boss-phase="2"] #bossFill { background: linear-gradient(90deg, #ff9a3d, #ffd166); }
+body[data-boss-phase="3"] #bossFill { background: linear-gradient(90deg, #ff1f4d, #ff5a4d); animation: bossRage .6s ease-in-out infinite; }
+body[data-boss-phase="3"] #bossBar { color: #ff5a6d; }
+@keyframes bossRage { 50% { filter: brightness(1.6); } }
+#waveSplash { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%); font-weight: 900; font-size: clamp(120px, 26vw, 300px); line-height: 1; color: transparent; -webkit-text-stroke: 3px rgba(255,255,255,.35); opacity: 0; pointer-events: none; letter-spacing: -.04em; z-index: 3; }
+#waveSplash.boss { -webkit-text-stroke-color: rgba(255,60,100,.55); }
+#waveSplash.go { animation: waveSplash 1.5s ease-out; }
+@keyframes waveSplash { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } 25% { opacity: .9; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(.92); } }
+#overlay[data-view="over"][data-result="win"] #ovTitle, #overlay[data-view="over"][data-result="win"] h1 { text-shadow: 0 0 28px rgba(61,220,132,.65); animation: resultGlow 2.4s ease-in-out infinite; }
+#overlay[data-view="over"][data-result="lose"] #ovTitle, #overlay[data-view="over"][data-result="lose"] h1 { text-shadow: 0 0 28px rgba(255,59,59,.6); animation: resultShake .5s steps(2, end) 2; }
+@keyframes resultGlow { 50% { text-shadow: 0 0 46px rgba(61,220,132,.95); } }
+@keyframes resultShake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+body.reduce-fx #waveSplash { display: none; }
+@media (prefers-reduced-motion: reduce) { #waveSplash.go, body[data-boss-phase="3"] #bossFill, #overlay[data-view="over"] h1, #overlay[data-view="over"] #ovTitle { animation: none; } }
+#overlay[data-view="over"][data-result="win"] #ovTitle span { color: #3ddc84; }
+#overlay[data-view="over"][data-result="lose"] #ovTitle span { color: #ff5a4d; }
+
+/* P62: acabamento só em qualidade Alta */
+#qualityVignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 1; background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.34) 100%); transition: opacity .4s; }
+body.q-high #qualityVignette { opacity: 1; }
+body.reduce-fx #qualityVignette { display: none; }

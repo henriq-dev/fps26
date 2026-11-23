@@ -305,3 +305,33 @@
 - [x] Sol listrado e rótulos do mapa sem sobreposição
 - [ ] Henriq: medir FPS real (`?perf=1` CSV + `chrome://gpu`)
 - [ ] Andares / arena maior — Henriq disse "sim"; precisa do FPS real e de um desenho (piso 2, rampas/escadas, colisão vertical, IA e pathfinding)
+
+## Lista de melhorias visuais (proposta ao Henriq — ele quer olhar e mexer nos detalhes)
+- Incursão: névoa/volumétrico nos corredores, luz de alarme vermelha pulsando, poeira, reflexos no piso, decalques nas paredes, portas com luzes de status, ícones no HUD de missão
+- Hack/deck: janelas arrastáveis, fontes e temas por distro, efeito CRT, gráfico de CPU/rede, animação de "conectando", mapa da rede com ligações
+- Armas: recuo/kick por arma, estojos, flash e fumaça do cano, animação de inspeção (F), skins/camuflagens, laser/mira vermelha
+- Mira: cruz dinâmica que abre ao atirar/correr, estilos (cruz/ponto/círculo), cor/espessura, hitmarker por tipo (corpo/cabeça/morte), mira por arma, mira de luneta com retículo
+- Geral: HUD (vida/escudo animados), dano direcional, tela de morte, transições de tela, quality presets, partículas de impacto por material
+
+## P57 (mãos arredondadas + armas chanfradas) — DESCARTADO pelo Henriq ("tá muito feio"). Base segue sendo o P56.
+
+## Pacote 58 `[x]` — modo hack mais real
+- [x] CRT, sysmon, journal, tráfego no mapa, laptop 3D detalhado
+- [ ] Ideias: janelas arrastáveis, `ssh`/`grep` simulados, peças móveis nas armas, andares (após FPS real)
+
+## Pacote 59 `[x]` — lista visual (Fácil)
+- [x] mira personalizável, hitmarker de abate, vida animada, fundo no aviso, luz nas portas, pistola/sniper menores, modo conforto
+- [ ] P60 Médio: inimigos (destaque, silhueta por classe, reação ao acerto), faíscas por material, placas/paleta por prédio, ícones/alertas padronizados, Baixa/Média/Alta
+- [ ] P61 Difícil: telas de onda/missão/vitória/derrota, fases de chefe, piso molhado/névoa, auto-qualidade por FPS, peças móveis das armas
+
+## Pacote 60 `[x]` — lista visual (Médio)
+- [x] contorno de inimigos, impactos por material, placas de direção, pulso de munição, partículas por qualidade
+- [ ] P61: silhueta/acessórios por classe, ícones padronizados, telas de onda/missão/vitória/derrota, fases do chefe, piso molhado/névoa, auto-qualidade por FPS, peças móveis das armas
+
+## Pacote 61 `[x]` — lista visual (Difícil, parte visual)
+- [x] chefe por fase, numeral da onda, telas de fim, ferrolho recua, acessórios por classe
+- [ ] Depende de FPS real: piso molhado/reflexos, névoa, iluminação por área, DOF/aberração, auto-qualidade de partículas
+- [ ] Mãos: deixadas de lado a pedido do Henriq
+
+## Pacote 62 `[x]` — acabamento em Alta (poças, vinheta, faíscas adaptativas)
+- [ ] Ainda depende de FPS real: névoa, iluminação por área, DOF/aberração

@@ -245,6 +245,11 @@ console.log('core tests: OK');
 assert.equal(A.INCURSION_STAGES.length, 4);
 assert.equal(A.INCURSION.terminals.t3.x, 23);
 assert.equal(A.INCURSION_LEVELS.length, 4);
+for (const level of A.INCURSION_LEVELS) {
+  const u = level.upperDeck;
+  assert.ok(u && u.height > 0 && u.w > 0 && u.d > 0 && u.rampLength > 0, level.id + ': segundo piso configurado');
+  assert.ok(Math.abs(u.x) < 1 && Math.abs(u.z) < 1, level.id + ': deck central');
+}
 assert.deepEqual(JSON.parse(JSON.stringify(Object.values(A.INCURSION.terminals).map(t => t.kind))), ['kvm', 'network', 'datacenter']);
 assert.ok(Object.values(A.INCURSION.terminals).every(t => Number.isFinite(t.rotation)));
 assert.match(fs.readFileSync('index.html', 'utf8'), /terminal-props\.js/);
@@ -486,3 +491,27 @@ console.log('p55: mãos, hologramas, drone PiP e cinemática OK');
 assert.match(gameSource, /porta fechada barra o tiro do jogador/); assert.match(gameSource, /placed\.some\(/);
 assert.match(require('fs').readFileSync(require('path').join(__dirname, '..', 'style.css'), 'utf8'), /transparent 8px 12px/);
 console.log('p56: portas barram tiros do jogador e detalhes visuais OK');
+
+// ---- p57: armas com quinas chanfradas (mãos intactas) ----
+assert.match(gameSource, /function bevelBoxGeometry\(w, h, d\)/); assert.ok(!/function gloveSleeve\(/.test(gameSource), 'mãos não mudam');
+console.log('p57: armas chanfradas OK');
+
+// ---- p58: modo hack mais real ----
+assert.match(gameSource, /function hackSample\(\)/); assert.match(gameSource, /function hackMonDraw\(\)/); assert.match(gameSource, /function updateDeckLeds\(\)/); assert.match(gameSource, /arenaCrt/);
+console.log('p58: CRT, sysmon, journal, tráfego e laptop 3D detalhado OK');
+
+// ---- p59: mira, HUD e conforto (itens Fáceis da lista visual) ----
+assert.match(gameSource, /reduceFx/); assert.match(gameSource, /hpGhost/); assert.match(gameSource, /hitKind = 'kill'/); assert.match(gameSource, /lampMat/);
+console.log('p59: mira personalizável, hitmarker de abate, vida animada, luz nas portas e modo conforto OK');
+
+// ---- p60: lista visual, nível Médio ----
+assert.match(gameSource, /function rimMat\(color\)/); assert.match(gameSource, /function signTexture\(/); assert.match(gameSource, /glass = !!/); assert.match(gameSource, /ammoTick|classList\.add\('tick'\)/);
+console.log('p60: contorno de inimigos, impactos por material, placas de direção e pulso de munição OK');
+
+// ---- p61: lista visual, nível Difícil (parte visual) ----
+assert.match(gameSource, /function countUpStats\(/); assert.match(gameSource, /bossPhase = ph/); assert.match(gameSource, /waveSplash/); assert.match(gameSource, /o ferrolho recua com o tiro/); assert.match(gameSource, /key === 'brute'/);
+console.log('p61: fases do chefe, numeral da onda, telas de fim, ferrolho e classes OK');
+
+// ---- p62: acabamento em qualidade Alta ----
+assert.match(gameSource, /function addPuddles\(M\)/); assert.match(gameSource, /appliedQuality === 'high'\) addPuddles/); assert.match(gameSource, /curPR < prCap \* 0\.75/);
+console.log('p62: poças, vinheta e faíscas adaptativas OK');

@@ -58,6 +58,7 @@ function buildComplex() {
   return { id: 'complexo', name: 'Complexo', theme: 'COMPLEXO // INCURSÃO', ceiling: H, floorTint: 0x8c9092, strip: 0x4de7ff, sky: 0x1b2630, floorA: '#3b4144', floorB: '#2c3235', wall: 0x5d6b75,
     blocks, glows, terminals, exit: { x: -25, z: 0 }, doors: blocks.doors,
     cameras: [{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }], turrets: Arena.turretsFor([{ x: 0, z: -26.6, dir: 0 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: 0, z: 26.6, dir: Math.PI }]),
+    upperDeck: { x: 0, z: 0, w: 8, d: 6, height: 3, rampLength: 8, rampWidth: 4 },
     spawns: [[-8, -8], [-22, -8], [-8, -22], [8, -8], [22, -8], [8, -24], [8, 8], [22, 24], [24, 16], [-8, 8], [-22, 8], [-22, 24], [0, -25], [0, 25], [25, 0]],
     hints: ['Atravesse o prédio até a SALA DE SEGURANÇA (noroeste) e invada o console KVM.', 'Vá à SALA DE REDE (nordeste) e escolha qual sistema de segurança reduzir.', 'Entre no DATACENTER (sudeste) e use o console central. Escolha o objetivo final.', 'Volte pelo corredor oeste até a SAÍDA DE SERVIÇO antes que a resposta chegue.'] };
 }
@@ -78,6 +79,7 @@ function buildRefinery() {
   return { id: 'refinaria', name: 'Refinaria', theme: 'REFINARIA // NÚCLEO ÂMBAR', ceiling: H, floorTint: 0x9a9283, strip: 0xffb04d, sky: 0x2a2218, floorA: '#4a4338', floorB: '#352f27', wall: 0x6b6252,
     blocks, glows, terminals, exit: { x: 25, z: 0 }, doors: blocks.doors,
     cameras: [{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }], turrets: Arena.turretsFor([{ x: -13.2, z: -13.2, dir: Math.PI * 0.25 }, { x: 13.2, z: 13.2, dir: -Math.PI * 0.75 }, { x: 13.2, z: -13.2, dir: -Math.PI * 0.25 }]),
+    upperDeck: { x: 0, z: 0, w: 8, d: 6, height: 3, rampLength: 8, rampWidth: 4 },
     spawns: [[0, -11], [0, 11], [-11, 0], [11, 0], [-11, -11], [11, 11], [-22, -8], [-22, 8], [22, -8], [22, 8], [-15, -22], [15, -22], [-15, 22], [15, 22], [0, 24], [0, -24]],
     hints: ['Saia do NÚCLEO pela porta oeste e invada o console do ESCRITÓRIO.', 'Siga o anel até a SALA DE CONTROLE (norte) e escolha qual sistema reduzir.', 'Vá à sala do REATOR (sul) e use o console. Escolha o objetivo final.', 'Cruze o anel até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
@@ -98,6 +100,7 @@ function buildLab() {
   return { id: 'laboratorio', name: 'Laboratório', theme: 'LABORATÓRIO // SETOR MÉDICO', ceiling: H, floorTint: 0x9aa7a8, strip: 0x3ddc84, sky: 0x1c2a2a, floorA: '#3d4a4a', floorB: '#2e3a3a', wall: 0x607373,
     blocks, glows, terminals, exit: { x: 26, z: 0 }, doors: blocks.doors,
     cameras: [{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }], turrets: Arena.turretsFor([{ x: -26.6, z: 0, dir: Math.PI / 2 }, { x: 26.6, z: 0, dir: -Math.PI / 2 }, { x: -10, z: -3.9, dir: Math.PI * 0.3 }]),
+    upperDeck: { x: 0, z: 0, w: 8, d: 6, height: 3, rampLength: 8, rampWidth: 4 },
     spawns: [[-20, 0], [20, 0], [-8, 0], [8, 0], [-18, -15], [0, -14], [18, -15], [-18, 15], [0, 14], [18, 15], [-24, -10], [24, 10], [-24, 22], [24, -22]],
     hints: ['Entre na sala do LABORATÓRIO (noroeste) e invada o console.', 'Cruze o salão até a sala da CIRURGIA (sudeste) e escolha qual sistema reduzir.', 'Volte ao ARQUIVO CENTRAL (sudoeste) e use o console. Escolha o objetivo final.', 'Corra pelo salão até a SAÍDA DE SERVIÇO no leste antes que a resposta chegue.'] };
 }
@@ -119,6 +122,7 @@ function buildCampus() {
   const cameras = [{ x: -11.2, z: -14.6, dir: 0 }, { x: 11.2, z: 14.6, dir: Math.PI }, { x: 0, z: -14.6, dir: 0 }];
   return { id: 'campus', name: 'Campus', theme: 'CAMPUS // BLOCOS A–E', ceiling: H, floorTint: 0x8f94a3, strip: 0x9e7bff, sky: 0x1d1b30, floorA: '#3a3b4a', floorB: '#2c2d3a', wall: 0x5f6678,
     blocks, glows, terminals, exit: { x: -11.2, z: 0 }, doors: blocks.doors, cameras, turrets: Arena.turretsFor(cameras),
+    upperDeck: { x: 0, z: 0, w: 8, d: 6, height: 3, rampLength: 8, rampWidth: 4 },
     spawns: [[-22, 0], [-22, -11], [-11, -11], [-11, 10], [0, -12], [0, 12], [11, 10], [11, -11], [22, 11], [22, -12], [-26, 12], [26, 0]],
     hints: ['Parta do BLOCO C (hall) para o BLOCO D (leste) e invada o console.', 'Cruze o campus até o BLOCO A (extremo oeste) e escolha qual sistema reduzir.', 'Atravesse tudo até o BLOCO E (extremo leste) e use o console central. Escolha o objetivo final.', 'Volte ao BLOCO B (oeste, perto do hall): a SAÍDA DE SERVIÇO fica no centro dele.'] };
 }

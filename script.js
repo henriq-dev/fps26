@@ -122,9 +122,17 @@ function setViewModelLights(index) {
    ===================================================================== */
 const solids = [];   // meshes que bloqueiam tiros (raycast)
 const boxes = [];    // caixas de colisão AABB (movimento)
-let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     // navGrid = grade do A* (recriada a cada mapa)
+let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic', activeUpperDeck = null;     // navGrid = grade do A* (recriada a cada mapa)
 let incTerminalViews = Object.create(null); let incTurrets = [];
 let incDoors = [], incCams = [];
+const signTex = {}, SIGN_LABELS = ['SEGURANÇA', 'CORREDOR A', 'SERVIDORES', 'ARQUIVO', 'SETOR B', 'SAÍDA'], SIGN_ARROWS = ['←', '→', '↑', '→', '←', '↑'];
+function signTexture(label, arrow, color) {                      // P60: placa de direção (cor = tira do prédio); textura em cache por texto+cor
+  const key = label + arrow + color; if (signTex[key]) return signTex[key];
+  const cv = document.createElement('canvas'); cv.width = 192; cv.height = 48; const g = cv.getContext('2d');
+  g.fillStyle = '#10151c'; g.fillRect(0, 0, 192, 48); g.fillStyle = '#' + color.toString(16).padStart(6, '0'); g.fillRect(0, 0, 8, 48);
+  g.font = 'bold 22px monospace'; g.textBaseline = 'middle'; g.fillText(arrow, 18, 25); g.font = 'bold 17px monospace'; g.fillStyle = '#e8f1f8'; g.fillText(label, 46, 25);
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = 2; return (signTex[key] = t);
+}
 const doorMat = new THREE.MeshLambertMaterial({ color: 0x4a5866 }), camBodyMat = new THREE.MeshLambertMaterial({ color: 0x20262e });                                     // terminais visuais, sem colisão extra
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
 const blockMats = new Map();
@@ -165,6 +173,21 @@ function addBlock(x, z, w, h, d, color, collide = true) {
   m.scale.set(w, h, d); m.position.set(x, h / 2, z); m.userData.surface = surfaceForColor(color);
   scene.add(m); solids.push(m); mapMeshes.push(m);
   if (collide) boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
+}
+// P63: altura contínua do térreo à plataforma; a rampa mantém o A* 2D conectado.
+function floorOffsetAt(x, z) {
+  const u = activeUpperDeck; if (!u) return 0;
+  if (Math.abs(x - u.x) <= u.w / 2 && Math.abs(z - u.z) <= u.d / 2) return u.height;
+  const a = u.z - u.d / 2 - u.rampLength, b = u.z - u.d / 2;
+  if (Math.abs(x - u.x) <= u.rampWidth / 2 && z >= a && z <= b) return ((z - a) / u.rampLength) * u.height;
+  return 0;
+}
+function addUpperDeck(M) {
+  activeUpperDeck = M.upperDeck || null; if (!activeUpperDeck) return;
+  const u = activeUpperDeck, mat = blockMat(M.wall), edge = new THREE.MeshBasicMaterial({ color: M.strip || 0x4de7ff });
+  const deck = new THREE.Mesh(blockGeo, mat); deck.scale.set(u.w, .18, u.d); deck.position.set(u.x, u.height - .09, u.z); scene.add(deck); mapMeshes.push(deck);
+  const ramp = new THREE.Mesh(blockGeo, mat); ramp.scale.set(u.rampWidth, .18, u.rampLength); ramp.rotation.x = -Math.atan2(u.height, u.rampLength); ramp.position.set(u.x, u.height / 2 - .02, u.z - u.d / 2 - u.rampLength / 2); scene.add(ramp); mapMeshes.push(ramp);
+  for (const side of [-1, 1]) { const rail = new THREE.Mesh(blockGeo, edge); rail.scale.set(.08, .72, u.d); rail.position.set(u.x + side * (u.w / 2 - .08), u.height + .36, u.z); scene.add(rail); mapMeshes.push(rail); }
 }
 // Luzes coloridas nos 4 cantos (dão profundidade sem custo alto) + faixa luminosa nas paredes (cor muda por mapa)
 const stripMat = new THREE.MeshBasicMaterial({ color: 0xff5a4d });
@@ -329,6 +352,24 @@ function addSkylineDressing() {
   cachedSkyline = group; scene.add(group); mapMeshes.push(group);
 }
 // Monta uma arena: troca cores, apaga a anterior e recria a grade do A*
+// P62 (qualidade Alta): poças no piso que "refletem" a cor do prédio. São planos translúcidos sem luz (1 desenho cada), em posições fixas por mapa e longe de obstáculos.
+const puddleTex = {};
+function puddleTexture(color) {
+  if (puddleTex[color]) return puddleTex[color];
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), hex = '#' + color.toString(16).padStart(6, '0');
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62); grad.addColorStop(0, hex + 'cc'); grad.addColorStop(.55, hex + '55'); grad.addColorStop(1, hex + '00');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128); g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 2; g.beginPath(); g.ellipse(64, 64, 26, 14, 0, 0, 7); g.stroke();
+  return (puddleTex[color] = new THREE.CanvasTexture(cv));
+}
+function addPuddles(M) {
+  let seed = 9173 + curMap * 131; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const mat = new THREE.MeshBasicMaterial({ map: puddleTexture(M.strip || 0x4de7ff), transparent: true, opacity: 0.55, depthWrite: false });
+  for (let tries = 0, n = 0; tries < 70 && n < 8; tries++) {
+    const x = (rnd() * 2 - 1) * (ARENA - 4), z = (rnd() * 2 - 1) * (ARENA - 4), w = 2.4 + rnd() * 1.8, d = 1.6 + rnd() * 1.2;
+    if (Math.hypot(x, z) < 5 || blocked(x, z, Math.max(w, d) * 0.55)) continue;
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); p.rotation.x = -Math.PI / 2; p.rotation.z = rnd() * 3; p.position.set(x, 0.02, z); p.renderOrder = 1; scene.add(p); mapMeshes.push(p); n++;
+  }
+}
 function loadMap(index) {
   const inc = index <= -2;                                  // -2/-3/-4 = prédios da Incursão
   const M = inc ? Arena.INCURSION_LEVELS[-2 - index] : Arena.MAPS[index % Arena.MAPS.length]; curMap = inc ? index : index % Arena.MAPS.length;
@@ -342,6 +383,9 @@ function loadMap(index) {
   addBlock(0, -ARENA - 0.5, W, 6, 1, M.wall, false); addBlock(0, ARENA + 0.5, W, 6, 1, M.wall, false);
   addBlock(-ARENA - 0.5, 0, 1, 6, W, M.wall, false); addBlock(ARENA + 0.5, 0, 1, 6, W, M.wall, false);
   M.blocks.forEach(b => addBlock(...b));               // obstáculos / coberturas
+  activeUpperDeck = null;
+  if (inc) addUpperDeck(M);
+  if (inc && appliedQuality === 'high') addPuddles(M);   // P62: poças com reflexo falso só em qualidade Alta
   (M.glows || []).forEach(([x, y, z, w, h, d, c]) => {  // detalhes luminosos (telas, LEDs): sem colisão, material compartilhado por cor
     const g = new THREE.Mesh(blockGeo, glowMat(c)); g.scale.set(w, h, d); g.position.set(x, y, z); scene.add(g); mapMeshes.push(g);
   });
@@ -350,7 +394,13 @@ function loadMap(index) {
   incDoors = []; incCams = []; incTurrets = [];
   (M.doors || []).forEach(d => {                          // portas deslizantes (só visual; a colisão/A* continuam tratando a abertura como livre)
     const m = new THREE.Mesh(blockGeo, doorMat); m.scale.set(d.axis === 'x' ? 4 : 0.3, M.ceiling - 0.15, d.axis === 'x' ? 0.3 : 4);
-    m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m); incDoors.push({ m, x: d.x, z: d.z, axis: d.axis, open: 0, y0: m.position.y });
+    m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m);
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xff3b3b });                 // P59: luz de status da porta (vermelha = fechada, verde = aberta)
+    for (const side of [-1, 1]) { const lamp = new THREE.Mesh(blockGeo, lampMat); lamp.scale.set(d.axis === 'x' ? 0.55 : 0.07, 0.12, d.axis === 'x' ? 0.07 : 0.55); lamp.position.set(d.x + (d.axis === 'x' ? 0 : side * 0.2), M.ceiling - 0.6, d.z + (d.axis === 'x' ? side * 0.2 : 0)); scene.add(lamp); mapMeshes.push(lamp); }
+    const si = incDoors.length % SIGN_LABELS.length, signMat = new THREE.MeshBasicMaterial({ map: signTexture(SIGN_LABELS[si], SIGN_ARROWS[si], M.strip || 0x4de7ff) });
+    for (const side of [-1, 1]) { const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.375), signMat); sign.position.set(d.x + (d.axis === 'x' ? 0 : side * 0.19), M.ceiling - 0.95, d.z + (d.axis === 'x' ? side * 0.19 : 0));
+      sign.rotation.y = d.axis === 'x' ? (side > 0 ? 0 : Math.PI) : (side > 0 ? Math.PI / 2 : -Math.PI / 2); scene.add(sign); mapMeshes.push(sign); }
+    incDoors.push({ m, x: d.x, z: d.z, axis: d.axis, open: 0, y0: m.position.y, lampMat });
   });
   (M.cameras || []).forEach(c => {                        // câmeras de segurança: corpo escuro + luz (vermelha = ativa)
     const g = new THREE.Group(); g.position.set(c.x, 3.25, c.z);
@@ -537,7 +587,7 @@ function updateIncursionTerminalViews() {
 }
 function startIncursion() {
   incLevel = Math.min(Arena.INCURSION_LEVELS.length - 1, Math.max(0, parseInt($('incLevelSelect').value, 10) || 0));
-  loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
+  loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0; py = EYE + floorOffsetAt(px, pz); vy = 0;
   terminalInteraction.id = null; terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = false; terminalInteraction.focus = 0;
   inc = { stage: 0, hold: 0, inRange: false, security: null, targets: [], fx: Arena.incursionEffects(null, []), spawned: 0, spawnT: 2, alarmT: 0, overrun: false,
           marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0, alertT: 0, camCd: 0, camHits: 0, scanT: 0, scanCd: 0, jamT: 0, jamCd: 0 };
@@ -550,7 +600,7 @@ function enterIncStage(i) {
   WEAPONS.forEach((w, k) => { const u = w.unlock || 1; if (u > prevWave && u <= wave) addFeed(`NOVA ARMA: ${w.name.toUpperCase()} [${k + 1}]`, false); });
   const st = incStage(), t = incTarget();
   if (inc.marker) scene.remove(inc.marker);
-  const marker = new THREE.Group(); marker.position.set(t.x, 0, t.z);
+  const marker = new THREE.Group(); marker.position.set(t.x, floorOffsetAt(t.x, t.z), t.z);
   const base = new THREE.Mesh(objectiveBaseGeo, objectiveMat); base.position.y = 0.14;
   const core = new THREE.Mesh(objectiveCoreGeo, st.exit ? new THREE.MeshBasicMaterial({ color: 0x3ddc84 }) : objectiveCoreMat); core.position.y = 1.1;
   const ring = new THREE.Mesh(objectiveRingGeo, objectiveRingMat); ring.position.y = 0.64; ring.rotation.x = Math.PI / 2;
@@ -667,12 +717,44 @@ function paintLaptop() {                              // tela do laptop 3D = she
   deckRig.userData.lid = new THREE.Group(); deckRig.userData.lid.position.set(0, 0.009, -0.12); deckRig.userData.lid.add(lid, scr);
   deckRig.add(base, keys, pad, deckRig.userData.lid); deckRig.scale.setScalar(1.35);
 }
+// P58: detalhes do laptop 3D — teclado desenhado, moldura da tela, adesivos originais na tampa, dobradiças, LEDs e adaptador de rede
+const dkLed = new THREE.MeshBasicMaterial({ color: 0x1a3d2a });
+{
+  const mk = (w, h, draw) => { const cv = document.createElement('canvas'); cv.width = w; cv.height = h; draw(cv.getContext('2d'), w, h); const t = new THREE.CanvasTexture(cv); t.anisotropy = 4; return t; };
+  const keyTex = mk(256, 112, (g, W, H) => {                                              // teclado: 14 colunas x 5 fileiras com luz azul por baixo
+    g.fillStyle = '#0a0e16'; g.fillRect(0, 0, W, H);
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 14; k++) { const wide = r === 4 && k > 2 && k < 9; if (r === 4 && k > 3 && k < 9 && k !== 4) continue;
+      const kw = (r === 4 && k === 4) ? 5 * 17.4 : 17.4; g.fillStyle = '#1b2433'; g.fillRect(2 + k * 18.2, 4 + r * 21, kw, 17); g.fillStyle = 'rgba(77,231,255,.22)'; g.fillRect(2 + k * 18.2, 19 + r * 21, kw, 2); }
+  });
+  const keys2 = new THREE.Mesh(new THREE.PlaneGeometry(0.29, 0.12), new THREE.MeshBasicMaterial({ map: keyTex })); keys2.rotation.x = -Math.PI / 2; keys2.position.set(0, 0.0132, 0.025);
+  const stick = mk(256, 160, (g, W, H) => {                                               // adesivos 100% originais (nada de marcas reais)
+    g.fillStyle = '#242c3b'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#3ddc84'; g.beginPath(); g.arc(56, 56, 34, 0, 7); g.fill(); g.fillStyle = '#0b1210'; g.fillRect(42, 46, 8, 12); g.fillRect(62, 46, 8, 12); g.fillRect(46, 68, 20, 4);   // mascote BYTE
+    g.save(); g.translate(168, 44); g.rotate(-.12); g.fillStyle = '#ffd166'; g.fillRect(-48, -16, 96, 32); g.fillStyle = '#111'; g.font = 'bold 20px monospace'; g.textAlign = 'center'; g.fillText('ROOT', 0, 7); g.restore();
+    g.strokeStyle = '#4de7ff'; g.lineWidth = 5; for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(60, 140, i * 16, -2.4, -.74); g.stroke(); }                                    // símbolo de sinal
+    g.save(); g.translate(176, 118); g.rotate(.1); g.fillStyle = '#ff5a4d'; g.fillRect(-60, -18, 120, 36); g.fillStyle = '#fff'; g.font = 'bold 13px monospace'; g.fillText('SEM REDE REAL', 0, 5); g.restore();
+    g.fillStyle = '#9fb4ff'; g.font = '12px monospace'; g.textAlign = 'left'; g.fillText('0xCAFE', 112, 90);
+  });
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.2), new THREE.MeshBasicMaterial({ map: stick })); back.rotation.y = Math.PI; back.position.set(0, 0.11, -0.0066);
+  const bezel = new THREE.Mesh(new THREE.PlaneGeometry(0.322, 0.2), dkDark); bezel.position.set(0, 0.11, 0.0064);
+  deckRig.userData.lid.add(back, bezel);
+  for (const sx of [-0.115, 0.115]) { const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.0085, 0.0085, 0.05, 10), dkDark); hinge.rotation.z = Math.PI / 2; hinge.position.set(sx, 0.012, -0.12); deckRig.add(hinge); }
+  const led1 = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.003, 0.006), dkLed); led1.position.set(-0.15, 0.0125, 0.108);
+  const dongle = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.012, 0.055), dkDark); dongle.position.set(0.19, 0.008, 0.03);
+  const led2 = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.003, 0.008), dkLed); led2.position.set(0.19, 0.0155, 0.04);
+  const pwr = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.003, 0.006), new THREE.MeshBasicMaterial({ color: 0x3ddc84 })); pwr.position.set(-0.135, 0.0125, 0.108);
+  deckRig.add(keys2, led1, dongle, led2, pwr);
+}
+function updateDeckLeds() {                                    // LED de rede pisca mais rápido quando há tráfego (scan/conexão)
+  const traffic = hack.net[hack.net.length - 1] > .3, t = performance.now();
+  dkLed.color.setHex((traffic ? t % 160 < 80 : t % 1400 < 120) ? 0x4de7ff : 0x16303a);
+}
 let deckAnim = 0, deckShown = false, deckPaintN = 0;
 const deckReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function updateDeckRig(dt) {
   deckAnim = Math.min(1, Math.max(0, deckAnim + (deckOpen ? (deckReduced ? 1 : dt / 0.55) : -dt / 0.3)));
   const rise = 1 - Math.pow(1 - Math.min(1, deckAnim / 0.5), 3), t = Math.max(0, (deckAnim - 0.35) / 0.65), lid = t * t * (3 - 2 * t);
-  deckRig.visible = deckAnim > 0.001; if (deckRig.visible) updateDeckHands(); if (deckRig.visible && (++deckPaintN % 12 === 0)) paintLaptop();       // cursor pisca na tela do laptop holder.visible = holder.visible && deckAnim < 0.05;
+  deckRig.visible = deckAnim > 0.001; if (deckRig.visible) { updateDeckHands(); updateDeckLeds(); } if (deckRig.visible && (++deckPaintN % 12 === 0)) paintLaptop();       // cursor pisca na tela do laptop holder.visible = holder.visible && deckAnim < 0.05;
   deckRig.position.set(0, -0.8 + rise * 0.52, -0.62); deckRig.rotation.x = 0.3 * rise;
   deckRig.userData.lid.rotation.x = Math.PI / 2 + (-0.32 - Math.PI / 2) * lid;                 // fechada = deitada sobre o teclado; aberta = levemente inclinada para trás
   if (deckOpen && !deckShown && deckAnim >= 1) { deckShown = true; showDeckOverlay(); }
@@ -769,6 +851,32 @@ function rainStart() { if (deckReduced || rainTimer) return; rainTimer = setInte
 function rainStop() { clearInterval(rainTimer); rainTimer = 0; }
 // mapa da rede: vista de cima com o jogador no centro; câmeras, torretas e console/saída nas posições reais
 let netTimer = 0;
+
+// ---- P58: modo hack mais real (CRT, monitor do sistema, journal, tráfego no mapa, laptop 3D detalhado) ----
+{ let on = true; try { on = localStorage.getItem('arenaCrt') !== '0'; } catch (e) {}                 // CRT ligado por padrão; lembrado por aparelho
+  const btn = $('deckCrt'), apply = () => { deckEl.classList.toggle('crt', on); btn.setAttribute('aria-pressed', on); };
+  apply(); btn.addEventListener('click', () => { on = !on; apply(); try { localStorage.setItem('arenaCrt', on ? '1' : '0'); } catch (e) {} }); }
+const hack = { cpu: Array(48).fill(.2), mem: Array(48).fill(.4), net: Array(48).fill(.05), log: [], n: 0 };
+const HACK_LOGS = ['kernel: eth0 link up (simulado)', 'systemd[1]: started byte-agent', 'sshd: sessao falsa aberta', 'nftables: regra fictícia #%', 'cron: job 0x% ok', 'audit: handshake NEXUS', 'dhcp: lease simulada 10.0.%.2', 'ids: ruído de fundo detectado'];
+function hackSample() {                                        // 1 amostra a cada 250 ms: os gráficos reagem ao que o jogo está fazendo
+  const busy = (inc.scanT > 0 ? .35 : 0) + (inc.jamT > 0 ? .25 : 0) + (inc.linkT > 0 ? .2 : 0), last = a => a[a.length - 1];
+  const push = (a, v) => { a.push(Math.max(0, Math.min(1, v))); a.shift(); };
+  push(hack.cpu, .16 + busy + Math.random() * .12 + Math.sin(hack.n / 6) * .04);
+  push(hack.mem, last(hack.mem) + (Math.random() - .5) * .03 + (busy ? .004 : -.002));
+  push(hack.net, .05 + (inc.scanT > 0 ? .55 : 0) + (inc.linkT > 0 ? .3 : 0) + Math.random() * .1);
+  if (++hack.n % 6 === 0) { const t = HACK_LOGS[(Math.random() * HACK_LOGS.length) | 0].replace('%', (Math.random() * 250) | 0); hack.log.push(`[${(inc.time | 0).toString().padStart(4, ' ')}] ${t}`); if (hack.log.length > 7) hack.log.shift(); }
+}
+function hackGraph(c, x, y, w, h, data, color, label) {         // sparkline com área preenchida
+  c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 1; c.strokeRect(x, y, w, h);
+  c.beginPath(); data.forEach((v, i) => { const gx = x + i / (data.length - 1) * w, gy = y + h - v * h; i ? c.lineTo(gx, gy) : c.moveTo(gx, gy); });
+  c.strokeStyle = color; c.lineWidth = 1.5; c.stroke(); c.lineTo(x + w, y + h); c.lineTo(x, y + h); c.fillStyle = color + '33'; c.fill();
+  c.fillStyle = color; c.font = '9px monospace'; c.textAlign = 'left'; c.fillText(`${label} ${Math.round(data[data.length - 1] * 100)}%`, x + 4, y + 10);
+}
+function hackMonDraw() {
+  const cv = $('deckMon'), c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
+  hackGraph(c, 0, 0, 240, 36, hack.cpu, '#4de7ff', 'CPU'); hackGraph(c, 0, 42, 240, 36, hack.mem, '#ffd166', 'MEM'); hackGraph(c, 0, 84, 240, 36, hack.net, '#3ddc84', 'REDE');
+  $('deckLog').textContent = hack.log.join('\n');
+}
 function netDraw() {
   const cv = $('deckNet'), c = cv.getContext('2d'), W = cv.width, Hh = cv.height, cx = W / 2, cy = Hh / 2, K = 5.2, t = performance.now() / 1000;
   c.clearRect(0, 0, W, Hh); c.strokeStyle = 'rgba(160,200,255,.14)'; c.lineWidth = 1;
@@ -786,12 +894,18 @@ function netDraw() {
     let ly = y - 10; while (placed.some(q => Math.abs(q.y - ly) < 12 && Math.abs(q.x - x) < 90) && ly > 12) ly -= 13;   // sobe o rótulo até achar espaço livre
     placed.push({ x, y: ly }); c.font = '11px monospace'; c.textAlign = 'center'; c.fillText(`${p.l} ${Math.round(Math.hypot(p.x - px, p.z - pz))}m`, x, ly);
   });
-  c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, 6, 0, 7); c.fill(); c.font = 'bold 11px monospace'; c.fillText('VOCÊ', cx, cy + 20);
+  if (scanning || inc.linkT > 0) pts.forEach((p, i) => {          // pacotes viajando pelas ligações enquanto há tráfego
+    const x = Math.max(12, Math.min(W - 12, cx + (p.x - px) * K)), y = Math.max(12, Math.min(Hh - 12, cy + (p.z - pz) * K));
+    for (let k = 0; k < 2; k++) { const f = ((t * .7 + i * .21 + k * .5) % 1); c.fillStyle = '#fff'; c.globalAlpha = .85; c.fillRect(cx + (x - cx) * f - 1.5, cy + (y - cy) * f - 1.5, 3, 3); }
+    c.globalAlpha = 1;
+  });
+  c.fillStyle = '#fff'; c.beginPath(); c.arc(cx, cy, 6, 0, 7); c.fill(); c.font = 'bold 11px monospace'; c.textAlign = 'center'; c.fillText('VOCÊ', cx, cy + 20);
+  hackGraph(c, 8, Hh - 46, 170, 38, hack.net, '#3ddc84', 'TRÁFEGO');                                  // sparkline de tráfego no canto
 }
 function deckTick() {                                          // relógio, chips e mapa enquanto o deck está aberto
   if (!deckOpen || !inc) return;
   deckClockEl.textContent = 'T+' + Math.floor(inc.time / 60).toString().padStart(2, '0') + ':' + Math.floor(inc.time % 60).toString().padStart(2, '0');
-  deckUpdateChips(); if ($('paneNet').classList.contains('on')) netDraw();
+  hackSample(); deckUpdateChips(); if ($('paneNet').classList.contains('on')) netDraw(); if ($('paneDesk').classList.contains('on')) hackMonDraw();
 }
 setInterval(deckTick, 250);
 
@@ -896,7 +1010,7 @@ function updateIncDoors(dt) {                            // abre a porta quando 
     let near = Math.hypot(px - d.x, pz - d.z) < 4.6;
     if (!near) for (const e of enemies) { if (!e.dead && Math.abs(e.g.position.x - d.x) < 4 && Math.abs(e.g.position.z - d.z) < 4) { near = true; break; } }
     d.open = clamp(d.open + (near ? 1 : -1) * dt * 4, 0, 1);
-    d.m.position.y = d.y0 + d.open * (incData().ceiling - 0.3); d.m.visible = d.open < 0.98;
+    d.m.position.y = d.y0 + d.open * (incData().ceiling - 0.3); d.m.visible = d.open < 0.98; d.lampMat.color.setHex(d.open > 0.5 ? 0x3ddc84 : 0xff3b3b);
   }
 }
 function updateIncCameras(dt) {
@@ -1066,9 +1180,17 @@ function gunMaterial(color, emissive) {
   }
   return mat;
 }
+// P57: caixa com as quinas chanfradas (mesmas medidas externas); peças minúsculas continuam cubos simples
+function bevelBoxGeometry(w, h, d) {
+  const m = Math.min(w, h, d); if (m < 0.016) return new THREE.BoxGeometry(w, h, d);
+  const b = Math.min(m * 0.17, 0.0065), sw = w - 2 * b, sh = h - 2 * b, sd = d - 2 * b;
+  const shape = new THREE.Shape(); shape.moveTo(-sw / 2, -sh / 2); shape.lineTo(sw / 2, -sh / 2); shape.lineTo(sw / 2, sh / 2); shape.lineTo(-sw / 2, sh / 2); shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: sd, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: b, bevelThickness: b, curveSegments: 1 });
+  geo.translate(0, 0, -sd / 2); return geo;
+}
 function gunBox(g, w, h, d, x, y, z, color, rz = 0, emissive = 0) {
-  const key = `b:${w}:${h}:${d}`;
-  let geo = gunGeoCache.get(key); if (!geo) { geo = new THREE.BoxGeometry(w, h, d); gunGeoCache.set(key, geo); }
+  const key = `bv:${w}:${h}:${d}`;
+  let geo = gunGeoCache.get(key); if (!geo) { geo = bevelBoxGeometry(w, h, d); gunGeoCache.set(key, geo); }
   const mat = gunMaterial(color, emissive);
   const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.z = rz; g.add(m); return m;
 }
@@ -1492,7 +1614,7 @@ let crossGap = 16, pathBudget = 0;                                              
 let crouchT = 0, slideT = 0, sprintT = 0, camLand = 0, camLandV = 0, camBobY = 0, camBobX = 0, inspectT = 0, timeScale = 1, slowMoT = 0, wasCrouch = false;
 const INSPECT_DUR = 2.2, SLOWMO_DUR = 0.9, SLOWMO_SCALE = 0.35;
 function triggerSlowMo(d = SLOWMO_DUR) { slowMoT = Math.max(slowMoT, d); }
-let combo = 1, comboT = 0, maxCombo = 1, shake = 0, lastHurt = 0, beatT = 0, aliveTime = 0, handGrenades = 3, credits = 0;
+let reduceFx = false, combo = 1, comboT = 0, maxCombo = 1, shake = 0, lastHurt = 0, beatT = 0, aliveTime = 0, handGrenades = 3, credits = 0;
 let shop = { dmg: 0, hp: 0, dash: 0 };                  // quantas vezes cada item da loja foi comprado
 // Recalcula os multiplicadores: perks (upgrades.js) + compras da loja. Chamar sempre que algum dos dois mudar.
 function refreshStats() {
@@ -1540,7 +1662,7 @@ WEAPONS.forEach((w, i) => {
 function updateHUD() {
   const w = cur(), s = ammoState[curW];
   const hpRatio = health / maxHealth;
-  el.hp.style.width = (hpRatio * 100) + '%';
+  el.hp.style.width = (hpRatio * 100) + '%'; $('hpGhost').style.width = (hpRatio * 100) + '%'; el.hp.parentElement.classList.toggle('low', hpRatio < 0.25);   // P59: 'fantasma' desce devagar; pulsa em vida baixa
   el.hp.style.background = hpRatio > 0.5 ? 'var(--ok)' : hpRatio > 0.25 ? 'var(--warn)' : 'var(--accent)';
   el.hpTxt.textContent = Math.ceil(health);
   if (shownScore > score || score - shownScore > 400) shownScore = score;          // zerou ou salto grande: mostra direto
@@ -1550,7 +1672,7 @@ function updateHUD() {
   updateObjectiveHud();
   const weaponColor = '#' + ((w.color || 0x4de7ff) >>> 0).toString(16).padStart(6, '0');
   document.body.style.setProperty('--weapon-color', weaponColor);
-  el.wname.textContent = w.name; el.wrole.textContent = w.role || ''; el.wrole.style.color = weaponColor; el.ammo.textContent = s.ammo; el.reserve.textContent = s.reserve;
+  el.wname.textContent = w.name; el.wrole.textContent = w.role || ''; el.wrole.style.color = weaponColor; if (el.ammo.textContent !== String(s.ammo)) { el.ammo.classList.remove('tick'); void el.ammo.offsetWidth; el.ammo.classList.add('tick'); } el.ammo.textContent = s.ammo; el.reserve.textContent = s.reserve;
   [...el.slots.children].forEach((d, i) => {
     const open = isUnlocked(i);
     d.classList.toggle('active', i === curW); d.classList.toggle('locked', !open);
@@ -1675,6 +1797,8 @@ function debris(p, color, n) {
   }
 }
 function sparkBurst(p, color, n = 4, normal = null) {
+  n = appliedQuality === 'low' ? Math.max(1, Math.ceil(n * 0.5)) : appliedQuality === 'high' ? Math.ceil(n * 1.3) : n;
+  if (curPR < prCap * 0.75) n = Math.max(1, Math.ceil(n * 0.6));   // P62: se a resolução automática já caiu (aparelho engasgando), as faíscas diminuem junto   // P60: qualidade escala as faíscas
   for (let i = 0; i < n && fx.length < 170; i++) {
     const m = chunkPool.get(); m.material = basicMat(color); m.position.copy(p);
     const vx = (Math.random() - .5) * 7, vy = (Math.random() - .2) * 6, vz = (Math.random() - .5) * 7;
@@ -1750,7 +1874,7 @@ function addBulletMark(point, normal, surface) {
   surfaceMarks.push({ obj, life: 13 + Math.random() * 4, maxLife: 17 });
 }
 function spawnDust(point, normal, color, count = 3) {
-  for (let i = 0; i < count && dustPuffs.length < 22; i++) {
+  for (let i = 0; i < count && dustPuffs.length < (appliedQuality === 'low' ? 10 : 22); i++) {
     const m = dustPool.get(), v = m.userData.v;
     m.material.color.setHex(color); m.material.opacity = 0.25 + Math.random() * 0.12;
     m.position.copy(point).addScaledVector(normal, 0.025 + Math.random() * 0.035);
@@ -1766,9 +1890,12 @@ function surfaceImpact(hit, weaponColor) {
   const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
   const point = hit.point.clone().addScaledVector(normal, 0.014), surface = hit.object.userData.surface || 'stone';
   addBulletMark(point, normal, surface);
-  if (surface === 'metal') { sparkBurst(point, 0xc5e6ff, 7, normal); debris(point, 0x8795a3, 1); }
+  const m = hit.object.material, glass = !!(m && m.transparent && m.opacity < 0.9), floor = normal.y > 0.75;     // P60: vidro e piso têm resposta própria
+  if (glass) { sparkBurst(point, 0xbfefff, 6, normal); debris(point, 0xcfeaf5, 4); }
+  else if (surface === 'metal') { sparkBurst(point, 0xc5e6ff, 7, normal); debris(point, 0x8795a3, 1); }
   else if (surface === 'wood') { sparkBurst(point, 0xd99a55, 2, normal); debris(point, 0xb47c42, 4); spawnDust(point, normal, 0xa4774b, 2); }
-  else { debris(point, 0xa3a5a6, 3); spawnDust(point, normal, 0xaaa59c, 4); }
+  else if (floor) { debris(point, 0x8d8f90, 2); spawnDust(point, normal, 0x9b9386, 6); }          // piso: poeira grossa, sem faísca
+  else { debris(point, 0xa3a5a6, 3); spawnDust(point, normal, 0xaaa59c, 4); sparkBurst(point, 0xd8d2c4, 1, normal); }      // parede de concreto: lasca clara
   if (weaponColor === 0x59e8ff) sparkBurst(point, weaponColor, 2, normal);
 }
 function updateSurfaceImpacts(dt) {
@@ -1865,6 +1992,7 @@ const rigPool = {};
 const antennaGeo = new THREE.CylinderGeometry(0.025, 0.04, 0.38, 5);   // compartilhada entre todos os rigs
 const rigBasicMats = {};
 const rigBasic = color => rigBasicMats[color] || (rigBasicMats[color] = new THREE.MeshBasicMaterial({ color }));
+const rimMats = {}; function rimMat(color) { return rimMats[color] || (rimMats[color] = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide, depthWrite: false })); }   // contorno = cópia maior virada do avesso
 function buildRig(key) {
   const T = TYPES[key], g = new THREE.Group();
   const mBody = new THREE.MeshLambertMaterial({ color: T.color });
@@ -1888,6 +2016,9 @@ function buildRig(key) {
   const badge = new THREE.Mesh(eGeo.badge, rigBasic(T.boss ? 0xff4f7b : T.healer ? 0x3ddc84 : 0x4de7ff)); badge.position.set(0, 1.15, 0.245);
   const antenna = new THREE.Mesh(antennaGeo, armorMat); antenna.position.set(0.27, 2.13, -0.08);
   const beacon = new THREE.Mesh(eGeo.badge, rigBasic(T.color)); beacon.scale.setScalar(0.48); beacon.position.set(0.27, 2.35, -0.08);
+  const rimColor = T.boss ? 0xff4f7b : T.healer ? 0x6dffa8 : T.shield ? 0x59e8ff : 0xfff1c9;                        // P59/60: contorno claro para destacar o inimigo sobre fundos vermelhos
+  const rimM = rimMat(rimColor);
+  [[body, 1.07], [head, 1.12]].forEach(([part, k]) => { const o = new THREE.Mesh(part.geometry, rimM); o.scale.setScalar(k); part.add(o); part.userData.rim = o; });
   g.add(body, head, eye, legL, legR, armL, armR, hpBg, hpBar, armorL, armorR, badge, antenna, beacon);
   // Visual dos especiais: bomba no peito (kamikaze), escudo na frente (escudeiro), orbe flutuante (curandeiro)
   let shield = null, orb = null;
@@ -1895,6 +2026,14 @@ function buildRig(key) {
   const shieldMatInstance = T.shield ? shieldMat.clone() : null;
   if (T.shield) { shield = new THREE.Mesh(shieldGeo, shieldMatInstance); shield.position.set(0, 1.1, 0.55); g.add(shield); }
   if (T.healer) { orb = new THREE.Mesh(orbGeo, orbMat); orb.position.set(0, 2.75, 0); g.add(orb); }
+  { const acc = (w, h, d, x, y, z, color, rz = 0) => { const m = new THREE.Mesh(blockGeo, rigBasic(color)); m.scale.set(w, h, d); m.position.set(x, y, z); m.rotation.z = rz; g.add(m); };   // P61: acessórios por classe (silhueta própria)
+    if (key === 'runner') { acc(0.05, 0.42, 0.34, -0.2, 1.25, -0.3, 0x4de7ff, 0.18); acc(0.05, 0.42, 0.34, 0.2, 1.25, -0.3, 0x4de7ff, -0.18); }          // aletas de velocidade nas costas
+    else if (key === 'brute') { acc(0.42, 0.22, 0.52, -0.58, 1.78, 0, 0x2d3440); acc(0.42, 0.22, 0.52, 0.58, 1.78, 0, 0x2d3440); acc(0.5, 0.12, 0.5, 0, 2.12, 0, 0x2d3440); }   // ombreiras e capacete
+    else if (key === 'ranged') { acc(0.09, 0.11, 0.8, 0.46, 1.38, 0.42, 0x1b2028); acc(0.05, 0.05, 0.2, 0.46, 1.38, 0.9, 0x59e8ff); } }                  // fuzil e ponta luminosa
+  if (T.boss) {                                                       // P61: aura no chão que muda de cor a cada fase do chefe (só visual)
+    const aura = new THREE.Mesh(new THREE.RingGeometry(0.85, 1.15, 28), new THREE.MeshBasicMaterial({ color: 0xffb04d, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false }));
+    aura.rotation.x = -Math.PI / 2; aura.position.y = 0.06; aura.visible = false; g.add(aura); body.userData.aura = aura;
+  }
   g.scale.setScalar(T.scale);
   return { g, body, head, mBody, mHead, hpBg, hpBar, legL, legR, armL, armR, shield, shieldMat: shieldMatInstance, orb };
 }
@@ -1908,6 +2047,8 @@ function spawnEnemy(key) {
   const T = TYPES[key];
   const rig = (rigPool[key] && rigPool[key].pop()) || buildRig(key);
   rig.mBody.emissive.setHex(0); rig.mHead.emissive.setHex(0);            // limpa estado do uso anterior
+  [rig.body, rig.head].forEach(p => { if (p.userData.rim) p.userData.rim.visible = appliedQuality !== 'low'; });
+  if (rig.body.userData.aura) { rig.body.userData.aura.visible = false; [rig.body, rig.head].forEach(p => { p.userData.rim.material = rimMat(0xff4f7b); }); document.body.dataset.bossPhase = 1; }   // chefe novo recomeça na fase 1   // contorno só em Média/Alta
   if (rig.shieldMat) rig.shieldMat.emissive.setHex(0x223355);
   rig.hpBar.scale.x = 1; rig.hpBar.material.color.setHex(0x3ddc84);
   rig.legL.rotation.x = 0; rig.legR.rotation.x = 0; if (rig.armL) rig.armL.rotation.x = -1.4; if (rig.armR) rig.armR.rotation.x = -1.4; rig.body.position.set(0, 1.1, 0); rig.head.position.set(0, 1.82, 0);
@@ -1922,7 +2063,7 @@ function spawnEnemy(key) {
     else { z = side * (ARENA - 2); x = (Math.random() * 2 - 1) * (ARENA - 2); }
     if (Math.hypot(x - px, z - pz) > 14 && !blocked(x, z, .6)) break;
   }
-  rig.g.position.set(x, 0, z);
+  rig.g.position.set(x, floorOffsetAt(x, z), z);
   scene.add(rig.g); rig.g.updateMatrixWorld(true);
 
   const hp0 = Arena.enemyHp(T, wave);
@@ -2018,7 +2159,8 @@ function pickType() { return Arena.pickType(wave); }
 // ----- Caminho: reta se estiver livre; senão A* (no máximo pathBudget buscas por quadro) -----
 function steerTarget(e, tx = px, tz = pz) {
   const pos = e.g.position;
-  if (Arena.lineClear(navGrid, pos.x, pos.z, tx, tz)) { e.path = null; return [tx, tz]; }   // caminho livre: vai direto
+  const heightGap = Math.abs(floorOffsetAt(pos.x, pos.z) - floorOffsetAt(tx, tz));
+  if (heightGap < 0.5 && Arena.lineClear(navGrid, pos.x, pos.z, tx, tz)) { e.path = null; return [tx, tz]; }   // pisos diferentes exigem a rota da rampa
   const moved = Math.hypot(tx - e.pathGX, tz - e.pathGZ) > 3;                               // alvo mudou muito: caminho velho
   if ((!e.path || time >= e.pathT || moved) && pathBudget > 0) {
     pathBudget--;
@@ -2075,6 +2217,8 @@ function bossRing(e) {                                // 14 projéteis em círcu
 }
 function bossPhaseStart(e, ph) {
   e.flash = 0.4; sfx.boss();
+  { const col = ph === 2 ? 0xffb04d : 0xff3b5f, au = e.body.userData.aura; document.body.dataset.bossPhase = ph;       // P61: cada fase muda aura, contorno e barra do chefe
+    if (au) { au.visible = true; au.material.color.setHex(col); } [e.body, e.head].forEach(p => { if (p.userData.rim) p.userData.rim.material = rimMat(col); }); }
   if (ph === 2) {
     banner('FASE 2\nO CHEFE CONVOCA REFORÇOS', 3);
     for (let k = 0; k < 3; k++) {
@@ -2088,6 +2232,7 @@ function bossPhaseStart(e, ph) {
 // Devolve true quando o chefe está "ocupado" (telegrafando ou investindo) e o movimento normal deve parar
 function updateBoss(e, dt, dx, dz, dist) {
   const B = e.boss, pos = e.g.position, ph = Arena.bossPhase(e.hp / e.maxHp);
+  { const au = e.body.userData.aura; if (au && au.visible) { au.rotation.z += dt * 1.5; au.material.opacity = 0.45 + 0.25 * Math.sin(time * 6); au.scale.setScalar(1 + 0.08 * Math.sin(time * 4)); } }
   if (ph > B.phase) { B.phase = ph; bossPhaseStart(e, ph); }
   if (B.charge === 'tele') {                          // aviso: para e pisca (0,9 s) antes de investir
     B.t -= dt;
@@ -2143,7 +2288,8 @@ function damageEnemy(e, dmg, head, showFloat = true, impact = 'body', hitPoint =
   hitT = 0.2; hitHead = head; hitKind = impact; impact === 'shield' ? sfx.shieldHit() : sfx.hit(head);
   if (e.hp <= 0 && !perfScenarioActive) killEnemy(e, head);
 }
-function killEnemy(e, head, silent = false) {           // silent = morte por suicídio (sem pontos nem drop)
+function killEnemy(e, head, silent = false) {
+  if (!silent) { hitT = 0.42; hitKind = 'kill'; }                 // P59: hitmarker de abate (maior, vermelho, dura mais)           // silent = morte por suicídio (sem pontos nem drop)
   e.dead = true;
   if (e.T.explodes) detonate(e);                         // kamikaze explode ao morrer
   const p = e.g.position.clone(); p.y = 1.2;
@@ -2460,7 +2606,8 @@ function animateBoltCycle(part,t,travel,pullStart,pullEnd,returnStart,returnEnd)
 function animateReloadParts(dt) {
   const parts=guns[curW].userData.reloadParts||{},profile=cur().visual?.reload;
   restoreReloadParts(curW);
-  if(!reloading){animateReloadHands(0,profile);return;}
+  if(!reloading){ if(profile==='slide'&&parts.bolt&&kick>.01) parts.bolt.mesh.position.z+=Math.min(.045,kick*.16);   // P61: o ferrolho recua com o tiro
+    animateReloadHands(0,profile);return;}
   const t=clamp((time-reloadStarted)/Math.max(.01,reloadDur),0,1),pulse=Math.sin(Math.PI*t);
   const magazine=(p)=>{
     if(!p)return;
@@ -2577,6 +2724,7 @@ function startWave() {
   introQueue = Object.keys(TYPES).filter(k => TYPES[k].intro === wave);   // o primeiro a nascer é o tipo novo
   introQueue.forEach(k => news.push(`NOVO INIMIGO: ${TYPES[k].label.toUpperCase()}`));
   banner(['ONDA ' + wave + ' · ' + profile.name, profile.hint, ...news].join('\n'), news.length ? 4 : 2.8); updateHUD();
+  { const ws = $('waveSplash'); ws.textContent = wave; ws.classList.remove('go'); void ws.offsetWidth; ws.classList.add('go'); ws.classList.toggle('boss', bossPending); }   // P61: numeral gigante da onda
 }
 
 /* =====================================================================
@@ -2615,7 +2763,8 @@ function update(dt) {
   if (dashTime > 0 && len === 0) { mx = -Math.sin(yaw); mz = -Math.cos(yaw); }
   const crouchHeld = !!(keys.KeyC || keys.ControlLeft);
   let sprint = (keys.ShiftLeft || (useTouch && inMag > 0.96)) && !crouchHeld;   // joystick até o limite = correr
-  const grounded = py <= EYE + 0.001;
+  const floorY = EYE + floorOffsetAt(px, pz);
+  const grounded = py <= floorY + 0.001;
   if (crouchHeld && !wasCrouch && grounded && Math.hypot(vx, vz) > 8 && slideT <= 0) { slideT = 0.65; const sv = Math.hypot(vx, vz); vx = vx / sv * 13; vz = vz / sv * 13; }   // correr + agachar = deslizar
   wasCrouch = crouchHeld; slideT = Math.max(0, slideT - dt);
   crouchT += ((crouchHeld || slideT > 0 ? 1 : 0) - crouchT) * Math.min(1, dt * 11);
@@ -2628,9 +2777,9 @@ function update(dt) {
   if (!blocked(px + vx * dt, pz, 0.4)) px += vx * dt;
   if (!blocked(px, pz + vz * dt, 0.4)) pz += vz * dt;
   // Pulo simples
-  if ((keys.Space || gamepadJumpQueued) && py <= EYE + 0.001) { vy = 7.5; slideT = 0; camLandV += 0.25; }
+  if ((keys.Space || gamepadJumpQueued) && py <= floorY + 0.001) { py = floorY; vy = 7.5; slideT = 0; camLandV += 0.25; }
   gamepadJumpQueued = false;
-  vy -= 22 * dt; py += vy * dt; if (py < EYE) { py = EYE; vy = 0; }
+  vy -= 22 * dt; py += vy * dt; const newFloorY = EYE + floorOffsetAt(px, pz); if (py < newFloorY) { py = newFloorY; vy = 0; }
 
   if (useTouch && assistOn && mouseHeld) assistAim(dt);            // mira assistida leve só no toque
   if (gamepadConnected && !useTouch) setAds(gamepadAdsHeld);
@@ -2642,7 +2791,7 @@ function update(dt) {
     pitch += (targetPitch - pitch) * Math.min(1, dt * 7);
   }
   pitch = clamp(pitch, -1.5, 1.5);
-  const sh = shake * shake;                                       // tremor de tela (explosões, dano): curva quadrática
+  const sh = reduceFx ? 0 : shake * shake;                                       // tremor de tela (explosões, dano): curva quadrática
   // Tremor suave (ruído senoidal) em vez de saltos aleatórios por quadro
   const shN = time * 38, shX = Math.sin(shN) * 0.6 + Math.sin(shN * 2.3 + 1) * 0.4, shY = Math.sin(shN * 1.7 + 2) * 0.6 + Math.sin(shN * 3.1) * 0.4;
   // Balanço da câmera: proporcional à velocidade, some no ar e ao mirar
@@ -2739,7 +2888,8 @@ function update(dt) {
   const sp = sprintT * (1 - adsT), ease = sp * sp * (3 - 2 * sp);
   holder.position.x += ease * 0.05; holder.position.y -= ease * 0.05 + crouchT * 0.012; holder.rotation.y += ease * 0.55; holder.rotation.x -= ease * 0.18;
   holder.position.y += Math.sin(bobT * 2) * 0.012 * ease;
-  { const zm = (WEAPONS[curW] && WEAPONS[curW].zoom) || 1, k = (1 + (1 / zm - 1) * adsT * 0.9) * VM_SCALE; holder.scale.setScalar(k); holder.position.x *= k; holder.position.y *= k; }   // P50: cancela a ampliação do FOV reduzido, senão a arma enche a tela ao mirar
+  { const zm = (WEAPONS[curW] && WEAPONS[curW].zoom) || 1, k = (1 + (1 / zm - 1) * adsT * 0.9) * VM_SCALE * (curW === 0 ? 0.9 : curW === 4 ? 0.88 : 1);   // P59: pistola e sniper 10–12% menores
+    holder.scale.setScalar(k); holder.position.x *= k; holder.position.y *= k; }   // P50: cancela a ampliação do FOV reduzido, senão a arma enche a tela ao mirar
   // Inspeção (tecla V): gira a arma, mostra a lateral e volta
   if (inspectT > 0) {
     if (reloading || mouseHeld || scoped || sprintT > 0.5) inspectT = 0;
@@ -2860,6 +3010,8 @@ function update(dt) {
       e.body.position.y = 1.1 + Math.sin(e.phase * 0.65) * 0.018;
       e.head.position.y = 1.82 + Math.sin(e.phase * 0.65 + 0.3) * 0.012;
     }
+    // P63: o rig acompanha a plataforma/rampa sem alterar o controlador horizontal existente.
+    pos.y += (floorOffsetAt(pos.x, pos.z) - pos.y) * Math.min(1, dt * 14);
     // Animação de ataque: braços recuam brevemente ao disparar e recuperam de forma amortecida.
     if (e.attackAnim > 0 && e.armL && e.armR && e.hitReact <= 0) { const attackBlend = clamp(e.attackAnim / 0.22, 0, 1); e.armL.rotation.x += (-1.18 - e.armL.rotation.x) * Math.min(1, dt * 10) * attackBlend; e.armR.rotation.x += (-1.18 - e.armR.rotation.x) * Math.min(1, dt * 10) * attackBlend; }
     // Ação de cada tipo (o chefe age dentro de updateBoss)
@@ -2927,7 +3079,7 @@ function update(dt) {
   hitT = Math.max(0, hitT - dt); el.hit.style.opacity = hitT > 0 ? 1 : 0;
   const hitPulse = hitT > 0 ? 0.82 + (1 - hitT / 0.2) * 0.28 : 0.72;   // pop curto ao acertar
   el.hit.style.transform = `translate(-50%, -50%) scale(${hitPulse})`;
-  el.hit.classList.toggle('head', hitHead); el.hit.classList.toggle('shield', hitKind === 'shield');
+  el.hit.classList.toggle('head', hitHead); el.hit.classList.toggle('shield', hitKind === 'shield'); el.hit.classList.toggle('kill', hitKind === 'kill');
   if (bannerT > 0) { bannerT -= dt; el.banner.style.opacity = Math.min(1, bannerT); }
   else el.banner.style.opacity = 0;
 }
@@ -3260,7 +3412,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
    ===================================================================== */
 /* ---- Preferências salvas no aparelho (localStorage, com try/catch: pode estar bloqueado) ---- */
 const PREF_KEY = 'arenaFpsPrefs';
-const prefEls = { sens: $('sensRange'), volume: $('volumeRange'), fov: $('fovRange'), quality: $('qualitySelect'), ctrl: ctrlSelect, radar: $('radarSelect'), assist: $('assistSelect'), touchSens: $('touchSens'), btnScale: $('btnScale'), mode: $('modeSelect'), difficulty: $('difficultySelect') };
+const prefEls = { sens: $('sensRange'), volume: $('volumeRange'), fov: $('fovRange'), quality: $('qualitySelect'), ctrl: ctrlSelect, radar: $('radarSelect'), assist: $('assistSelect'), touchSens: $('touchSens'), btnScale: $('btnScale'), mode: $('modeSelect'), difficulty: $('difficultySelect'), crossStyle: $('crossStyle'), crossColor: $('crossColor'), crossThick: $('crossThick'), fxReduce: $('fxReduce') };
 function applyPrefs() {                              // aplica o valor atual dos controles do menu ao jogo
   SENS = +prefEls.sens.value; audio.setVolume(+prefEls.volume.value);
   baseFov = +prefEls.fov.value; if (!scoped) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
@@ -3275,6 +3427,10 @@ function applyPrefs() {                              // aplica o valor atual dos
     cachedSkyline = null; cachedIndustrialDressing = null;   // P48: skyline e neons dependem da qualidade; o cache velho ficava preso até recarregar
     if (curMap !== -1) loadMap(curMap);                  // refaz materiais da arena e reaquece (acontece no menu, nunca no combate)
   }
+  document.body.classList.toggle('q-high', appliedQuality === 'high');       // P62: vinheta suave só em Alta
+  el.cross.dataset.style = prefEls.crossStyle.value; el.cross.style.setProperty('--ct', prefEls.crossThick.value + 'px');          // P59: mira personalizada
+  prefEls.crossColor.value === 'weapon' ? el.cross.style.removeProperty('--cross-color') : el.cross.style.setProperty('--cross-color', prefEls.crossColor.value);
+  reduceFx = prefEls.fxReduce.value === 'on'; document.body.classList.toggle('reduce-fx', reduceFx);
   TOUCH_LOOK = +prefEls.touchSens.value; assistOn = prefEls.assist.value === 'on';
   radarOn = prefEls.radar.value === 'on'; radarEl.classList.toggle('off', !radarOn);
   $('cluster').style.setProperty('--ts', prefEls.btnScale.value);
@@ -3310,6 +3466,12 @@ function refreshCareerUI() {
 function syncRunSelection() {
   if (!alive) { currentMode = $('modeSelect').value || 'survival'; currentDifficulty = $('difficultySelect').value || 'normal'; refreshRecord(); updateHUD(); }
 }
+function countUpStats(root) {                                  // números dos <b> sobem de 0 até o valor em ~0,8 s (pulado se reduzir efeitos)
+  if (reduceFx || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const bs = [...root.querySelectorAll('b')].filter(b => /^\d+$/.test(b.textContent)), end = bs.map(b => +b.textContent), t0 = performance.now();
+  const step = now => { const k = Math.min(1, (now - t0) / 800), e = 1 - Math.pow(1 - k, 3); bs.forEach((b, i) => { b.textContent = Math.round(end[i] * e); }); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
 function showOverlay(mode, keepHidden = false) {
   if (!keepHidden) el.overlay.classList.remove('hidden');
   if (mode === 'menu') {
@@ -3323,6 +3485,7 @@ function showOverlay(mode, keepHidden = false) {
     el.title.innerHTML = incVictory ? 'MISSÃO <span>CUMPRIDA</span>' : 'GAME <span>OVER</span>';
     el.text.innerHTML = `Pontuação: <b>${score}</b>  ·  Abates: <b>${kills}</b>  ·  Onda: <b>${wave}</b>\nModo: <b>${currentMode === 'operations' ? 'Operações' : currentMode === 'incursion' ? 'Incursão · ' + incData().name : 'Sobrevivência'}</b> · Dificuldade: <b>${Arena.difficultyConfig(currentDifficulty).label}</b>\nMaior combo: <b>x${maxCombo}</b>  ·  Tempo: <b>${Math.floor(aliveTime / 60)}:${String(Math.floor(aliveTime % 60)).padStart(2, '0')}</b>\nRecorde deste modo/dificuldade: <b>${best}</b>${score >= best && score > 0 ? '  <b style="color:var(--warn)">NOVO!</b>' : ''}`;
     helpCardEl.innerHTML = ''; el.btn.textContent = 'VOLTAR AO LOBBY';
+    el.overlay.dataset.result = incVictory ? 'win' : 'lose'; countUpStats(el.text);   // P61: cor própria + números subindo
   }
   el.btn.dataset.mode = mode; el.overlay.dataset.view = mode;   // P51: o CSS mostra só o que cada tela precisa
   refreshCareerUI();

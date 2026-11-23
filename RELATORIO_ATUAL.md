@@ -1,7 +1,93 @@
-# Relatório atual — Arena FPS v8 · Pacote P56
+# Relatório atual — Arena FPS v8 · Pacote P62
 
 **Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 62 — Acabamento só em qualidade Alta (23/11/2026)
+
+Como o FPS real ainda não foi medido, os efeitos mais caros entram **somente na qualidade Alta** (Média continua igual ao P61). Visual apenas.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Vinheta suave nas bordas da tela em Alta (some com "reduzir efeitos") | CSS `radial-gradient` + classe `q-high` | Foco no centro, custo praticamente zero. |
+| Médio | Faíscas diminuem sozinhas quando a resolução automática já caiu (aparelho engasgando) | Lê `curPR` contra `prCap` | Aproveita o ajuste por FPS que já existia, sem mudar a jogabilidade. |
+| Difícil | Poças no piso das Incursões com "reflexo" na cor do prédio: 8 planos translúcidos sem luz, posições fixas por mapa, longe de obstáculos | `CanvasTexture` em gradiente radial, `blocked()` para evitar colisão, material compartilhado | Dá a ideia de piso molhado por ~8 desenhos, sem shader novo. |
+
+Testes: `bash test.sh` aprovado; Chromium: Alta cria 8 poças e liga a vinheta, Média cria 0, 0 erros JS.
+**Ainda não feito:** névoa volumétrica, iluminação por área, DOF e aberração cromática (precisam de pós-processamento ou luzes; só com FPS real medido). Poças são decorativas: não afetam movimento nem tiro.
+
+## Pacote 61 — Lista visual, nível Difícil (23/11/2026)
+
+Só apresentação; armas, dano, IA, ataques do chefe e balanceamento intactos.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Médio | Acessórios por classe: corredor com aletas, brutamonte com ombreiras e capacete, atirador com fuzil luminoso | Meshes compartilhados (`blockGeo` + material em cache) | Silhueta reconhecível à distância, +2 a +3 desenhos por inimigo dessas classes. |
+| Médio | Ferrolho da pistola/SMG recua com o tiro, proporcional ao recuo | Reaproveita `reloadParts.bolt` e `kick` | Animação de peça móvel sem novo modelo. |
+| Difícil | Chefe: aura giratória no chão e contorno que mudam de cor a cada fase (âmbar na 2, vermelho na final); barra do chefe acompanha, com pulso na final | Estado por fase (`data-boss-phase`), pool de modelos com reset ao reaproveitar | Mostra a fase sem tocar nos ataques. |
+| Difícil | Numeral gigante da onda (rosa em onda de chefe) com animação curta | CSS `@keyframes`, reinício por `offsetWidth` | Identidade para o início de cada onda. |
+| Difícil | Telas de fim: vitória verde com brilho pulsante, derrota vermelha com tremor curto, e números que sobem de 0 ao valor | `requestAnimationFrame` com ease-out, pulado com movimento reduzido ou "reduzir efeitos" | Informação continua legível; só ganha vida. |
+
+Testes: `bash test.sh` aprovado; Chromium: classes com acessórios, chefe na fase 3 com barra vermelha, tela de vitória verde, 0 erros JS. O numeral da onda foi validado congelando a animação (o teste com render por software roda a ~3 quadros/s e perde a animação real). FPS real não medido.
+**Ainda não feito (decisão consciente):** mão envolvendo o cabo e tocando peças (mãos deixadas de lado), piso molhado com reflexo e névoa nos corredores (custo alto de GPU sem FPS real medido), iluminação por área, DOF/aberração. O ajuste automático de qualidade por FPS já existia para a resolução (cai e sobe sozinha); não foi estendido a partículas/névoa.
+
+## Pacote 60 — Lista visual, nível Médio (23/11/2026)
+
+Só apresentação; armas, dano, IA, colisão e balanceamento intactos.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Médio | Contorno claro nos inimigos (corpo e cabeça), com cor por classe: boss rosa, curandeiro verde, escudeiro ciano, demais creme; desligado em qualidade Baixa | Casco invertido: cópia maior com `side: BackSide` e material compartilhado por cor | Destaca contra fundos vermelhos custando só +2 desenhos por inimigo. |
+| Médio | Impactos por material: vidro (cacos claros), piso (poeira grossa, sem faísca), concreto (lasca clara), metal e madeira como antes | Classificação por `material.transparent` e `normal.y` | Cada superfície responde de um jeito, sem objetos novos. |
+| Médio | Qualidade escala as partículas (faíscas ×0,5 em Baixa e ×1,3 em Alta; poeira limitada em Baixa) | Parâmetro de qualidade já existente (`appliedQuality`) | Mantém a leitura do combate em aparelhos fracos. |
+| Médio | Placas de direção sobre as portas, com seta, nome do setor e tira na cor do prédio | `CanvasTexture` em cache por texto+cor, 2 planos por porta | Orientação e identidade por prédio sem custo de luz. |
+| Médio | Pulso na munição ao mudar o número e transições suaves nos avisos | CSS `animation` e `transition`, respeitando movimento reduzido | Feedback imediato sem texto extra. |
+
+Testes: `bash test.sh` aprovado; Chromium: inimigos com contorno visível sobre o fundo vermelho, placa "SETOR B" na porta, 0 erros JS. FPS real não medido.
+**Limites:** as placas usam nomes genéricos por porta (não por sala real); silhueta e acessórios novos por classe, reação ao acerto além da existente, ícones padronizados e qualidade Baixa/Média/Alta com mais efeitos (névoa, luz) ficam para o P61.
+
+## Pacote 59 — Lista visual, nível Fácil (22/11/2026)
+
+Só apresentação: armas, dano, IA, colisão e balanceamento intactos. Mãos ficam de lado (decisão do Henriq).
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Mira: estilo (cruz/ponto/círculo), cor e espessura nos AJUSTES; contorno escuro para contraste | Variáveis CSS (`--ct`, `--cross-color`), `data-style`, `prefEls` (salva sozinho) | Leitura melhor sobre qualquer fundo; some dentro da luneta (já era assim). |
+| Fácil | Hitmarker de **abate**: maior, vermelho, dura mais; `killEnemy` define `hitKind='kill'` | Estado de feedback separado do acerto comum | Diferencia acerto, escudo, cabeça e abate. |
+| Fácil | Barra de vida: "fantasma" que desce devagar e pulso em vida baixa | `transition` com atraso, classe `.low` | Mostra o dano recebido e alerta sem texto. |
+| Fácil | Fundo em degradê atrás do aviso de onda/missão | CSS `linear-gradient` | Legível sobre cenários claros. |
+| Fácil | Luz de status nas portas: vermelha fechada, verde aberta | `MeshBasicMaterial` por porta, atualizado em `updateIncDoors` | Sem luz dinâmica nem shader novo. |
+| Fácil | Pistola e sniper 10–12% menores na tela | Multiplicador de escala do viewmodel | Menos área tapada. |
+| Fácil | "Reduzir tremores e flashes": zera tremor de tela, flashes, vinheta e CRT | Classe `body.reduce-fx` + variável `reduceFx` | Conforto visual; a vinheta de dano some neste modo (a seta de direção continua). |
+
+Já existiam: mira some na luneta, mira que abre ao correr/atirar, CRT opcional, laptop detalhado, mapa de rede animado, armas chanfradas (P57).
+**Fica para P60+ (Médio/Difícil):** destaque e silhueta por classe de inimigos, faíscas por material, placas/direção e paleta por prédio, ícones e telas de vitória/derrota, qualidade Baixa/Média/Alta com auto-ajuste por FPS, e as peças móveis das armas.
+Testes: `bash test.sh` aprovado; Chromium: 3 estilos de mira, luz das portas trocando de vermelho para verde, 0 erros JS. FPS real não medido.
+
+## Pacote 58 — Modo hack mais real (22/11/2026)
+
+Sem mudar regras do jogo: só apresentação do deck e do laptop. Todo conteúdo segue fictício e sem marcas reais (adesivos e mascote BYTE originais).
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Efeito CRT: vinheta, scanlines com rolagem, brilho e franja RGB no texto, leve cintilar; botão CRT liga/desliga e lembra por aparelho | CSS (`radial-gradient`, `text-shadow`, `@keyframes`), `localStorage` com try/catch | Dá cara de monitor antigo; respeita `prefers-reduced-motion` e pode ser desligado. |
+| Médio | Desktop: janelas **sysmon** (CPU/MEM/REDE) e **journal** (logs fictícios rolando) | Canvas 2D, séries temporais com `push/shift` | Gráficos reagem ao jogo: scan, jam e conexão elevam CPU e rede. |
+| Médio | Laptop 3D: teclado desenhado com luz azul, moldura da tela, adesivos originais na tampa, dobradiças, LEDs de energia/rede e adaptador de rede | `CanvasTexture`, poucos meshes, LED por material compartilhado | Detalhe visual barato (sem luz dinâmica, sem material novo por frame). |
+| Difícil | Mapa de rede: pacotes viajando pelas ligações durante scan/conexão e sparkline de tráfego; canvas corrigido para caber no painel | Animação por tempo, reutilização de `hackGraph` | A mesma série alimenta desktop, mapa e LED do laptop (fonte única de verdade). |
+
+Testes: `bash test.sh` aprovado; Chromium: CRT, desktop, mapa e laptop 3D renderizam, 0 erros JS.
+**Limites:** FPS real não medido; o log do journal usa o tempo da missão (parado em 0 fora de uma missão ativa).
+
+## Pacote 57 — Armas com quinas chanfradas (22/11/2026)
+
+Versão anterior do P57 (mãos arredondadas) foi **descartada** pelo Henriq; mãos ficam como no P56. Só geometria das armas; dano, cadência e recarga intactos.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cache `v8-p57`, título e versão do lobby | Versionamento PWA | Força atualização. |
+| Difícil | `bevelBoxGeometry`: toda caixa de arma ≥ 16 mm ganha quinas chanfradas com as mesmas medidas externas; peças menores seguem cubos | `ExtrudeGeometry` com `bevelSize`/`bevelThickness`, cache por tamanho | O brilho nas bordas dá aspecto de metal usinado sem mexer em modelos nem em recarga. |
+
+Custo (render por software): triângulos ~5,9 mil → ~20 mil, chamadas de desenho iguais. **FPS real não medido.**
 
 ## Pacote 56 — Portas barram os tiros do jogador + detalhes visuais (22/11/2026)
 
@@ -1030,3 +1116,12 @@ Referência enviada: desktop com janela de terminal (prompt `usuario@maquina:~$`
 
 Testes: `./test.sh` aprovado (desenho da tela e terminal ocioso); Chromium: monitor do KVM mostra a janela de terminal, 0 erros JS. Armas, dano, IA, colisão: intocados.
 **Limites:** a tela 3D do console é pequena, então o texto só fica legível de perto; o laptop 3D aparece só durante a subida/descida (depois o overlay cobre).
+
+
+## Pacote 63 — segundo piso com rampas na Incursão (23/11/2026)
+
+Implementada a opção A escolhida: plataforma elevada central, rampa de acesso, guarda-corpos e sinalização visual nos quatro prédios da Incursão. A física do jogador agora calcula o piso em X/Z, permitindo salto e aterrissagem no térreo, na rampa e no deck. Inimigos recebem a altura correspondente ao piso atual e o steering exige a rota do A* quando há diferença vertical entre origem e destino. Marcadores da missão também acompanham a altura do piso.
+
+O loop existente de combate, armas, portas, objetivos, cyberdeck, progressão, chefes, controles e os modos não-Incursão foi preservado. A limitação deliberada é que o A* continua sendo uma grade 2D compatível com a implementação anterior; a rampa fornece a conexão física entre os níveis.
+
+Validações do pacote: sintaxe JavaScript verificada com `node --check`, testes existentes executados e configuração `upperDeck` validada nos quatro mapas.
