@@ -1,0 +1,79 @@
+{
+  "benchmark": "P71 fixed scenario",
+  "duration_requested_seconds": 60.0,
+  "collected_samples": 463,
+  "measured_frame_time_seconds": 61.664,
+  "warmup_discarded_samples": 21,
+  "gpu_renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 16.0.0) (0x0000C0DE)), SwiftShader driver)",
+  "software_renderer": "true",
+  "device_pixel_ratio": "1",
+  "canvas": "1280x720",
+  "flags": "{\"noLights\":false,\"simple\":false,\"noFog\":false,\"noDust\":false,\"scale\":0}",
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "latest_pixel_ratio": 1.0,
+  "latest_quality_code": 1.0,
+  "latest_draw_calls": 249.0,
+  "latest_triangles": 9328.0,
+  "page_errors": [],
+  "metrics": {
+    "full": {
+      "raf_frame_ms": {
+        "n": 463,
+        "mean_ms": 133.184,
+        "p50_ms": 133.3,
+        "p95_ms": 150.0,
+        "p99_ms": 199.9,
+        "max_ms": 800.0
+      },
+      "cpu_update_ms": {
+        "n": 463,
+        "mean_ms": 1.15,
+        "p50_ms": 1.0,
+        "p95_ms": 1.7,
+        "p99_ms": 4.2,
+        "max_ms": 9.1
+      },
+      "cpu_render_submit_ms": {
+        "n": 463,
+        "mean_ms": 3.017,
+        "p50_ms": 2.8,
+        "p95_ms": 4.0,
+        "p99_ms": 8.2,
+        "max_ms": 10.9
+      },
+      "raf_share_over_16_67ms_pct": 100.0,
+      "raf_share_over_33_33ms_pct": 100.0,
+      "raf_share_over_50ms_pct": 100.0
+    },
+    "steady_after_first_3s": {
+      "raf_frame_ms": {
+        "n": 442,
+        "mean_ms": 132.499,
+        "p50_ms": 133.3,
+        "p95_ms": 150.0,
+        "p99_ms": 166.7,
+        "max_ms": 800.0
+      },
+      "cpu_update_ms": {
+        "n": 442,
+        "mean_ms": 1.136,
+        "p50_ms": 1.0,
+        "p95_ms": 1.6,
+        "p99_ms": 4.1,
+        "max_ms": 9.1
+      },
+      "cpu_render_submit_ms": {
+        "n": 442,
+        "mean_ms": 2.99,
+        "p50_ms": 2.8,
+        "p95_ms": 3.8,
+        "p99_ms": 8.2,
+        "max_ms": 10.9
+      },
+      "raf_share_over_16_67ms_pct": 100.0,
+      "raf_share_over_33_33ms_pct": 100.0,
+      "raf_share_over_50ms_pct": 100.0
+    }
+  },
+  "interpretation": "RAF mede o intervalo entre callbacks requestAnimationFrame. render-submit é duração síncrona do renderer.render no CPU; não mede a conclusão/tempo da GPU. Chromium headless com SwiftShader é software rendering, não GPU física."
+}

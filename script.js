@@ -58,7 +58,7 @@ let perfPanel = null, perfReadout = null, perfHint = null, perfToggle = null;
 if (perfMode) {
   perfPanel = document.createElement('section'); perfPanel.id = 'perfPanel';
   perfPanel.setAttribute('aria-label', 'Telemetria local do jogo');
-  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO P19</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
+  perfPanel.innerHTML = '<header><span>DIAGNÓSTICO DE DESEMPENHO</span><span>F8 · F9 · F10</span></header><pre id="perfReadout">Aguardando o início do cenário…</pre><div id="perfHint">Clique em JOGAR para executar o cenário fixo.</div><footer><button type="button" data-perf-action="restart">Reiniciar (F9)</button><button type="button" data-perf-action="export">Exportar CSV (F10)</button><button type="button" data-perf-action="hide">Ocultar (F8)</button></footer>';
   document.body.appendChild(perfPanel);
   perfReadout = perfPanel.querySelector('#perfReadout'); perfHint = perfPanel.querySelector('#perfHint');
   perfToggle = document.createElement('button'); perfToggle.id = 'perfToggle'; perfToggle.type = 'button'; perfToggle.textContent = 'PERF';
@@ -134,6 +134,13 @@ function signTexture(label, arrow, color) {                      // P60: placa d
   g.fillStyle = '#10151c'; g.fillRect(0, 0, 192, 48); g.fillStyle = '#' + color.toString(16).padStart(6, '0'); g.fillRect(0, 0, 8, 48);
   g.font = 'bold 22px monospace'; g.textBaseline = 'middle'; g.fillText(arrow, 18, 25); g.font = 'bold 17px monospace'; g.fillStyle = '#e8f1f8'; g.fillText(label, 46, 25);
   const t = new THREE.CanvasTexture(cv); t.anisotropy = 2; return (signTex[key] = t);
+}
+const mapOwnedGeometries = new Set(), mapOwnedMaterials = new Set();
+function ownMapGeometry(geometry) { mapOwnedGeometries.add(geometry); return geometry; }
+function ownMapMaterial(material) { mapOwnedMaterials.add(material); return material; }
+function disposeMapResources() {
+  mapOwnedGeometries.forEach(geometry => geometry.dispose()); mapOwnedGeometries.clear();
+  mapOwnedMaterials.forEach(material => material.dispose()); mapOwnedMaterials.clear();
 }
 const doorMat = new THREE.MeshLambertMaterial({ color: 0x4a5866 }), camBodyMat = new THREE.MeshLambertMaterial({ color: 0x20262e });                                     // terminais visuais, sem colisão extra
 const blockGeo = new THREE.BoxGeometry(1, 1, 1);     // UM cubo unitário compartilhado: cada bloco só muda a escala
@@ -350,11 +357,12 @@ function puddleTexture(color) {
 }
 function addPuddles(M) {
   let seed = 9173 + curMap * 131; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const mat = new THREE.MeshBasicMaterial({ map: puddleTexture(M.strip || 0x4de7ff), transparent: true, opacity: 0.55, depthWrite: false });
+  const mat = ownMapMaterial(new THREE.MeshBasicMaterial({ map: puddleTexture(M.strip || 0x4de7ff), transparent: true, opacity: 0.55, depthWrite: false }));
   for (let tries = 0, n = 0; tries < 70 && n < 8; tries++) {
     const x = (rnd() * 2 - 1) * (ARENA - 4), z = (rnd() * 2 - 1) * (ARENA - 4), w = 2.4 + rnd() * 1.8, d = 1.6 + rnd() * 1.2;
     if (Math.hypot(x, z) < 5 || blocked(x, z, Math.max(w, d) * 0.55)) continue;
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); p.rotation.x = -Math.PI / 2; p.rotation.z = rnd() * 3; p.position.set(x, 0.02, z); p.renderOrder = 1; scene.add(p); mapMeshes.push(p); n++;
+    const geo = ownMapGeometry(new THREE.PlaneGeometry(w, d));
+    const p = new THREE.Mesh(geo, mat); p.rotation.x = -Math.PI / 2; p.rotation.z = rnd() * 3; p.position.set(x, 0.02, z); p.renderOrder = 1; scene.add(p); mapMeshes.push(p); n++;
   }
 }
 // P67 âncora: mezanino (bloco sólido + faixa luminosa), rampa (prisma) e parapeito (caixas finas com colisão)
@@ -370,12 +378,15 @@ function buildDecks(M) {
   for (const d of M.decks || []) {
     const m = new THREE.Mesh(blockGeo, deckMat); m.scale.set(d.x1 - d.x0, d.h, d.z1 - d.z0); m.position.set((d.x0 + d.x1) / 2, d.h / 2, (d.z0 + d.z1) / 2);
     m.userData.surface = 'metal'; scene.add(m); solids.push(m); mapMeshes.push(m);
-    const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), new THREE.LineBasicMaterial({ color: M.strip || 0x4de7ff }));
+    const sourceGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const edgeGeo = ownMapGeometry(new THREE.EdgesGeometry(sourceGeo)); sourceGeo.dispose();
+    const edgeMat = ownMapMaterial(new THREE.LineBasicMaterial({ color: M.strip || 0x4de7ff }));
+    const e = new THREE.LineSegments(edgeGeo, edgeMat);
     e.scale.set(d.x1 - d.x0 - 0.1, 1, d.z1 - d.z0 - 0.1); e.position.set(m.position.x, d.h + 0.02, m.position.z); scene.add(e); mapMeshes.push(e);   // contorno luminoso no piso do mezanino
   }
   for (const r of M.ramps || []) {
     const w = r.axis === 'z' ? r.x1 - r.x0 : r.z1 - r.z0, len = r.axis === 'z' ? r.z1 - r.z0 : r.x1 - r.x0;
-    const m = new THREE.Mesh(rampGeometry(w, len, r.h), rampMat); m.position.set((r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2);
+    const m = new THREE.Mesh(ownMapGeometry(rampGeometry(w, len, r.h)), rampMat); m.position.set((r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2);
     m.rotation.y = r.axis === 'z' ? (r.dir > 0 ? 0 : Math.PI) : (r.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
     m.userData.surface = 'metal'; scene.add(m); solids.push(m); mapMeshes.push(m);
   }
@@ -385,7 +396,7 @@ function buildDecks(M) {
 function loadMap(index) {
   const inc = index <= -2;                                  // -2/-3/-4 = prédios da Incursão
   const M = inc ? Arena.INCURSION_LEVELS[-2 - index] : Arena.MAPS[index % Arena.MAPS.length]; curMap = inc ? index : index % Arena.MAPS.length;
-  mapMeshes.forEach(m => scene.remove(m)); mapMeshes = []; solids.length = 0; boxes.length = 0;   // length = 0 mantém a MESMA lista (outras funções a usam)
+  mapMeshes.forEach(m => scene.remove(m)); mapMeshes = []; disposeMapResources(); solids.length = 0; boxes.length = 0;   // libera recursos exclusivos; length = 0 mantém as listas usadas por outros sistemas
   activeMapLook = M.look || 'classic';
   setSky(M.sky);
   const floorTint = M.floorTint || new THREE.Color(M.floorA).lerp(new THREE.Color(M.floorB), 0.5).getHex();   // floorTint por mapa = piso legível
@@ -407,10 +418,10 @@ function loadMap(index) {
   (M.doors || []).forEach(d => {                          // portas deslizantes (só visual; a colisão/A* continuam tratando a abertura como livre)
     const m = new THREE.Mesh(blockGeo, doorMat); m.scale.set(d.axis === 'x' ? 4 : 0.3, M.ceiling - 0.15, d.axis === 'x' ? 0.3 : 4);
     m.position.set(d.x, (M.ceiling - 0.15) / 2, d.z); scene.add(m); mapMeshes.push(m);
-    const lampMat = new THREE.MeshBasicMaterial({ color: 0xff3b3b });                 // P59: luz de status da porta (vermelha = fechada, verde = aberta)
+    const lampMat = ownMapMaterial(new THREE.MeshBasicMaterial({ color: 0xff3b3b })); // P59: luz de status da porta (vermelha = fechada, verde = aberta)
     for (const side of [-1, 1]) { const lamp = new THREE.Mesh(blockGeo, lampMat); lamp.scale.set(d.axis === 'x' ? 0.55 : 0.07, 0.12, d.axis === 'x' ? 0.07 : 0.55); lamp.position.set(d.x + (d.axis === 'x' ? 0 : side * 0.2), M.ceiling - 0.6, d.z + (d.axis === 'x' ? side * 0.2 : 0)); scene.add(lamp); mapMeshes.push(lamp); }
-    const si = incDoors.length % SIGN_LABELS.length, signMat = new THREE.MeshBasicMaterial({ map: signTexture(SIGN_LABELS[si], SIGN_ARROWS[si], M.strip || 0x4de7ff) });
-    for (const side of [-1, 1]) { const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.375), signMat); sign.position.set(d.x + (d.axis === 'x' ? 0 : side * 0.19), M.ceiling - 0.95, d.z + (d.axis === 'x' ? side * 0.19 : 0));
+    const si = incDoors.length % SIGN_LABELS.length, signMat = ownMapMaterial(new THREE.MeshBasicMaterial({ map: signTexture(SIGN_LABELS[si], SIGN_ARROWS[si], M.strip || 0x4de7ff) }));
+    for (const side of [-1, 1]) { const sign = new THREE.Mesh(ownMapGeometry(new THREE.PlaneGeometry(1.5, 0.375)), signMat); sign.position.set(d.x + (d.axis === 'x' ? 0 : side * 0.19), M.ceiling - 0.95, d.z + (d.axis === 'x' ? side * 0.19 : 0));
       sign.rotation.y = d.axis === 'x' ? (side > 0 ? 0 : Math.PI) : (side > 0 ? Math.PI / 2 : -Math.PI / 2); scene.add(sign); mapMeshes.push(sign); }
     incDoors.push({ m, x: d.x, z: d.z, axis: d.axis, open: 0, y0: m.position.y, lampMat });
   });
@@ -3518,7 +3529,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
    ===================================================================== */
 /* ---- Preferências salvas no aparelho (localStorage, com try/catch: pode estar bloqueado) ---- */
 const PREF_KEY = 'arenaFpsPrefs';
-const prefEls = { sens: $('sensRange'), volume: $('volumeRange'), fov: $('fovRange'), quality: $('qualitySelect'), ctrl: ctrlSelect, radar: $('radarSelect'), assist: $('assistSelect'), touchSens: $('touchSens'), btnScale: $('btnScale'), mode: $('modeSelect'), difficulty: $('difficultySelect'), crossStyle: $('crossStyle'), crossColor: $('crossColor'), crossThick: $('crossThick'), fxReduce: $('fxReduce') };
+const prefEls = { sens: $('sensRange'), volume: $('volumeRange'), fov: $('fovRange'), quality: $('qualitySelect'), ctrl: ctrlSelect, radar: $('radarSelect'), assist: $('assistSelect'), touchSens: $('touchSens'), btnScale: $('btnScale'), mode: $('modeSelect'), difficulty: $('difficultySelect'), crossStyle: $('crossStyle'), crossColor: $('crossColor'), crossThick: $('crossThick'), fxReduce: $('fxReduce'), deckVolume: $('deckVolume'), hudCompact: $('hudCompact') };
 function applyPrefs() {                              // aplica o valor atual dos controles do menu ao jogo
   SENS = +prefEls.sens.value; audio.setVolume(+prefEls.volume.value);
   baseFov = +prefEls.fov.value; if (!scoped) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
@@ -3537,6 +3548,7 @@ function applyPrefs() {                              // aplica o valor atual dos
   el.cross.dataset.style = prefEls.crossStyle.value; el.cross.style.setProperty('--ct', prefEls.crossThick.value + 'px');          // P59: mira personalizada
   prefEls.crossColor.value === 'weapon' ? el.cross.style.removeProperty('--cross-color') : el.cross.style.setProperty('--cross-color', prefEls.crossColor.value);
   reduceFx = prefEls.fxReduce.value === 'on'; document.body.classList.toggle('reduce-fx', reduceFx);
+  audio.setDeckVolume(+prefEls.deckVolume.value); document.body.classList.toggle('hud-compact', prefEls.hudCompact.value === 'on');   // P70
   TOUCH_LOOK = +prefEls.touchSens.value; assistOn = prefEls.assist.value === 'on';
   radarOn = prefEls.radar.value === 'on'; radarEl.classList.toggle('off', !radarOn);
   $('cluster').style.setProperty('--ts', prefEls.btnScale.value);
@@ -3582,7 +3594,7 @@ function showOverlay(mode, keepHidden = false) {
   if (!keepHidden) el.overlay.classList.remove('hidden');
   if (mode === 'menu') {
     el.title.innerHTML = 'ARENA <span>FPS</span>'; el.text.innerHTML = ''; helpCardEl.innerHTML = helpText(); el.btn.textContent = 'JOGAR';
-    if (perfMode) { el.text.innerHTML += '<b>DIAGNÓSTICO P19:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
+    if (perfMode) { el.text.innerHTML += '<b>DIAGNÓSTICO DE DESEMPENHO:</b> este link inicia o teste fixo de 12 inimigos. F8 mostra/oculta métricas; F9 reinicia; F10 exporta CSV.'; el.btn.textContent = 'INICIAR CENÁRIO FIXO'; }
   } else if (mode === 'lobby') {
     el.title.innerHTML = 'LOBBY'; el.text.innerHTML = ''; helpCardEl.innerHTML = helpText(); el.btn.textContent = 'JOGAR';   // P50: depois do fim de partida, recomeçar passa pelo lobby (modo, dificuldade, carreira)
   } else if (mode === 'pause') {
@@ -3714,7 +3726,7 @@ showOverlay('menu');
 loadPrefs(); applyPrefs();                          // restaura ajustes salvos (modo, dificuldade, controles e qualidade)
 applySkin(); if (!perfMode) career.beginDay(); refreshCareerUI(); syncRunSelection();
 applyControlMode();                                 // detecta celular (pointer: coarse) e ajusta HUD e ajuda
-if (urlParams.get('test') === '1') window.__arenaTest = { loadMap, setAds: on => { locked = true; scoped = on && WEAPONS[curW].zoom > 1; }, start: () => { started = true; resetGame(); locked = true; el.overlay.classList.add('hidden'); }, select: i => selectWeapon(i), setQuality: q => { prefEls.quality.value = q; applyPrefs(); }, frame: () => { renderer.info.reset(); renderer.render(scene, camera); return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, objs: mapMeshes.length }; } };   // P49: gancho só para tests/e2e-smoke.py
+if (urlParams.get('test') === '1') window.__arenaTest = { loadMap, setAds: on => { locked = true; scoped = on && WEAPONS[curW].zoom > 1; }, start: () => { started = true; resetGame(); locked = true; el.overlay.classList.add('hidden'); }, select: i => selectWeapon(i), setQuality: q => { prefEls.quality.value = q; applyPrefs(); }, frame: () => { renderer.info.reset(); renderer.render(scene, camera); return { calls: renderer.info.render.calls, tris: renderer.info.render.triangles, objs: mapMeshes.length }; }, resources: () => ({ geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }) };   // P49: gancho só para tests/e2e-smoke.py
 requestAnimationFrame(loop);
 
 })();

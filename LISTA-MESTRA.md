@@ -6,6 +6,8 @@ terminais físicos, interação com E, NEXUS) e mais: Campus (4º prédio), deck
 lobby novo e P56–P62 visuais. Base única = **P62**. Esta lista junta os pendentes das duas linhas.
 
 ## Já feito (não repetir)
+P71: descarte de recursos exclusivos dos mapas · teste de 30 trocas sem crescimento de geometrias/texturas · rótulo neutro de desempenho.
+P70: volume dos sons do deck e HUD compacto (opções no menu).
 P69: comando `missao` no deck (connect, relógio e notificações já existiam).
 P68: mezaninos nos 4 prédios · botão de diagnóstico no menu.
 P67: mezanino com rampa no Complexo (Média/Alta).
@@ -18,9 +20,8 @@ deck/modo hack (CRT, sysmon, rede, journal) · mira/HUD/combate visual · cenár
 faíscas adaptativas (Alta) · resolução adaptativa · `?perf=1` · PWA offline.
 
 ## 🟢 Fácil
-- [ ] HUD enxuto + céu avermelhado + letreiros (pendente do P16, referência visual)
-- [ ] Ajustar volume dos sons do deck depois de você ouvir
-- [ ] Atualizar LEIA-ME/GUIA-RAPIDO e cabeçalho de versão
+- [ ] Céu avermelhado + letreiros (precisa de referência visual; HUD enxuto virou opção "HUD compacto")
+- [ ] Atualizar GUIA-RAPIDO (cabeçalho P71 já atualizado)
 
 ## 🟡 Médio
 - [ ] Fundir peças dos inimigos (menos draw calls) — só após medir FPS

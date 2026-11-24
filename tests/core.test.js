@@ -607,3 +607,18 @@ assert.equal(A.deckCompass(0, -10), 'norte'); assert.equal(A.deckCompass(10, 0),
   assert.ok(A.DECK_COMMANDS.includes('missao'));
 }
 console.log('p69: comando missao OK');
+
+// ---- p70: volume do deck e HUD compacto (opcionais) ----
+assert.equal(typeof audioProbe.setDeckVolume, 'function'); audioProbe.setDeckVolume(0.4); audioProbe.setDeckVolume(99); audioProbe.setDeckVolume('x');
+assert.ok(audioProbe.sfx.deckScan && audioProbe.sfx.deckKey, 'sons do deck continuam existindo');
+{ const html = fs.readFileSync('index.html', 'utf8'); assert.match(html, /id="deckVolume"/); assert.match(html, /id="hudCompact"/); assert.match(html, /id="hudCompact"[^>]*><option value="off" selected/); }
+assert.match(gameSource, /hud-compact/); assert.match(fs.readFileSync('style.css', 'utf8'), /body\.hud-compact/);
+console.log('p70: volume do deck e HUD compacto OK');
+
+// ---- desempenho: recursos próprios dos mapas e diagnóstico com nome neutro ----
+assert.match(gameSource, /function disposeMapResources\(\)/);
+assert.match(gameSource, /mapMeshes\.forEach\(m => scene\.remove\(m\)\); mapMeshes = \[\]; disposeMapResources\(\)/);
+assert.match(gameSource, /resources: \(\) => \(\{ geometries: renderer\.info\.memory\.geometries, textures: renderer\.info\.memory\.textures \}\)/);
+assert.match(gameSource, /DIAGNÓSTICO DE DESEMPENHO/); assert.doesNotMatch(gameSource, /DIAGNÓSTICO P19/);
+assert.match(fs.readFileSync('tests/e2e-smoke.py', 'utf8'), /range\(30\)/);
+console.log('desempenho: rótulo neutro, descarte por mapa e medição de memória OK');

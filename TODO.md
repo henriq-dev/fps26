@@ -1,6 +1,19 @@
-# TODO — Arena FPS v8 · Pacote P69
+# TODO — Arena FPS v8 · Pacote P71
 
 > P69: itens antigos já entregues foram marcados `[x]`. A lista viva e correta é a **LISTA-MESTRA.md**.
+
+## Pacote 71 — Otimização segura de trocas de mapa `[x]`
+
+- [x] Liberar explicitamente as geometrias e materiais pertencentes somente ao mapa anterior; preservar recursos compartilhados/cacheados e materiais de terminais tratados pelo seu próprio descarte.
+- [x] Testar 30 trocas entre Hangar, Pátio, Fábrica, Complexo, Refinaria, Laboratório e Campus (sete arenas do seletor interno) após aquecimento, com qualidade Alta; falhar se crescer a contagem de geometrias ou texturas.
+- [x] Substituir rótulos de diagnóstico P19 por “DIAGNÓSTICO DE DESEMPENHO”.
+- [x] Conferir as otimizações já presentes: resolução adaptativa, faíscas adaptativas e simplificações de qualidade Média; mantidas sem duplicação.
+- [ ] Medir FPS/frametime em GPU real e celular físico; baseline do Sandbox/SwiftShader registrado no relatório, mas não substitui hardware real.
+
+## Pacote 70 — Volume do deck + HUD compacto `[x]`
+
+- [x] Controle de volume dos sons do deck
+- [x] HUD compacto opcional
 
 ## Pacote 69 — Comando `missao` no deck `[x]`
 

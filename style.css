@@ -674,3 +674,9 @@ body.reduce-fx .obj-arrow.alarm svg { animation: none; }
 .pad-row.listening b { color: #ffb04d; }
 .pad-hint { margin: 10px 0 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .pad-reset { padding: 7px 12px; border: 1px solid rgba(77,231,255,.35); border-radius: 8px; background: transparent; color: var(--ui); font: inherit; font-size: 12px; cursor: pointer; }
+
+/* P70: HUD compacto (opcional): só pontuação e onda; objetivo sem o texto longo; radar menor */
+body.hud-compact #stats .row ~ .row { display: none; }   /* mantém só a 1ª linha (Onda) */
+body.hud-compact #objectiveHint { display: none; }
+body.hud-compact #radar { width: 120px; height: 120px; opacity: .85; }
+body.hud-compact #weapon .label, body.hud-compact #stats .label { opacity: .6; }

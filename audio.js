@@ -28,9 +28,11 @@ Arena.createAudio = getVolume => {
   const setVolume = v => { if (masterGain) masterGain.gain.value = v; };
   const setListener = (x, z, yaw) => { listener = { x, z, yaw }; };
   const spatial = (x, z) => Arena.audioSpatial(x, z, listener.x, listener.z, listener.yaw);
+  let deckMul = 1, curScale = 1;                              // P70: volume só dos sons do deck (curScale vale 1 fora dos sons deck*)
+  const setDeckVolume = v => { deckMul = Math.max(0, Math.min(2, +v || 0)); };
   function route(node, pan = 0, gainScale = 1) {
     if (!actx) return node.connect(masterGain);
-    const g = actx.createGain(); g.gain.value = gainScale;
+    const g = actx.createGain(); g.gain.value = gainScale * curScale;
     node.connect(g);
     if (typeof actx.createStereoPanner === 'function') {
       const p = actx.createStereoPanner(); p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(masterGain);
@@ -98,6 +100,9 @@ Arena.createAudio = getVolume => {
     deckJam(){ playNoise(0.7, 3200, 0.22, 0, 'bandpass'); playTone(110, 55, 0.6, 0.14, 'sawtooth'); },
     achievement(){ playTone(523, 1046, 0.22, 0.2, 'triangle'); playTone(784, 1568, 0.22, 0.16, 'sine', 0.12); }
   };
-  return { init, setVolume, setListener, sfx };
+  for (const k of Object.keys(sfx)) if (k.startsWith('deck')) {   // sons do deck passam pelo multiplicador próprio
+    const f = sfx[k]; sfx[k] = (...a) => { curScale = deckMul; try { return f(...a); } finally { curScale = 1; } };
+  }
+  return { init, setVolume, setDeckVolume, setListener, sfx };
 };
 })();

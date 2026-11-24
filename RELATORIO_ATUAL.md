@@ -1,7 +1,50 @@
-# Relatório atual — Arena FPS v8 · Pacote P69
+# Relatório atual — Arena FPS v8 · Pacote P71
 
-**Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
+**Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P71 em 24/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 71 — Recursos de mapa e estabilidade de memória (24/11/2026)
+
+O P70 removia do `scene` os objetos do mapa anterior, mas não descartava algumas geometrias e materiais criados exclusivamente para portas, placas, mezaninos e poças. O renderer mantinha recursos WebGL sem referência lógica após as trocas. P71 registra esses recursos temporários como pertencentes ao mapa e executa `dispose()` ao desmontá-lo; geometrias/materiais compartilhados e caches de textura são preservados, e os terminais continuam usando o descarte próprio. Não houve mudança em armas, dano, IA, colisões, navegação ou balanceamento.
+
+Também foi corrigido o rótulo antigo `P19` para **DIAGNÓSTICO DE DESEMPENHO** no painel e na tela de início. A resolução adaptativa, as faíscas adaptativas e as simplificações da qualidade Média já existiam no P70; foram auditadas e mantidas sem duplicação nem mudança de comportamento.
+
+| Ensaio Chromium/SwiftShader | Geometrias | Texturas | Resultado |
+|---|---:|---:|---|
+| P70 original, baseline e retorno ao mapa 1 após 30 trocas | 706 → 1206 (+500) | 77 → 77 (+0) | crescimento de geometrias detectado |
+| P71, baseline e retorno ao mapa 1 após 30 trocas | 122 → 122 (+0) | 77 → 77 (+0) | estável |
+
+O teste automatizado percorre as sete arenas disponíveis no seletor interno (Hangar, Pátio, Fábrica, Complexo, Refinaria, Laboratório e Campus), em qualidade Alta. Após duas passadas de aquecimento, captura um baseline separado por mapa; depois de 30 trocas compara cada retorno com o baseline da própria arena, evitando que mapas de tamanhos diferentes escondam crescimento. O custo inicial difere porque P71 descarta recursos temporários. `renderer.info.memory` mede recursos do renderer, **não** tempo de GPU nem FPS. Um benchmark de frametime foi coletado no Chromium/SwiftShader e está registrado abaixo; a validação em GPU real e celular físico continua pendente.
+
+### Frametime P71 em software (24/11/2026)
+
+Cenário fixo do Hangar, 12 inimigos, qualidade Média, 1280 × 720, pixel ratio 1, flags padrão, Chromium headless/SwiftShader. Coleta por 60 s: 463 amostras; as estatísticas estáveis abaixo descartam os primeiros 3 s (21 amostras). Sem erros JavaScript.
+
+| Métrica (após aquecimento) | Resultado |
+|---|---:|
+| Intervalo RAF médio / p50 / p95 / p99 / máximo | 132,5 / 133,3 / 150,0 / 166,7 / 800,0 ms |
+| FPS equivalente ao p50 de RAF | ~7,5 |
+| Quadros com intervalo RAF acima de 50 ms | 100% |
+| CPU `update` média / p95 / p99 / máximo | 1,14 / 1,6 / 4,1 / 9,1 ms |
+| CPU `render-submit` média / p95 / p99 / máximo | 2,99 / 3,8 / 8,2 / 10,9 ms |
+
+O renderer identificado foi ANGLE/Vulkan com **SwiftShader (software)**. Assim, os ~7,5 FPS equivalentes descrevem somente este ambiente, não o FPS esperado no aparelho do jogador. O intervalo RAF está alto enquanto os trechos medidos de JavaScript são baixos; sem GPU física e sem timer de conclusão da GPU, não se deve atribuir esse intervalo a um gargalo específico do jogo ou extrapolá-lo para hardware real. CSV bruto e resumo JSON estão em `benchmarks/frametime-p71/`.
+
+**Validação P71:** `./test.sh` passou (testes de núcleo, sintaxe e Chromium); 30 trocas, crescimento zero de geometrias/texturas, nenhum erro JS. Benchmark opt-in `?perf=1`: 463 amostras no cenário fixo, sem erros JS; ver a tabela e os dados brutos acima.
+
+## Pacote 70 — Volume do deck e HUD compacto (24/11/2026)
+
+Duas opções no menu (AJUSTES), ambas persistidas junto das outras preferências. Armas, dano, IA, colisão e balanceamento intactos. O padrão não muda nada: volume do deck 1,0 e HUD compacto desligado.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | HUD compacto (opcional): pontuação + onda, objetivo sem o texto longo, radar menor | classe `body.hud-compact` + seletor `.row ~ .row` | quem prefere tela limpa liga; não precisou de imagem de referência |
+| Médio | Controle "Volume dos sons do deck" (0 a 1,5) | multiplicador `curScale` aplicado em `route()` só durante `deck*` | você ajusta sozinho em vez de me dizer "alto/baixo"; os outros sons não mudam |
+| Médio | Os dois controles entram em `prefEls` | salvamento automático em `localStorage` | persistem ao recarregar (testado: `on` e `0.3` voltaram) |
+
+**Lógica do volume do deck:** cada som cujo nome começa com `deck` é embrulhado numa função que liga `curScale = deckMul` durante a chamada e volta a 1 no `finally`. `route()` multiplica o ganho por `curScale`, então só esses sons mudam.
+**Erro encontrado:** primeiro seletor (`nth-of-type(n+2)`) escondeu também a linha "Onda"; corrigido para `.row ~ .row`.
+**Testes:** `./test.sh` verde (bloco p70). Chromium: classe aplicada, 1 linha visível no painel de pontuação, persistência após recarregar, 0 erros de JS.
 
 ## Pacote 69 — Comando `missao` + revisão do TODO (24/11/2026)
 
