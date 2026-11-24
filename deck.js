@@ -18,7 +18,7 @@ Arena.DECK_SKINS = {
 };
 
 // Ferramentas reais que o jogo NÃO executa (só avisa). Mantém o deck seguro e cenográfico.
-const REAL_TOOLS = ['hydra', 'msfconsole', 'sqlmap', 'aircrack-ng', 'john', 'hashcat', 'ssh', 'ping', 'curl', 'wget', 'nc', 'netcat', 'metasploit', 'burpsuite', 'wireshark', 'ettercap'];
+const REAL_TOOLS = ['hydra', 'msfconsole', 'sqlmap', 'aircrack-ng', 'john', 'hashcat', 'ping', 'curl', 'wget', 'nc', 'netcat', 'metasploit', 'burpsuite', 'wireshark', 'ettercap'];
 const o = (t, k = 'out') => ({ t, k });
 // Sistema de arquivos FICTÍCIO do deck (nada é lido do computador do jogador). content(ctx) devolve as linhas do arquivo.
 Arena.DECK_FILES = [
@@ -28,7 +28,32 @@ Arena.DECK_FILES = [
   { name: 'scan.log', content: c => [`último scan: ${(c.scanCd || 0) > 0 ? 'há pouco (em resfriamento)' : 'nenhum recente'}`, 'faixa de rede fictícia: 192.0.2.0/24'] },
   { name: 'jammer.sh', content: () => ['#!/bin/sh', '# (fictício) interferência local — use o comando "jam" no deck'] }
 ];
-Arena.deckFile = (name, ctx = {}) => { const f = Arena.DECK_FILES.find(x => x.name === name); return f ? f.content(ctx).map(t => ({ t, k: 'out' })) : null; };
+// P66: arquivos e pistas FICTÍCIOS por prédio. Cada prédio tem 3 arquivos; o plantão muda conforme o setor (ctx.status.stage)
+const stageLine = (c, lines) => lines[Math.min(3, Math.max(1, (c.status && c.status.stage) || 1)) - 1];
+Arena.DECK_BUILDING_FILES = {
+  complexo: [
+    { name: 'complexo-plantao.txt', content: c => ['PLANTÃO // COMPLEXO (fictício)', stageLine(c, ['Vigia da noite: "a ronda passa de tempos em tempos; fique atento às câmeras."', 'Técnico de rede: "o KVM está liberado; a gerência de rede ainda pede autorização."', 'Gerente: "o datacenter fica no fundo; só o console central aceita comando final."'])] },
+    { name: 'complexo-rotas.txt', content: () => ['Rotas: os blocos são ligados por portas.', 'Dica: portas fechadas barram tiros — use-as como abrigo.', 'Dica: o "jam" silencia câmeras e torretas por pouco tempo.'] },
+    { name: 'complexo-pistas.txt', content: () => ['PISTA 1: CONSOLE KVM é o primeiro alvo (sala noroeste).', 'PISTA 2: PORTA DE GERENCIAMENTO DE REDE abre o caminho para o datacenter.', 'PISTA 3: CONSOLE CENTRAL DO DATACENTER decide o objetivo final.'] }
+  ],
+  refinaria: [
+    { name: 'refinaria-plantao.txt', content: c => ['PLANTÃO // REFINARIA (fictício)', stageLine(c, ['Operador: "o escritório está vazio, só os drones de ronda."', 'Chefe de turno: "a sala de controle tem torretas; cuidado com o corredor âmbar."', 'Engenheiro: "o reator só responde ao console dele. Sem pressa… ou com alarme."'])] },
+    { name: 'refinaria-rotas.txt', content: () => ['Rotas: caixas e tubulações servem de cobertura.', 'Dica: o brilho âmbar das lâmpadas avisa quando a porta está trancada.', 'Dica: o drone [F] revela torretas atrás das paredes.'] },
+    { name: 'refinaria-pistas.txt', content: () => ['PISTA 1: CONSOLE DO ESCRITÓRIO — comece por aqui.', 'PISTA 2: CONSOLE DA SALA DE CONTROLE — vigiado por torretas.', 'PISTA 3: CONSOLE DO REATOR — objetivo final.'] }
+  ],
+  laboratorio: [
+    { name: 'laboratorio-plantao.txt', content: c => ['PLANTÃO // LABORATÓRIO (fictício)', stageLine(c, ['Vigilante: "o laboratório principal está silencioso demais."', 'Enfermeiro: "a cirurgia tem câmeras novas; elas giram devagar."', 'Arquivista: "o arquivo central guarda tudo; só abre com a rede da cirurgia caída."'])] },
+    { name: 'laboratorio-rotas.txt', content: () => ['Rotas: salas compactas e visão curta.', 'Dica: câmeras giram em arco — espere a varredura passar.', 'Dica: "scan" mostra inimigos mesmo fora da linha de visão.'] },
+    { name: 'laboratorio-pistas.txt', content: () => ['PISTA 1: CONSOLE DO LABORATÓRIO — primeiro alvo.', 'PISTA 2: CONSOLE DA CIRURGIA — fica no canto oposto.', 'PISTA 3: CONSOLE DO ARQUIVO CENTRAL — objetivo final.'] }
+  ],
+  campus: [
+    { name: 'campus-plantao.txt', content: c => ['PLANTÃO // CAMPUS (fictício)', stageLine(c, ['Zelador: "o bloco D está vazio; só a ronda passa por lá."', 'Monitor da TI: "o bloco A tem a rede de segurança; há torretas guardando a rede."', 'Coordenador: "o bloco E concentra os dados; o alarme é geral."'])] },
+    { name: 'campus-rotas.txt', content: () => ['Rotas: blocos A–E ligados por portas.', 'Dica: portas fechadas barram tiros dos dois lados.', 'Dica: a seta sob o painel de missão aponta o próximo console.'] },
+    { name: 'campus-pistas.txt', content: () => ['PISTA 1: CONSOLE DO BLOCO D — primeiro alvo.', 'PISTA 2: CONSOLE DO BLOCO A — rede de segurança.', 'PISTA 3: CONSOLE CENTRAL DO BLOCO E — objetivo final.'] }
+  ]
+};
+Arena.deckFileList = (ctx = {}) => Arena.DECK_FILES.concat(Arena.DECK_BUILDING_FILES[ctx.building] || []);
+Arena.deckFile = (name, ctx = {}) => { const f = Arena.deckFileList(ctx).find(x => x.name === name); return f ? f.content(ctx).map(t => ({ t, k: 'out' })) : null; };
 
 // ctx = { skin, scanCd, jamCd, targets: [{ label, dist }] }  →  { lines: [{t,k}], fx: { scan?, jam?, skin?, clear?, exit? } }
 Arena.deckRun = (line, ctx = {}) => {
@@ -44,6 +69,7 @@ Arena.deckRun = (line, ctx = {}) => {
     L.push(o('Comandos do CYBERDECK (tudo simulado):', 'dim'),
       o('  scan      varre a rede fictícia e marca alvos na tela (alias: nmap)'),
       o('  jam       interfere nas câmeras e torretas por alguns segundos'),
+      o('  missao    resumo do objetivo: ordem, direção e distância do console'),
       o('  connect   (perto do console) prepara a invasão: adianta 50% da barra de E'),
       o('  theme     troca o visual: theme kali | theme arch'),
       o('  neofetch  mostra o sistema do deck   ·   uname, whoami, ls, cat notas.txt'),
@@ -53,6 +79,12 @@ Arena.deckRun = (line, ctx = {}) => {
   else if (cmd === 'exit' || cmd === 'quit') { fx.exit = true; }
   else if (cmd === 'whoami') L.push(o('operador'));
   else if (cmd === 'id') L.push(o('uid=1000(operador) gid=1000(operador) (simulado)'));
+  else if (cmd === 'missao' || cmd === 'missão' || cmd === 'objetivo') {          // P69: resumo do objetivo atual
+    const st = ctx.status || {};
+    L.push(o(`missão  : setor ${st.stage || 1}/4 · ${st.mission || '—'}`), o(`ordem   : ${st.hint || '—'}`),
+      o(st.dist > 0 ? `console : a ~${Math.round(st.dist)} m ao ${Arena.deckCompass(st.dx, st.dz)}` : 'console : você está junto dele — segure E', st.dist > 0 ? 'out' : 'ok'),
+      o(`tempo   : ${Math.floor((ctx.time || 0) / 60)}:${String(Math.floor((ctx.time || 0) % 60)).padStart(2, '0')}`));
+  }
   else if (cmd === 'status') {
     const st = ctx.status || {};
     L.push(o(`missão  : setor ${st.stage || 1}/4 · ${st.mission || '—'}`), o(`scan    : ${(ctx.scanCd || 0) > 0 ? 'resfriando ' + Math.ceil(ctx.scanCd) + ' s' : 'pronto'}`),
@@ -77,7 +109,7 @@ Arena.deckRun = (line, ctx = {}) => {
   else if (cmd === 'motd') L.push(...Arena.deckBoot(skin.id).slice(-2).map(t => o(t, 'dim')));
   else if (cmd === 'pwd') L.push(o('/home/operador'));
   else if (cmd === 'uname') L.push(o(args[0] === '-a' ? `Linux deck ${skin.kernel} #1 SMP PREEMPT (simulado) x86_64 GNU/Linux` : 'Linux'));
-  else if (cmd === 'ls') L.push(o(Arena.DECK_FILES.map(f => f.name).join('  '), 'dim'));
+  else if (cmd === 'ls') L.push(o(Arena.deckFileList(ctx).map(f => f.name).join('  '), 'dim'));
   else if (cmd === 'cat') { const f = Arena.deckFile(args[0] || '', ctx); if (f) L.push(...f); else L.push(o(`cat: ${args[0] || ''}: arquivo não encontrado`, 'err')); }
   else if (cmd === 'avisos' || cmd === 'notify') { const n = (ctx.notes || []).slice(-8); if (!n.length) L.push(o('nenhum aviso ainda.', 'dim')); else n.forEach(x => L.push(o(`[T+${x.at}] ${x.t}`, x.k === 'warn' ? 'warn' : 'out'))); }
   else if (cmd === 'neofetch' || cmd === 'fastfetch') L.push(o(`operador@deck`), o('-------------'), o(`OS:      ${skin.os}`), o(`Kernel:  ${skin.kernel}`), o(`Shell:   ${skin.shell}`), o('Máquina: CYBERDECK CX-7 (fictício)'), o('Rede:    NENHUMA (modo offline)'));
@@ -99,6 +131,22 @@ Arena.deckRun = (line, ctx = {}) => {
     if ((ctx.jamCd || 0) > 0) L.push(o(`jammer em resfriamento (${Math.ceil(ctx.jamCd)} s)`, 'warn'));
     else { L.push(o('[SIM] emitindo interferência …', 'dim'), o('interferência', 'bar'), o(`[SIM] câmeras e torretas fora do ar por ${Arena.DECK.jam.time} s`, 'ok')); fx.jam = Arena.DECK.jam.time; }
   }
+  else if (cmd === 'grep') {                                   // P63: busca de texto nos arquivos FICTÍCIOS do deck
+    const term = (args[0] || '').replace(/^["']|["']$/g, '').toLowerCase(), only = args[1];
+    if (!term) L.push(o('uso: grep <termo> [arquivo]', 'warn'));
+    else {
+      const all = Arena.deckFileList(ctx), files = only ? all.filter(f => f.name === only) : all; let hits = 0;
+      if (only && !files.length) L.push(o(`grep: ${only}: arquivo não encontrado`, 'err'));
+      files.forEach(f => f.content(ctx).forEach((t, i) => { if (t.toLowerCase().includes(term)) { hits++; L.push(o(`${f.name}:${i + 1}: ${t}`)); } }));
+      if (!hits && (!only || files.length)) L.push(o('(nada encontrado)', 'dim'));
+    }
+  }
+  else if (cmd === 'ssh') {                                    // P63: conexão FALSA — nada sai do jogo
+    const host = args[0] || '';
+    if (!host) L.push(o('uso: ssh operador@192.0.2.<n>', 'warn'));
+    else if (!/(^|@)192\.0\.2\.\d{1,3}$/.test(host)) L.push(o(`[SIM] ${host}: só hosts da rede fictícia 192.0.2.0/24`, 'warn'));
+    else L.push(o(`[SIM] conectando a ${host.split('@').pop()} (fictício) …`, 'dim'), o('conexão', 'bar'), o('[SIM] acesso negado: use "connect" no console físico.', 'warn'));
+  }
   else if (cmd === 'apt' || cmd === 'apt-get' || cmd === 'pacman' || cmd === 'yay') L.push(o('[SIM] sem rede externa: modo offline. Nada foi instalado.', 'warn'));
   else if (REAL_TOOLS.includes(cmd)) L.push(o(`[SIM] "${cmd}" real está desativado neste jogo. Use scan ou jam.`, 'warn'));
   else L.push(o(skin.notFound(cmd), 'err'));
@@ -106,7 +154,12 @@ Arena.deckRun = (line, ctx = {}) => {
 };
 
 // Lista de comandos (para o autocompletar com Tab)
-Arena.DECK_COMMANDS = ['help', 'scan', 'nmap', 'jam', 'connect', 'status', 'theme', 'neofetch', 'uname', 'whoami', 'id', 'pwd', 'ls', 'cat', 'avisos', 'date', 'uptime', 'ip', 'echo', 'history', 'motd', 'clear', 'exit'];
+// P69: direção em palavras. No mapa, norte = -z e oeste = -x (como nos textos das missões)
+Arena.deckCompass = (dx, dz) => {
+  const a = (Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360;                 // 0° = norte, 90° = leste
+  return ['norte', 'nordeste', 'leste', 'sudeste', 'sul', 'sudoeste', 'oeste', 'noroeste'][Math.round(a / 45) % 8];
+};
+Arena.DECK_COMMANDS = ['missao', 'help', 'scan', 'nmap', 'jam', 'connect', 'status', 'theme', 'neofetch', 'uname', 'whoami', 'id', 'pwd', 'ls', 'cat', 'grep', 'ssh', 'avisos', 'date', 'uptime', 'ip', 'echo', 'history', 'motd', 'clear', 'exit'];
 // Tab: completa o 1º termo (ou o argumento de "theme"). Devolve { line, options } — options só quando há mais de uma opção.
 Arena.deckComplete = (line) => {
   const m = /^(\s*)(\S*)$/.exec(line), t = /^(\s*theme\s+)(\S*)$/i.exec(line);

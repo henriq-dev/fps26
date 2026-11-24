@@ -18,8 +18,13 @@ const ACHIEVEMENTS = [
   { id: 'bossbreaker', title: 'QUEBRA-CHEFES', detail: 'Derrote um chefe', test: p => p.totals.bosses >= 1, skin: 'gold' },
   { id: 'operator', title: 'ESPECIALISTA', detail: 'Conclua 3 objetivos', test: p => p.totals.objectives >= 3, skin: 'mint' },
   { id: 'chain', title: 'REAÇÃO EM CADEIA', detail: 'Alcance combo x5', test: p => p.totals.bestCombo >= 5 },
+  { id: 'escapist', title: 'ESCAPISTA', detail: 'Conclua uma Incursão', test: p => p.totals.incursions >= 1 },
+  { id: 'ghost', title: 'FANTASMA', detail: 'Conclua uma Incursão sem disparar o alarme', test: p => p.totals.silent >= 1 },
+  { id: 'sprinter', title: 'RELÂMPAGO', detail: 'Conclua uma Incursão em menos de 6 minutos', test: p => p.totals.fastIncursions >= 1 },
+  { id: 'saboteur', title: 'SABOTADOR', detail: 'Destrua 5 torretas', test: p => p.totals.turrets >= 5 },
   { id: 'daily', title: 'TURNO COMPLETO', detail: 'Conclua os três desafios do dia', test: p => p.daily.completed.length >= CHALLENGES.length, skin: 'aurora' }
 ];
+Arena.INCURSION_FAST_SECONDS = 360;   // 6 min: meta da conquista RELÂMPAGO
 const SKINS = {
   neon: { label: 'Neon original', achievement: null },
   violet: { label: 'Pulso violeta', achievement: 'veteran' },
@@ -29,7 +34,7 @@ const SKINS = {
 };
 const empty = () => ({
   version: 1,
-  totals: { runs: 0, kills: 0, objectives: 0, bosses: 0, waves: 0, bestWave: 0, bestCombo: 1, score: 0 },
+  totals: { runs: 0, kills: 0, objectives: 0, bosses: 0, waves: 0, bestWave: 0, bestCombo: 1, score: 0, incursions: 0, silent: 0, fastIncursions: 0, turrets: 0 },
   records: {}, achievements: [], unlockedSkins: ['neon'], selectedSkin: 'neon',
   daily: { day: '', progress: {}, completed: [] }
 });
@@ -90,6 +95,12 @@ Arena.createCareerStore = storageArg => {
       if (type === 'kill') { profile.totals.kills++; updateChallenges('kill', 1); if (value.boss) profile.totals.bosses++; }
       else if (type === 'wave') { amount = safeNumber(value.wave); profile.totals.waves++; profile.totals.bestWave = Math.max(profile.totals.bestWave, amount); updateChallenges('wave', amount); }
       else if (type === 'objective') { profile.totals.objectives++; updateChallenges('objective', 1); }
+      else if (type === 'turret') profile.totals.turrets++;                                  // P64: torreta destruída
+      else if (type === 'incursion') {                                                       // P64: fuga concluída
+        profile.totals.incursions++;
+        if (value.silent) profile.totals.silent++;
+        if (safeNumber(value.time) > 0 && safeNumber(value.time) < Arena.INCURSION_FAST_SECONDS) profile.totals.fastIncursions++;
+      }
       else if (type === 'combo') profile.totals.bestCombo = Math.max(profile.totals.bestCombo, safeNumber(value.combo));
       const earned = evaluate(); persist(); return earned;
     },

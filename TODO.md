@@ -1,4 +1,52 @@
-# TODO — Arena FPS v8 · Pacote 38
+# TODO — Arena FPS v8 · Pacote P69
+
+> P69: itens antigos já entregues foram marcados `[x]`. A lista viva e correta é a **LISTA-MESTRA.md**.
+
+## Pacote 69 — Comando `missao` no deck `[x]`
+
+- [x] `missao`/`objetivo`: ordem, direção (bússola) e distância do console, tempo
+- [ ] Aguardando você: playtest dos mezaninos, CSV do `?perf=1`, decisão sobre o chefe, referência do HUD enxuto
+
+
+Lista completa e unificada: ver **LISTA-MESTRA.md**.
+
+## Pacote 68 — Mezaninos nos 4 prédios + diagnóstico no menu `[x]`
+
+- [x] Mezanino/rampa em Refinaria, Laboratório e Campus
+- [x] Botão de diagnóstico (?perf=1) no menu
+- [ ] Playtest humano + medir FPS; 2º andar completo
+
+## Pacote 67 — Mezanino com rampa (Complexo, Média/Alta) `[x]`
+
+- [x] groundAt, parapeito, rampa, física, inimigos
+- [ ] Playtest humano do mezanino + medir FPS (?perf=1)
+- [ ] Mezaninos nos outros 3 prédios; segundo andar completo (depende do FPS)
+
+## Pacote 66 — Deck por prédio + gamepad `[x]`
+
+- [x] 3 arquivos/pistas por prédio
+- [x] Remapeamento do gamepad no menu
+- [ ] Próximo: andares / arena maior (P67)
+
+## Pacote 65 — Seta de direção até o objetivo `[x]`
+
+- [x] Seta + distância; azul/verde/vermelha pulsando no alarme
+- [ ] Aguarda decisão: chefe reagir a scan/jam (muda IA)
+
+## Pacote 64 — Conquistas da Incursão e ícones do HUD `[x]`
+
+- [x] ESCAPISTA, FANTASMA, RELÂMPAGO, SABOTADOR
+- [x] Ícones ⚠ ◉ ✦ no status da missão
+- [ ] Próximo: peças móveis/laser/estojos por arma, chefe reagindo a scan/jam, rota de fuga com alarme
+
+## Pacote 63 — Rastro na porta, grep/ssh, janelas arrastáveis `[x]`
+
+- [x] Rastro do tiro para na porta fechada
+- [x] Deck: `grep` e `ssh` simulados
+- [x] Janelas do desktop arrastáveis
+- [ ] Próximo: ícones/alertas do HUD padronizados, conquistas da Incursão, peças móveis das armas
+
+## Pacote 38 — (histórico)
 
 ## Pacote 38 — Arsenal, partículas, consoles e responsividade `[x]`
 
@@ -61,7 +109,7 @@
 - [x] Modo Incursão: mapa Complexo, terminais, 4 setores, escolhas, alarme, fuga, vitória
 - [x] Drone (F)
 - [ ] Testar no aparelho: `index.html?perf=1` e jogar a Incursão
-- [ ] Próximo: portas animadas, torretas/câmeras como objetos, segundo bloco (mapa A–E), drone em 3D
+- [x] Próximo: portas animadas, torretas/câmeras como objetos, segundo bloco (mapa A–E), drone em 3D _(entregue; revisado no P69)_
 
 
 ## Pacote 19
@@ -104,7 +152,7 @@
 - [x] Sinais de áudio distintos para corpo/headshot, escudo, disparos e explosões com espacialização.
 - [x] Flash emissivo, faíscas e sobrecarga da Railgun contra escudos.
 - [x] Gamepad com analógicos, RT/LT, LB/RB, A/B/X/Y, Start e L3 para interagir.
-- [ ] Remapeamento de controles de gamepad no menu (pendência deliberadamente fora desta continuação).
+- [x] Remapeamento de controles de gamepad no menu (pendência deliberadamente fora desta continuação). _(entregue; revisado no P69)_
 
 ## Pacote 3 — IA, tática e ondas
 
@@ -247,7 +295,7 @@
 - [x] Mescla p23 + portas/câmeras; hold respeita lockout; consoles fundidos (≤18 meshes); telas por terminal.
 - [x] NEXUS nos monitores físicos (textura por terminal).
 - [ ] Pendente: medir `?perf=1` em celular/GPU física.
-- [ ] Pendente: torretas, prédios multi-bloco, marcadores 3D do drone, NEXUS dentro dos monitores físicos, porta bloqueando LOS dos inimigos.
+- [x] Pendente: torretas, prédios multi-bloco, marcadores 3D do drone, NEXUS dentro dos monitores físicos, porta bloqueando LOS dos inimigos. _(entregue; revisado no P69)_
 
 ## Pacote 25
 - [x] Marcadores 3D do drone (inimigos, console/saída, câmeras).
@@ -272,11 +320,11 @@
 
 ## Pacote 30
 - [x] Cyberdeck (T): shell Kali/Arch simulado, scan e jam.
-- [ ] Ideias: laptop 3D na mão; mais comandos (ex.: `connect` ligado ao console); missão via deck.
+- [x] Ideias: laptop 3D na mão; mais comandos (ex.: `connect` ligado ao console); missão via deck. _(entregue; revisado no P69)_
 
 ## Pacote 31
 - [x] Deck: sons, boot, Tab, chips de recarga, comandos extras.
-- [ ] Ideias: laptop 3D na mão; `connect` no console; ajustar volume dos sons do deck após ouvir.
+- [x] Ideias: laptop 3D na mão; `connect` no console; ajustar volume dos sons do deck após ouvir. _(entregue; revisado no P69)_
 
 ## Pacote 32
 - [x] connect liga o deck ao console (50% da barra, 1x por setor).

@@ -1,8 +1,8 @@
-const VERSION = 'P63';
-const CACHE_NAME = 'arena-fps-v8-p62';
+const VERSION = 'P69';
+const CACHE_NAME = 'arena-fps-v8-p69';
 const CORE = [
   './', './index.html', './style.css', './three.min.js', './script.js', './app.js',
-  './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './deck.js',
+  './industrial-materials.js', './perf-telemetry.js', './weapons.js', './enemies.js', './upgrades.js', './maps.js', './incursion.js', './terminal-props.js', './gamepad-map.js', './deck.js',
   './pathfinding.js', './tactics.js', './progression.js', './audio.js', './manifest.json', './icon.svg',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'
 ];

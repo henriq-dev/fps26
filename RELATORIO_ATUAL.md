@@ -1,7 +1,112 @@
-# Relatório atual — Arena FPS v8 · Pacote P62
+# Relatório atual — Arena FPS v8 · Pacote P69
 
 **Base de integração:** P53 + diagnóstico de instalação. **Última atualização:** pacote P54 em 22/11/2026.  
 **Projeto:** Arena FPS — Three.js r128, scripts clássicos, namespace `Arena`.
+
+## Pacote 69 — Comando `missao` + revisão do TODO (24/11/2026)
+
+Armas, dano, IA, colisão e balanceamento intactos.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Revisão do `TODO.md`: itens antigos já entregues marcados `[x]` | higiene de documentação | a lista deixa de mostrar pendências que já foram feitas |
+| Médio | Comando `missao` (alias `objetivo`) no deck: setor, ordem, direção, distância e tempo | contexto do jogo passado ao deck (`deckTargetVec`) | fecha o item "missão via deck" |
+| Médio | `Arena.deckCompass(dx,dz)`: direção em palavras (8 setores) | `atan2` + arredondamento em múltiplos de 45° | norte = -z e oeste = -x, igual aos textos das missões |
+
+**Testes:** `./test.sh` verde (bloco p69). Chromium: `missao` no deck imprime "setor 1/4 · INFILTRAR" e a ordem; 0 erros de JS.
+
+## Pacote 68 — Mezaninos nos 4 prédios + diagnóstico no menu (24/11/2026)
+
+Armas, dano, IA e balanceamento intactos. Mezanino continua só em qualidade Média/Alta.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Cartão "DIAGNÓSTICO // MEDIR FPS" no menu com botão que liga/desliga `?perf=1` | `URLSearchParams` + recarga | o F10 só funciona com `?perf=1`; você não precisa mais digitar a URL |
+| Médio | Rampa mais escura (cor do mezanino e da rampa) | iluminação Lambert: cor base baixa = tom final legível | antes a rampa ficava lavanda-clara e destoava do piso |
+| Difícil | Mezanino + rampa também na Refinaria, no Laboratório e no Campus | dados por mapa (`decks`/`ramps`) reaproveitando a infraestrutura do P67 | pontos livres achados por busca automática (sem invadir paredes, terminais, portas, câmeras e torretas) |
+| Difícil | Teste automático generalizado para os 4 prédios | invariantes: rampa só sobe, cabe sob o teto (1,3+1,7+0,5 ≤ 3,8), parapeito dentro e sem tapar a rampa, nada invade a zona | impede erro de layout em qualquer prédio |
+
+**Posições:** Refinaria (4×6, ala oeste), Laboratório (5×8, noroeste do bloco sul), Campus (5×8, oeste). Em Laboratório e Campus a rampa fica num "bolso" ao lado de uma parede (1 m de folga): o acesso é pelos lados.
+**Testes:** `./test.sh` verde. Chromium em Alta: os 4 prédios chegam a 3,0 m de altura dos olhos; 0 erros de JS.
+**Pendente:** playtest humano de cada mezanino e medir FPS; segundo andar completo ainda não.
+
+## Pacote 67 — Mezanino com rampa no Complexo (24/11/2026)
+
+Primeiro passo de "andares": um mezanino elevado (1,3 m) no alojamento do Complexo, com rampa de acesso e parapeito. **Só em qualidade Média e Alta**; na Baixa o mapa continua plano. Armas, dano, balanceamento e IA de decisão não mudaram; colisão e altura do piso foram estendidas, como você aprovou.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Dados do mezanino/rampa no mapa (`decks`, `ramps`) | dados separados da lógica | fácil criar novos andares em outros prédios |
+| Médio | `Arena.groundAt(M,x,z)` (altura do piso) e `Arena.deckRails` (parapeito sem tapar a rampa) | funções puras testáveis em Node | a regra fica fora do `script.js` |
+| Médio | Meshes: bloco do mezanino, contorno luminoso, rampa (prisma) e parapeito com colisão | `BufferGeometry` com índices; reuso de `addBlock` | visual sólido e tiros bloqueados pelas estruturas |
+| Difícil | Física do jogador sobre piso variável (`groundEye`): sobe a rampa, desce colado, pula do piso certo | clamp ao piso + "snap" de descida (< 0,45 m) | sem flutuar ao descer; cair da lateral da rampa funciona |
+| Difícil | Inimigos acompanham o piso (sobem a rampa), tiros saem na altura certa, corpo a corpo só no mesmo nível, granada e estojos pousam no piso elevado | `pos.y = groundAt(...)` | evita atacar "através do chão" |
+
+**Lógica do `groundAt`:** dentro do mezanino devolve a altura dele; dentro da rampa interpola 0→h ao longo do eixo de subida; fora, 0. O mezanino não é uma caixa de colisão (senão você ficaria "dentro" dele); a borda é o parapeito.
+**Testes:** `./test.sh` verde (bloco p67, inclui "nenhum bloco do mapa invade o mezanino/rampa"). Chromium: Alta e Média sobem de 1,7 a 3,0 e descem de volta colados no piso; Baixa = terreno desativado; inimigo na rampa a 0,87 m e no mezanino a 1,3 m; 0 erros de JS.
+**Limites honestos:** é um mezanino, não um segundo andar completo; FPS real ainda não medido (por isso gate de qualidade); outros prédios continuam planos; a cor da rampa ficou mais clara que o piso (vale um ajuste depois do seu playtest).
+
+## Pacote 66 — Arquivos e pistas do deck por prédio + remapeamento do gamepad (24/11/2026)
+
+Nada de armas, dano, IA, colisão ou balanceamento foi alterado. Conteúdo do deck 100% fictício.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | 3 arquivos novos por prédio (plantão, rotas, pistas) nos 4 prédios; `ls`, `cat`, `grep` e a aba Arquivos os enxergam | dados por chave (`DECK_BUILDING_FILES[building]`), `deckFileList(ctx)` | cada prédio tem identidade; o conteúdo só cita nomes de consoles que existem de fato |
+| Fácil | O "plantão" muda conforme o setor (1–3) | função com `ctx.status.stage` | o arquivo reage ao progresso, sem ficar estático |
+| Médio | A aba Arquivos refaz a lista quando o prédio muda | `dataset.building` como chave de cache | antes a lista era montada uma única vez |
+| Médio | Remapeamento do gamepad no menu (10 ações) | módulo puro `gamepad-map.js`: `padSanitize`, `padAssign` | regra testável em Node; o `script.js` só guarda e mostra |
+| Médio | Botão repetido TROCA com a outra ação; valores inválidos do `localStorage` voltam ao padrão; Esc cancela; tempo limite de 8 s | invariante "nenhuma ação sem botão" | impossível travar o controle sem querer |
+| Médio | A dica do menu mostra os botões atuais | `HELP` virou função (`buildHelp`) | a ajuda nunca mente depois de remapear |
+
+**Lógica do `padAssign`:** se o botão escolhido já pertence a outra ação, ela recebe o botão antigo da ação editada. Assim o mapa sempre tem botões únicos.
+**Testes:** `./test.sh` verde (bloco p66). Chromium com gamepad simulado: Atirar RT → RB, Próxima arma passou a RT, persistiu após recarregar, reset volta ao padrão; `ls`/`cat` no deck listam os arquivos do Complexo; 0 erros de JS.
+**Porta × visão dos inimigos:** conferido no código — projéteis inimigos (linha 2231) e ataques à distância (linha 3044) já respeitam portas fechadas; torretas e câmeras também. Não há o que aprovar.
+
+## Pacote 65 — Seta de direção até o objetivo (24/11/2026)
+
+Visual apenas: armas, dano, IA, colisão e balanceamento intactos.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Seta sob o painel de missão com a distância em metros | elemento HUD + variável CSS `--ang` | quem se perde no prédio vê para onde ir sem abrir o radar |
+| Médio | Ângulo em relação ao olhar do jogador: `atan2(direita, frente)` | projeção de vetor no referencial da câmera | a seta gira conforme o jogador vira; 0 = alvo à frente, π = atrás |
+| Médio | Cores por estado: azul (console), verde (saída), vermelha pulsando (alarme) | classes CSS por estado; `reduce-fx` desliga a pulsação | a rota de fuga fica legível sob pressão e respeita o modo de menos efeitos |
+
+**Lógica:** com `yaw`, a frente do jogador é `(-sin yaw, -cos yaw)` e a direita é `(cos yaw, -sin yaw)`. O vetor até o alvo é projetado nos dois eixos e `atan2` devolve o ângulo. A seta some a menos de 5 m, com o terminal aberto ou com o deck aberto.
+**Testes:** `./test.sh` verde (bloco p65). Chromium: olhando o alvo = 0 rad, de costas = π rad, 33 m; alarme deixa a seta vermelha; 0 erros de JS.
+**Descoberta:** estojos, fumaça, peças móveis e recuo por arma já existiam (`visual.casing`, `smoke`, `reloadParts`); itens removidos da lista.
+**Não feito de propósito:** "chefe reagindo a scan/jam" muda a IA; aguarda sua decisão.
+
+## Pacote 64 — Conquistas da Incursão e ícones do HUD (24/11/2026)
+
+Nada de armas, dano, IA, colisão ou balanceamento foi alterado.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Status da missão com ícones padronizados: ⚠ alarme/alerta, ◉ câmeras, ✦ drone | convenção visual (um símbolo por categoria) | leitura rápida sem ler o texto todo; mesmos símbolos para o mesmo tipo de aviso |
+| Médio | 4 conquistas novas: ESCAPISTA (concluir), FANTASMA (sem alarme), RELÂMPAGO (< 6 min), SABOTADOR (5 torretas) | contadores em `totals`, `event('incursion'/'turret')`, regra pura testável | a Incursão passa a contar na carreira; contadores novos têm valor padrão, então perfis salvos antigos continuam válidos |
+
+**Lógica do FANTASMA:** `inc.alarmed` vira `true` quando um alarme é disparado (`alarmSeconds > 0`); ao fugir, `silent = !inc.alarmed`.
+**Testes:** `./test.sh` verde (bloco p64). Chromium: status com os ícones renderizados; 5 torretas + fuga desbloquearam as 4 conquistas e persistiram em `localStorage`; 0 erros de JS.
+**Nota de teste:** arrays criados dentro do `vm` do Node têm outro protótipo, então os testes comparam com `JSON.stringify` em vez de `deepStrictEqual`.
+
+## Pacote 63 — Rastro na porta, grep/ssh simulados e janelas arrastáveis (23/11/2026)
+
+Primeiro pacote da LISTA-MESTRA (P62 + projeto P22 unificados). Nada de armas, dano, IA, colisão ou balanceamento foi alterado.
+
+| Nível | Atividade | Conceito praticado | Justificativa |
+|---|---|---|---|
+| Fácil | Rastro do tiro para na porta fechada (`doorStopPoint`) | busca binária sobre o raio | o dano já parava na porta; o traço visual passava e parecia bug. 9 passos dão precisão de ~0,1 m |
+| Fácil | `grep <termo> [arquivo]` no deck | filtro sobre dados fictícios (`DECK_FILES`) | reforça o uso dos arquivos/pistas sem ler nada do computador real |
+| Fácil | `ssh` simulado (só hosts 192.0.2.x; sempre "acesso negado, use connect") | whitelist + saída cenográfica | ssh saiu da lista de bloqueados; hosts reais continuam recusados; nada de rede |
+| Médio | Janelas do desktop arrastáveis (mouse/toque pelo título; setas no teclado) | Pointer Events + `setPointerCapture`, limites do painel | arrastar é a interação esperada num desktop; setas mantêm acessibilidade |
+
+**Lição:** reinserir o nó no DOM (`appendChild`) no `pointerdown` cancelava a captura do ponteiro e o arrasto não andava; a solução foi trazer a janela para frente só com `z-index` no CSS.
+
+**Testes:** `./test.sh` verde (novo bloco p63; teste de Tab atualizado, pois "s" agora completa `ssh`). Chromium: rastro parou a 5,63 m de uma porta a ~5,7 m; `grep scan` listou 3 linhas; `ssh operador@192.0.2.10` mostrou barra e "acesso negado"; janela sysmon moveu +150/+90 px; 0 erros de JS.
+
+**Descoberta:** a LISTA-MESTRA listava torretas, câmeras e marcadores 3D do drone como pendentes, mas já existem (testes p25, p27, p29). Lista corrigida.
 
 ## Pacote 62 — Acabamento só em qualidade Alta (23/11/2026)
 
@@ -1116,12 +1221,3 @@ Referência enviada: desktop com janela de terminal (prompt `usuario@maquina:~$`
 
 Testes: `./test.sh` aprovado (desenho da tela e terminal ocioso); Chromium: monitor do KVM mostra a janela de terminal, 0 erros JS. Armas, dano, IA, colisão: intocados.
 **Limites:** a tela 3D do console é pequena, então o texto só fica legível de perto; o laptop 3D aparece só durante a subida/descida (depois o overlay cobre).
-
-
-## Pacote 63 — segundo piso com rampas na Incursão (23/11/2026)
-
-Implementada a opção A escolhida: plataforma elevada central, rampa de acesso, guarda-corpos e sinalização visual nos quatro prédios da Incursão. A física do jogador agora calcula o piso em X/Z, permitindo salto e aterrissagem no térreo, na rampa e no deck. Inimigos recebem a altura correspondente ao piso atual e o steering exige a rota do A* quando há diferença vertical entre origem e destino. Marcadores da missão também acompanham a altura do piso.
-
-O loop existente de combate, armas, portas, objetivos, cyberdeck, progressão, chefes, controles e os modos não-Incursão foi preservado. A limitação deliberada é que o A* continua sendo uma grade 2D compatível com a implementação anterior; a rampa fornece a conexão física entre os níveis.
-
-Validações do pacote: sintaxe JavaScript verificada com `node --check`, testes existentes executados e configuração `upperDeck` validada nos quatro mapas.

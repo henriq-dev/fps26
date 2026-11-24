@@ -122,7 +122,9 @@ function setViewModelLights(index) {
    ===================================================================== */
 const solids = [];   // meshes que bloqueiam tiros (raycast)
 const boxes = [];    // caixas de colisão AABB (movimento)
-let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic', activeUpperDeck = null;     // navGrid = grade do A* (recriada a cada mapa)
+let activeTerrain = null;             // P67: mapa com mezanino ativo (null = piso plano)
+const gAt = (x, z) => activeTerrain ? Arena.groundAt(activeTerrain, x, z) : 0;
+let mapMeshes = [], curMap = -1, navGrid = null, activeMapLook = 'classic';     // navGrid = grade do A* (recriada a cada mapa)
 let incTerminalViews = Object.create(null); let incTurrets = [];
 let incDoors = [], incCams = [];
 const signTex = {}, SIGN_LABELS = ['SEGURANÇA', 'CORREDOR A', 'SERVIDORES', 'ARQUIVO', 'SETOR B', 'SAÍDA'], SIGN_ARROWS = ['←', '→', '↑', '→', '←', '↑'];
@@ -173,21 +175,6 @@ function addBlock(x, z, w, h, d, color, collide = true) {
   m.scale.set(w, h, d); m.position.set(x, h / 2, z); m.userData.surface = surfaceForColor(color);
   scene.add(m); solids.push(m); mapMeshes.push(m);
   if (collide) boxes.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, h });
-}
-// P63: altura contínua do térreo à plataforma; a rampa mantém o A* 2D conectado.
-function floorOffsetAt(x, z) {
-  const u = activeUpperDeck; if (!u) return 0;
-  if (Math.abs(x - u.x) <= u.w / 2 && Math.abs(z - u.z) <= u.d / 2) return u.height;
-  const a = u.z - u.d / 2 - u.rampLength, b = u.z - u.d / 2;
-  if (Math.abs(x - u.x) <= u.rampWidth / 2 && z >= a && z <= b) return ((z - a) / u.rampLength) * u.height;
-  return 0;
-}
-function addUpperDeck(M) {
-  activeUpperDeck = M.upperDeck || null; if (!activeUpperDeck) return;
-  const u = activeUpperDeck, mat = blockMat(M.wall), edge = new THREE.MeshBasicMaterial({ color: M.strip || 0x4de7ff });
-  const deck = new THREE.Mesh(blockGeo, mat); deck.scale.set(u.w, .18, u.d); deck.position.set(u.x, u.height - .09, u.z); scene.add(deck); mapMeshes.push(deck);
-  const ramp = new THREE.Mesh(blockGeo, mat); ramp.scale.set(u.rampWidth, .18, u.rampLength); ramp.rotation.x = -Math.atan2(u.height, u.rampLength); ramp.position.set(u.x, u.height / 2 - .02, u.z - u.d / 2 - u.rampLength / 2); scene.add(ramp); mapMeshes.push(ramp);
-  for (const side of [-1, 1]) { const rail = new THREE.Mesh(blockGeo, edge); rail.scale.set(.08, .72, u.d); rail.position.set(u.x + side * (u.w / 2 - .08), u.height + .36, u.z); scene.add(rail); mapMeshes.push(rail); }
 }
 // Luzes coloridas nos 4 cantos (dão profundidade sem custo alto) + faixa luminosa nas paredes (cor muda por mapa)
 const stripMat = new THREE.MeshBasicMaterial({ color: 0xff5a4d });
@@ -370,6 +357,31 @@ function addPuddles(M) {
     const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); p.rotation.x = -Math.PI / 2; p.rotation.z = rnd() * 3; p.position.set(x, 0.02, z); p.renderOrder = 1; scene.add(p); mapMeshes.push(p); n++;
   }
 }
+// P67 âncora: mezanino (bloco sólido + faixa luminosa), rampa (prisma) e parapeito (caixas finas com colisão)
+const deckMat = new THREE.MeshLambertMaterial({ color: 0x141b22 }), rampMat = new THREE.MeshLambertMaterial({ color: 0x18212a, side: THREE.DoubleSide });
+function rampGeometry(w, len, h) {                       // prisma: sobe ao longo de +z local
+  const g = new THREE.BufferGeometry(), a = -w / 2, b = w / 2, z0 = -len / 2, z1 = len / 2;
+  const v = [a, 0, z0, b, 0, z0, a, 0, z1, b, 0, z1, a, h, z1, b, h, z1];                          // A B C D E F
+  g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+  g.setIndex([0, 1, 5, 0, 5, 4, 2, 3, 5, 2, 5, 4, 0, 2, 4, 1, 3, 5]);                          // rampa, fundo e as duas laterais
+  g.computeVertexNormals(); return g;
+}
+function buildDecks(M) {
+  for (const d of M.decks || []) {
+    const m = new THREE.Mesh(blockGeo, deckMat); m.scale.set(d.x1 - d.x0, d.h, d.z1 - d.z0); m.position.set((d.x0 + d.x1) / 2, d.h / 2, (d.z0 + d.z1) / 2);
+    m.userData.surface = 'metal'; scene.add(m); solids.push(m); mapMeshes.push(m);
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)), new THREE.LineBasicMaterial({ color: M.strip || 0x4de7ff }));
+    e.scale.set(d.x1 - d.x0 - 0.1, 1, d.z1 - d.z0 - 0.1); e.position.set(m.position.x, d.h + 0.02, m.position.z); scene.add(e); mapMeshes.push(e);   // contorno luminoso no piso do mezanino
+  }
+  for (const r of M.ramps || []) {
+    const w = r.axis === 'z' ? r.x1 - r.x0 : r.z1 - r.z0, len = r.axis === 'z' ? r.z1 - r.z0 : r.x1 - r.x0;
+    const m = new THREE.Mesh(rampGeometry(w, len, r.h), rampMat); m.position.set((r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2);
+    m.rotation.y = r.axis === 'z' ? (r.dir > 0 ? 0 : Math.PI) : (r.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+    m.userData.surface = 'metal'; scene.add(m); solids.push(m); mapMeshes.push(m);
+  }
+  const top = Math.max(...M.decks.map(d => d.h));
+  Arena.deckRails(M.decks, M.ramps).forEach(([x, z, w, d]) => addBlock(x, z, w, top + 0.9, d, 0x3a444d));   // parapeito 0,9 m acima do piso do mezanino
+}
 function loadMap(index) {
   const inc = index <= -2;                                  // -2/-3/-4 = prédios da Incursão
   const M = inc ? Arena.INCURSION_LEVELS[-2 - index] : Arena.MAPS[index % Arena.MAPS.length]; curMap = inc ? index : index % Arena.MAPS.length;
@@ -383,8 +395,8 @@ function loadMap(index) {
   addBlock(0, -ARENA - 0.5, W, 6, 1, M.wall, false); addBlock(0, ARENA + 0.5, W, 6, 1, M.wall, false);
   addBlock(-ARENA - 0.5, 0, 1, 6, W, M.wall, false); addBlock(ARENA + 0.5, 0, 1, 6, W, M.wall, false);
   M.blocks.forEach(b => addBlock(...b));               // obstáculos / coberturas
-  activeUpperDeck = null;
-  if (inc) addUpperDeck(M);
+  activeTerrain = inc && appliedQuality !== 'low' && (M.decks || M.ramps) ? M : null;    // P67: mezanino só em Média/Alta
+  if (activeTerrain) buildDecks(M);
   if (inc && appliedQuality === 'high') addPuddles(M);   // P62: poças com reflexo falso só em qualidade Alta
   (M.glows || []).forEach(([x, y, z, w, h, d, c]) => {  // detalhes luminosos (telas, LEDs): sem colisão, material compartilhado por cor
     const g = new THREE.Mesh(blockGeo, glowMat(c)); g.scale.set(w, h, d); g.position.set(x, y, z); scene.add(g); mapMeshes.push(g);
@@ -587,7 +599,7 @@ function updateIncursionTerminalViews() {
 }
 function startIncursion() {
   incLevel = Math.min(Arena.INCURSION_LEVELS.length - 1, Math.max(0, parseInt($('incLevelSelect').value, 10) || 0));
-  loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0; py = EYE + floorOffsetAt(px, pz); vy = 0;
+  loadMap(-2 - incLevel); clearPickups(); clearSurfaceImpacts(); px = 0; pz = 0; vx = vz = 0;
   terminalInteraction.id = null; terminalInteraction.active = false; terminalInteraction.canUse = false; terminalInteraction.lockout = false; terminalInteraction.focus = 0;
   inc = { stage: 0, hold: 0, inRange: false, security: null, targets: [], fx: Arena.incursionEffects(null, []), spawned: 0, spawnT: 2, alarmT: 0, overrun: false,
           marker: null, choiceOpen: false, done: false, droneT: 0, droneCd: 0, time: 0, alertT: 0, camCd: 0, camHits: 0, scanT: 0, scanCd: 0, jamT: 0, jamCd: 0 };
@@ -600,15 +612,27 @@ function enterIncStage(i) {
   WEAPONS.forEach((w, k) => { const u = w.unlock || 1; if (u > prevWave && u <= wave) addFeed(`NOVA ARMA: ${w.name.toUpperCase()} [${k + 1}]`, false); });
   const st = incStage(), t = incTarget();
   if (inc.marker) scene.remove(inc.marker);
-  const marker = new THREE.Group(); marker.position.set(t.x, floorOffsetAt(t.x, t.z), t.z);
+  const marker = new THREE.Group(); marker.position.set(t.x, 0, t.z);
   const base = new THREE.Mesh(objectiveBaseGeo, objectiveMat); base.position.y = 0.14;
   const core = new THREE.Mesh(objectiveCoreGeo, st.exit ? new THREE.MeshBasicMaterial({ color: 0x3ddc84 }) : objectiveCoreMat); core.position.y = 1.1;
   const ring = new THREE.Mesh(objectiveRingGeo, objectiveRingMat); ring.position.y = 0.64; ring.rotation.x = Math.PI / 2;
   marker.add(base, core, ring); marker.userData = { core, ring }; scene.add(marker); inc.marker = marker;
   banner(`${incData().name.toUpperCase()} // ${st.title}\n${incHint(st)}`, 4.4); updateObjectiveHud(); updateHUD();
 }
+// P65 âncora: seta de direção até o objetivo (console ou saída). Ângulo = posição relativa ao olhar do jogador
+const objArrowEl = $('objArrow'), objArrowDist = $('objArrowDist');
+function updateObjArrow(active) {
+  const t = active ? incTarget() : null, dx = t ? t.x - px : 0, dz = t ? t.z - pz : 0, d = Math.hypot(dx, dz);
+  const show = !!t && d > 5 && !(inc.choiceOpen || deckOpen);
+  objArrowEl.classList.toggle('hidden', !show); if (!show) return;
+  const fwd = dx * -Math.sin(yaw) + dz * -Math.cos(yaw), right = dx * Math.cos(yaw) + dz * -Math.sin(yaw);   // projeta no referencial do olhar
+  objArrowEl.style.setProperty('--ang', `${Math.atan2(right, fwd)}rad`);
+  objArrowEl.classList.toggle('exit', !!incStage().exit); objArrowEl.classList.toggle('alarm', inc.alarmT > 0);
+  const txt = `${Math.round(d)} m`; if (objArrowDist.textContent !== txt) objArrowDist.textContent = txt;
+}
 function updateIncursionHud() {
   const active = inc && !inc.done;
+  updateObjArrow(active);
   el.objectivePanel.classList.toggle('hidden', !inc);
   if (!inc) return;
   const st = incStage();
@@ -617,9 +641,9 @@ function updateIncursionHud() {
   let ratio = 0, status = 'MISSÃO CUMPRIDA';
   if (active && st.exit) { const t = incTarget(); status = `SAÍDA A ${Math.round(Math.hypot(t.x - px, t.z - pz))} m`; ratio = 1; }
   else if (active) { ratio = inc.hold / st.hold; status = inc.inRange ? `INVASÃO ${Math.floor(ratio * 100)}% · SEGURE E` : 'APROXIME-SE DO CONSOLE E SEGURE E'; }
-  if (inc.alarmT > 0) status += ` · ALARME ${Math.ceil(inc.alarmT)}s`; else if (inc.overrun && active) status += ' · RESPOSTA TOTAL';
-  status += (Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0) ? ' · CÂMERAS OFF' : inc.alertT > 0 ? ' · ALERTA' : ' · CÂMERAS ON';
-  status += inc.droneT > 0 ? ` · DRONE ${Math.ceil(inc.droneT)}s` : inc.droneCd > 0 ? ` · DRONE ${Math.ceil(inc.droneCd)}s` : ' · DRONE [F]';
+  if (inc.alarmT > 0) status += ` · ⚠ ALARME ${Math.ceil(inc.alarmT)}s`; else if (inc.overrun && active) status += ' · ⚠ RESPOSTA TOTAL';
+  status += (Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0) ? ' · ◉ CÂMERAS OFF' : inc.alertT > 0 ? ' · ⚠ ALERTA' : ' · ◉ CÂMERAS ON';
+  status += inc.droneT > 0 ? ` · ✦ DRONE ${Math.ceil(inc.droneT)}s` : inc.droneCd > 0 ? ` · ✦ DRONE ${Math.ceil(inc.droneCd)}s` : ' · ✦ DRONE [F]';
   el.objectiveFill.style.width = `${clamp(ratio, 0, 1) * 100}%`; el.objectiveStatus.textContent = status;
 }
 // P25: marcadores do drone. Canvas 2D por cima da cena; só desenha com o drone ativo (custo zero fora disso)
@@ -672,6 +696,24 @@ function deckPrint(text, cls) { const d = document.createElement('div'); if (cls
 let deckQueue = [], deckTimer = 0;
 let deckBarCur = null, deckTyping = null;
 function deckGlitch() { const lp = deckEl.querySelector('.deck-laptop'); lp.classList.remove('glitch'); void lp.offsetWidth; lp.classList.add('glitch'); setTimeout(() => lp.classList.remove('glitch'), 340); }
+// P63 âncora: janelas do desktop arrastáveis (mouse/toque pelo título; setas no teclado)
+function deckMakeDraggable(win) {
+  const pane = win.parentElement, head = win.querySelector('b'); let ox = 0, oy = 0, drag = false;
+  const place = (x, y) => {                                      // limita a janela dentro do painel
+    const maxX = Math.max(0, pane.clientWidth - win.offsetWidth), maxY = Math.max(0, pane.clientHeight - win.offsetHeight);
+    win.style.left = Math.min(maxX, Math.max(0, x)) + 'px'; win.style.top = Math.min(maxY, Math.max(0, y)) + 'px'; win.style.right = 'auto';
+  };
+  win.tabIndex = 0; head.style.cursor = 'grab'; head.style.touchAction = 'none';
+  head.addEventListener('pointerdown', e => { drag = true; ox = e.clientX - win.offsetLeft; oy = e.clientY - win.offsetTop; head.setPointerCapture(e.pointerId); win.classList.add('dragging'); });   // (z-index no CSS traz a janela para frente; reinserir o nó cancelaria o arrasto)
+  head.addEventListener('pointermove', e => { if (drag) place(e.clientX - ox, e.clientY - oy); });
+  const end = () => { drag = false; win.classList.remove('dragging'); };
+  head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+  win.addEventListener('keydown', e => {                         // acessibilidade: setas movem 12 px
+    const d = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] }[e.key];
+    if (d && e.target === win) { e.preventDefault(); place(win.offsetLeft + d[0], win.offsetTop + d[1]); }
+  });
+}
+document.querySelectorAll('.desk-win').forEach(deckMakeDraggable);
 function deckBarText(l, n) { return `${l.t.padEnd(13)} [${'█'.repeat(n)}${'░'.repeat(10 - n)}] ${n * 10}%`; }
 function deckPump() {
   deckTimer = 0; const l = deckQueue.shift(); if (!l) return;
@@ -782,10 +824,14 @@ function deckConnectState() {                              // o que o comando "c
   if (inc.primedStage === inc.stage) return { state: 'primed' };
   return { state: inc.inRange ? 'ready' : 'far', name: t ? t.name : 'CONSOLE' };
 }
+function deckTargetVec() {                                    // P69: vetor até o console do setor (para o comando "missao")
+  const t = incTarget(); if (!t) return { dist: 0, dx: 0, dz: 0 };
+  const dx = t.x - px, dz = t.z - pz, d = Math.hypot(dx, dz); return { dist: d < 5 ? 0 : d, dx, dz };
+}
 function deckCtx() {                                       // tudo que o deck precisa saber do jogo
   const st = incStage(), cams = Arena.camerasOff(inc.security, inc.targets) || inc.jamT > 0;
-  return { skin: deckSkin, scanCd: inc.scanCd, jamCd: inc.jamCd, targets: deckTargets(), history: deckHist, time: inc.time, connect: deckConnectState(), notes: deckNotes,
-    status: { stage: inc.stage + 1, mission: st.title, camsOff: cams, alarm: inc.alarmT, threats: cams ? 0 : incCams.length + incTurrets.filter(t => !t.st.dead).length } };
+  return { building: incData().id, skin: deckSkin, scanCd: inc.scanCd, jamCd: inc.jamCd, targets: deckTargets(), history: deckHist, time: inc.time, connect: deckConnectState(), notes: deckNotes,
+    status: { stage: inc.stage + 1, mission: st.title, hint: st.hint, ...deckTargetVec(), camsOff: cams, alarm: inc.alarmT, threats: cams ? 0 : incCams.length + incTurrets.filter(t => !t.st.dead).length } };
 }
 function deckSubmit(line) {
   const sk = Arena.DECK_SKINS[deckSkin]; sfx.deckEnter(); deckFlush();
@@ -834,8 +880,9 @@ function deckShowPane(id) {                                 // troca de "janela"
 document.querySelectorAll('[data-pane]').forEach(b => b.addEventListener('click', () => deckShowPane(b.dataset.pane)));
 $('deckBell').addEventListener('click', () => { deckUnread = 0; deckBellN.textContent = 0; deckShowPane('paneShell'); deckSubmit('avisos'); });
 function deckFillFiles() {
-  if (filesListEl.childElementCount) return;
-  Arena.DECK_FILES.forEach(f => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = '▤ ' + f.name;
+  const ctx = deckCtx(); if (filesListEl.childElementCount && filesListEl.dataset.building === ctx.building) return;   // P66: refaz a lista se o prédio mudou
+  filesListEl.innerHTML = ''; filesListEl.dataset.building = ctx.building;
+  Arena.deckFileList(ctx).forEach(f => { const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.textContent = '▤ ' + f.name;
     b.addEventListener('click', () => { filesListEl.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); filesViewEl.textContent = Arena.deckFile(f.name, deckCtx()).map(l => l.t).join('\n'); sfx.deckKey(); });
     li.appendChild(b); filesListEl.appendChild(li); });
 }
@@ -1049,6 +1096,7 @@ function updateIncTurrets(dt) {                       // torretas: giram para o 
 }
 function finishIncursion() {
   inc.done = true; incVictory = true;
+  notifyAchievements(career.event('incursion', { time: inc.time, silent: !inc.alarmed }));   // P64: conquistas da Incursão
   const bonus = 2000 + Math.max(0, Math.round(600 - inc.time)) * 2;
   score += bonus; addFeed(`FUGA CONCLUÍDA  +${bonus}`, false);
   gameOver();
@@ -1094,7 +1142,7 @@ function applyIncChoice() {
   if (st.choose === 'security') { inc.security = sel[0]; inc.fx = Arena.incursionEffects(inc.security, inc.targets); }
   else {
     inc.targets = sel; inc.fx = Arena.incursionEffects(inc.security, sel);
-    score += inc.fx.score; credits += inc.fx.credits; inc.alarmT = inc.fx.alarmSeconds;
+    score += inc.fx.score; credits += inc.fx.credits; inc.alarmT = inc.fx.alarmSeconds; if (inc.alarmT > 0) inc.alarmed = true;
     if (inc.fx.speedMul < 1) enemies.forEach(e => { if (!e.dead) e.speed *= inc.fx.speedMul; });
     if (sel.includes('destruir')) { [[20, 1.6, 18], [14, 1.6, 24], [24, 1.6, 12]].forEach(([x, y, z]) => blastFx(x, y, z, 3.2, 0xff6a3d, 0.7)); shake = Math.max(shake, 0.7); }
     if (inc.fx.score) addFeed(`OBJETIVO FINAL  +${inc.fx.score}${inc.fx.credits ? ' · +' + inc.fx.credits + '¢' : ''}`, false);
@@ -1573,6 +1621,7 @@ camera.add(holder);
    ===================================================================== */
 let time = 0;                       // relógio do jogo (só avança em jogo ativo)
 let locked = false, alive = false, started = false;
+let groundEye = EYE;                // P67: altura dos olhos sobre o piso atual (mezanino/rampa)
 let px = 0, pz = 0, py = EYE, vx = 0, vz = 0, vy = 0, yaw = 0, pitch = 0;
 let health = 100, maxHealth = 100, score = 0, kills = 0, wave = 0, toSpawn = 0, spawnT = 0, waveDelay = 3;
 let shownScore = 0;                 // placar exibido: sobe suave até alcançar `score` (animação de contagem)
@@ -1779,6 +1828,16 @@ function spawnBlastSmoke(x,y,z,count) {
   }
 }
 
+// P63 âncora: acha (por busca binária) até onde o raio vai antes de bater numa porta fechada
+const _doorPt = new THREE.Vector3();
+function doorStopPoint(dir, maxD = 60) {
+  let lo = 0, hi = maxD;
+  for (let i = 0; i < 9; i++) {                                  // 9 passos ≈ precisão de 0,1 m
+    const mid = (lo + hi) / 2; _doorPt.copy(camera.position).addScaledVector(dir, mid);
+    if (Arena.segmentBlockedByDoors(incDoors, camera.position.x, camera.position.z, _doorPt.x, _doorPt.z)) hi = mid; else lo = mid;
+  }
+  return _doorPt.copy(camera.position).addScaledVector(dir, lo);
+}
 function tracer(a, b, color = 0xffe9a8) {
   const l = tracerPool.get(), p = l.userData.geo.attributes.position;
   p.setXYZ(0, a.x, a.y, a.z); p.setXYZ(1, b.x, b.y, b.z); p.needsUpdate = true;
@@ -1955,8 +2014,8 @@ function ejectCasing(w) {
 function updateCasings(dt) {
   for (let i = casings.length - 1; i >= 0; i--) {
     const c = casings[i], p = c.m.position; c.life -= dt; c.velocity.y -= 11 * dt; p.addScaledVector(c.velocity, dt);
-    if (p.y < 0.035) {
-      const impactSpeed = Math.max(0,-c.velocity.y); p.y = 0.035;
+    if (p.y < 0.035 + gAt(p.x, p.z)) {
+      const impactSpeed = Math.max(0,-c.velocity.y); p.y = 0.035 + gAt(p.x, p.z);
       if (impactSpeed > 0.2) {
         c.velocity.y = impactSpeed * 0.24;
         if (!c.soundPlayed && impactSpeed > 1.2) { sfx.casing(p.x,p.z,Math.min(1,impactSpeed/7)); c.soundPlayed = true; }
@@ -2063,7 +2122,7 @@ function spawnEnemy(key) {
     else { z = side * (ARENA - 2); x = (Math.random() * 2 - 1) * (ARENA - 2); }
     if (Math.hypot(x - px, z - pz) > 14 && !blocked(x, z, .6)) break;
   }
-  rig.g.position.set(x, floorOffsetAt(x, z), z);
+  rig.g.position.set(x, 0, z);
   scene.add(rig.g); rig.g.updateMatrixWorld(true);
 
   const hp0 = Arena.enemyHp(T, wave);
@@ -2159,8 +2218,7 @@ function pickType() { return Arena.pickType(wave); }
 // ----- Caminho: reta se estiver livre; senão A* (no máximo pathBudget buscas por quadro) -----
 function steerTarget(e, tx = px, tz = pz) {
   const pos = e.g.position;
-  const heightGap = Math.abs(floorOffsetAt(pos.x, pos.z) - floorOffsetAt(tx, tz));
-  if (heightGap < 0.5 && Arena.lineClear(navGrid, pos.x, pos.z, tx, tz)) { e.path = null; return [tx, tz]; }   // pisos diferentes exigem a rota da rampa
+  if (Arena.lineClear(navGrid, pos.x, pos.z, tx, tz)) { e.path = null; return [tx, tz]; }   // caminho livre: vai direto
   const moved = Math.hypot(tx - e.pathGX, tz - e.pathGZ) > 3;                               // alvo mudou muito: caminho velho
   if ((!e.path || time >= e.pathT || moved) && pathBudget > 0) {
     pathBudget--;
@@ -2193,7 +2251,7 @@ function shootProjectile(ox, oy, oz, dx, dy, dz, speed, dmg, color, size) {     
 }
 function fireEnemyProjectile(e) {                     // mira no jogador
   e.attackAnim = 0.22;
-  const o = e.g.position, oy = e.T.boss ? 1.5 : 1.2;
+  const o = e.g.position, oy = (e.T.boss ? 1.5 : 1.2) + o.y;
   let dx = px - o.x, dy = py - oy, dz = pz - o.z; const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
   if (e.T.boss) shootProjectile(o.x, oy, o.z, dx, dy, dz, 9, 16 * Arena.difficultyConfig(currentDifficulty).damage, 0xff3b82, 0.22);
   else shootProjectile(o.x, oy, o.z, dx, dy, dz, 7, e.attackDamage, 0xffa13d, 0.12);
@@ -2390,7 +2448,7 @@ function triggerMuzzleFlash(index, color, duration) {
 function currentSpread() {
   const moving = Math.min(1, Math.hypot(vx, vz) / 6.5);
   const precision = scoped ? (curW === 4 ? 0 : 0.35) : 1;
-  return cur().spread * precision * (1 + moving * 0.8) * (py > EYE + 0.05 ? 1.5 : 1) * (1 - crouchT * 0.3);
+  return cur().spread * precision * (1 + moving * 0.8) * (py > groundEye + 0.05 ? 1.5 : 1) * (1 - crouchT * 0.3);
 }
 function tryShoot() {
   if (!locked || !alive || reloading || time < nextShot) return;
@@ -2424,7 +2482,7 @@ function tryShoot() {
     const hits = ray.intersectObjects(targets, false);         // ordenados do mais perto ao mais longe
     const seen = new Set(); let end = null, stopped = false;
     for (const hit of hits) {
-      if (incDoors.length && Arena.segmentBlockedByDoors(incDoors, camera.position.x, camera.position.z, hit.point.x, hit.point.z)) break;   // porta fechada barra o tiro do jogador
+      if (incDoors.length && Arena.segmentBlockedByDoors(incDoors, camera.position.x, camera.position.z, hit.point.x, hit.point.z)) { end = doorStopPoint(_dir); stopped = true; break; }   // porta fechada barra o tiro (P63: o rastro também para nela)
       const ud = hit.object.userData;
         if (ud && ud.enemy) {
           if (ud.enemy.dead) continue;
@@ -2453,12 +2511,16 @@ function tryShoot() {
         if (!w.pierce) { stopped = true; break; }              // balas comuns param no primeiro inimigo
       } else if (ud && ud.turret) {                            // torreta: recebe dano, bloqueia o tiro
         sparkBurst(hit.point, 0xffd27a, 4); end = hit.point; stopped = true;
-        if (Arena.turretHit(ud.turret.st, w.dmg * stats.dmg * (1 - w.falloff * Math.min(hit.distance / w.range, 1)))) destroyTurret(ud.turret);
+        if (Arena.turretHit(ud.turret.st, w.dmg * stats.dmg * (1 - w.falloff * Math.min(hit.distance / w.range, 1)))) { destroyTurret(ud.turret); notifyAchievements(career.event('turret')); }
         break;
       } else { surfaceImpact(hit, w.color); end = hit.point; stopped = true; break; }   // cenário bloqueia tudo
     }
     if (end && stopped) _end.copy(end);
-    else _end.copy(camera.position).addScaledVector(_dir, Math.min(w.range, w.pierce ? 120 : 60));
+    else {
+      const far = Math.min(w.range, w.pierce ? 120 : 60);
+      _end.copy(camera.position).addScaledVector(_dir, far);
+      if (incDoors.length && Arena.segmentBlockedByDoors(incDoors, camera.position.x, camera.position.z, _end.x, _end.z)) _end.copy(doorStopPoint(_dir, far));   // tiro no ar também para na porta
+    }
     tracer(_muzzle, _end, w.color);
   }
 
@@ -2487,7 +2549,7 @@ function updateGrenades(dt) {
   for (let i = grenades.length - 1; i >= 0; i--) {
     const g = grenades[i], p = g.m.position;
     g.life -= dt; g.v.y -= 16 * dt; p.addScaledVector(g.v, dt);         // gravidade
-    let boom = g.life <= 0 || p.y <= 0.15 || Math.abs(p.x) > ARENA || Math.abs(p.z) > ARENA;
+    let boom = g.life <= 0 || p.y <= 0.15 + gAt(p.x, p.z) || Math.abs(p.x) > ARENA || Math.abs(p.z) > ARENA;
     if (!boom) for (const b of boxes) {                                  // só bate na caixa se estiver abaixo da altura dela
       if (p.y < b.h && p.x > b.minX - 0.1 && p.x < b.maxX + 0.1 && p.z > b.minZ - 0.1 && p.z < b.maxZ + 0.1) { boom = true; break; }
     }
@@ -2703,7 +2765,7 @@ function resetGame() {
   ammoState.forEach((s, i) => { s.ammo = WEAPONS[i].mag; s.reserve = WEAPONS[i].reserve; });
   crouchT = slideT = sprintT = camLand = camLandV = inspectT = slowMoT = 0; timeScale = 1;
   document.body.classList.remove('spawn-in'); void document.body.offsetWidth; document.body.classList.add('spawn-in');
-  px = 0; pz = 0; py = EYE; vx = vz = vy = 0; yaw = 0; pitch = 0; dashQueued = false; dashTime = 0; dashCooldown = 0; adsT = 0;
+  px = 0; pz = 0; py = EYE; groundEye = EYE; vx = vz = vy = 0; yaw = 0; pitch = 0; dashQueued = false; dashTime = 0; dashCooldown = 0; adsT = 0;
   health = maxHealth; score = 0; shownScore = 0; kills = 0; wave = 0; reloading = false; scoped = false; kick = 0;
   curW = -1; selectWeapon(0);
   alive = true;
@@ -2763,8 +2825,7 @@ function update(dt) {
   if (dashTime > 0 && len === 0) { mx = -Math.sin(yaw); mz = -Math.cos(yaw); }
   const crouchHeld = !!(keys.KeyC || keys.ControlLeft);
   let sprint = (keys.ShiftLeft || (useTouch && inMag > 0.96)) && !crouchHeld;   // joystick até o limite = correr
-  const floorY = EYE + floorOffsetAt(px, pz);
-  const grounded = py <= floorY + 0.001;
+  const floorEye = EYE + gAt(px, pz), grounded = py <= floorEye + 0.001;   // P67: piso pode estar elevado (mezanino/rampa)
   if (crouchHeld && !wasCrouch && grounded && Math.hypot(vx, vz) > 8 && slideT <= 0) { slideT = 0.65; const sv = Math.hypot(vx, vz); vx = vx / sv * 13; vz = vz / sv * 13; }   // correr + agachar = deslizar
   wasCrouch = crouchHeld; slideT = Math.max(0, slideT - dt);
   crouchT += ((crouchHeld || slideT > 0 ? 1 : 0) - crouchT) * Math.min(1, dt * 11);
@@ -2777,9 +2838,11 @@ function update(dt) {
   if (!blocked(px + vx * dt, pz, 0.4)) px += vx * dt;
   if (!blocked(px, pz + vz * dt, 0.4)) pz += vz * dt;
   // Pulo simples
-  if ((keys.Space || gamepadJumpQueued) && py <= floorY + 0.001) { py = floorY; vy = 7.5; slideT = 0; camLandV += 0.25; }
+  if ((keys.Space || gamepadJumpQueued) && grounded) { vy = 7.5; slideT = 0; camLandV += 0.25; }
   gamepadJumpQueued = false;
-  vy -= 22 * dt; py += vy * dt; const newFloorY = EYE + floorOffsetAt(px, pz); if (py < newFloorY) { py = newFloorY; vy = 0; }
+  groundEye = EYE + gAt(px, pz);
+  if (grounded && vy <= 0 && py - groundEye < 0.45) { py = groundEye; vy = 0; }       // descer rampa: cola no chão em vez de flutuar
+  vy -= 22 * dt; py += vy * dt; if (py < groundEye) { py = groundEye; vy = 0; }
 
   if (useTouch && assistOn && mouseHeld) assistAim(dt);            // mira assistida leve só no toque
   if (gamepadConnected && !useTouch) setAds(gamepadAdsHeld);
@@ -2795,11 +2858,11 @@ function update(dt) {
   // Tremor suave (ruído senoidal) em vez de saltos aleatórios por quadro
   const shN = time * 38, shX = Math.sin(shN) * 0.6 + Math.sin(shN * 2.3 + 1) * 0.4, shY = Math.sin(shN * 1.7 + 2) * 0.6 + Math.sin(shN * 3.1) * 0.4;
   // Balanço da câmera: proporcional à velocidade, some no ar e ao mirar
-  const gSpeed = Math.min(1.4, Math.hypot(vx, vz) / 6.5) * (py <= EYE + 0.02 && slideT <= 0 ? 1 : 0) * (1 - adsT * 0.85);
+  const gSpeed = Math.min(1.4, Math.hypot(vx, vz) / 6.5) * (py <= groundEye + 0.02 && slideT <= 0 ? 1 : 0) * (1 - adsT * 0.85);
   camBobY += (Math.sin(bobT * 2) * 0.032 * gSpeed - camBobY) * Math.min(1, dt * 14);
   camBobX += (Math.sin(bobT) * 0.018 * gSpeed - camBobX) * Math.min(1, dt * 14);
   // Aterrissagem: mola amortecida
-  if (lastVy < -4 && py <= EYE + 0.02 && Math.abs(vy) < 0.5) camLandV -= Math.min(2.2, -lastVy * 0.16);
+  if (lastVy < -4 && py <= groundEye + 0.02 && Math.abs(vy) < 0.5) camLandV -= Math.min(2.2, -lastVy * 0.16);
   camLandV += (-camLand * 140 - camLandV * 16) * dt; camLand += camLandV * dt;
   const sideV = vx * Math.cos(yaw) - vz * Math.sin(yaw);
   const camRoll = -sideV * 0.0035 * (1 - adsT) + Math.sin(bobT) * 0.004 * gSpeed + slideT * 0.06;
@@ -2873,7 +2936,7 @@ function update(dt) {
   swayY += (THREE.MathUtils.clamp(dPitch * 1.6, -.05, .05) * swayK - swayY) * Math.min(1, dt * 10);
   const sideVel = vx * Math.cos(yaw) - vz * Math.sin(yaw);
   strafeTilt += (THREE.MathUtils.clamp(-sideVel * 0.012, -.06, .06) * (1 - adsT) - strafeTilt) * Math.min(1, dt * 8);
-  if (lastVy < -3 && Math.abs(vy) < 0.5 && py <= EYE + 0.02) landDip = Math.min(0.06, -lastVy * 0.006);
+  if (lastVy < -3 && Math.abs(vy) < 0.5 && py <= groundEye + 0.02) landDip = Math.min(0.06, -lastVy * 0.006);
   lastVy = vy; landDip *= Math.exp(-9 * dt);
   holder.position.set(
     HOLD_BASE.x * (1 - adsT * 0.5) + Math.sin(bobT) * 0.008 * moveRatio * (1 - adsT),   // P50: ao mirar a arma fica no canto inferior (antes ia ao centro e tampava o inimigo)
@@ -2939,7 +3002,7 @@ function update(dt) {
   }
   for (const e of enemies) {
     if (e.dead) continue;
-    const pos = e.g.position;
+    const pos = e.g.position; if (activeTerrain) pos.y = gAt(pos.x, pos.z);   // P67: inimigos acompanham o piso (sobem a rampa)
     const dx = px - pos.x, dz = pz - pos.z, dist = Math.hypot(dx, dz);
     e.g.rotation.y = Math.atan2(dx, dz);        // modelo olha para +Z
     e.g.rotation.z += (Math.sin(e.phase) * 0.025 - e.g.rotation.z) * Math.min(1, dt * 5);
@@ -3010,8 +3073,6 @@ function update(dt) {
       e.body.position.y = 1.1 + Math.sin(e.phase * 0.65) * 0.018;
       e.head.position.y = 1.82 + Math.sin(e.phase * 0.65 + 0.3) * 0.012;
     }
-    // P63: o rig acompanha a plataforma/rampa sem alterar o controlador horizontal existente.
-    pos.y += (floorOffsetAt(pos.x, pos.z) - pos.y) * Math.min(1, dt * 14);
     // Animação de ataque: braços recuam brevemente ao disparar e recuperam de forma amortecida.
     if (e.attackAnim > 0 && e.armL && e.armR && e.hitReact <= 0) { const attackBlend = clamp(e.attackAnim / 0.22, 0, 1); e.armL.rotation.x += (-1.18 - e.armL.rotation.x) * Math.min(1, dt * 10) * attackBlend; e.armR.rotation.x += (-1.18 - e.armR.rotation.x) * Math.min(1, dt * 10) * attackBlend; }
     // Ação de cada tipo (o chefe age dentro de updateBoss)
@@ -3029,7 +3090,7 @@ function update(dt) {
           blastFx(o.g.position.x, 1.2 * o.T.scale, o.g.position.z, 0.9, 0x44ff99, 0.35);
         }
       }
-    } else if (dist <= (e.T.explodes ? 1.9 : 1.5) && time >= e.nextAtk) {
+    } else if (dist <= (e.T.explodes ? 1.9 : 1.5) && time >= e.nextAtk && Math.abs(pos.y - (groundEye - EYE)) < 0.7) {   // P67: corpo a corpo só no mesmo nível
       if (e.T.explodes) { detonate(e); killEnemy(e, false, true); continue; }   // kamikaze: explode encostado em você
       e.nextAtk = time + 1.55; hurtPlayer(e.attackDamage, pos.x, pos.z);
     }
@@ -3238,6 +3299,51 @@ function padAxis(v, dead = 0.14) {
   const a = Math.abs(v || 0); if (a <= dead) return 0;
   return Math.sign(v) * Math.min(1, (a - dead) / (1 - dead));
 }
+/* ---- P66: remapeamento do gamepad (lógica pura em gamepad-map.js; aqui só guardar e mostrar no menu) ---- */
+let padMap = Arena.padDefaults();   // (o bloco do diagnóstico logo abaixo usa $ e perfMode, já definidos)
+try { padMap = Arena.padSanitize(JSON.parse(localStorage.getItem('arenaFpsPadMap'))); } catch (_) {}
+const padMapEl = $('padMap'), padHintEl = $('padHint'); let padListening = null, padListenRaf = 0, padListenT0 = 0;
+// P68 âncora: liga/desliga o modo diagnóstico sem digitar ?perf=1 na URL
+{
+  const txt = $('perfLobbyText'), btn = $('perfLobbyBtn'), url = new URL(location.href);
+  txt.textContent = perfMode ? 'Diagnóstico LIGADO. Jogue 30–60 s e depois: F8 mostra/oculta o painel · F9 reinicia o teste · F10 baixa o CSV (ou use o botão do painel).'
+    : 'Para medir o FPS real do seu aparelho, abra o jogo em modo diagnóstico. Depois jogue 30–60 s e aperte F10 para baixar o CSV.';
+  btn.textContent = perfMode ? 'Sair do diagnóstico' : 'Abrir em modo diagnóstico (?perf=1)';
+  btn.addEventListener('click', () => { perfMode ? url.searchParams.delete('perf') : url.searchParams.set('perf', '1'); location.href = url.toString(); });
+}
+function padTip() {                                            // dica do menu sempre reflete o mapa atual
+  const n = id => Arena.padLabel(padMap[id]).replace(/ \(\d+\)/, '');
+  return `${n('fire')} fogo · ${n('ads')} mirar · ${n('prev')}/${n('next')} trocar · ${n('reload')} recarregar · ${n('grenade')} granada · ${n('dash')} dash · ${n('jump')} pular · ${n('interact')} interagir`;
+}
+function padSave() { try { localStorage.setItem('arenaFpsPadMap', JSON.stringify(padMap)); } catch (_) {} if (typeof helpCardEl !== 'undefined' && helpCardEl) helpCardEl.innerHTML = helpText(); }
+function padRender() {
+  padMapEl.innerHTML = '';
+  for (const a of Arena.PAD_ACTIONS) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pad-row' + (padListening === a.id ? ' listening' : '');
+    b.innerHTML = `<span>${a.label}</span><b>${padListening === a.id ? 'aperte um botão…' : Arena.padLabel(padMap[a.id])}</b>`;
+    b.addEventListener('click', () => padListen(a.id)); padMapEl.appendChild(b);
+  }
+}
+function padStopListening(msg) { padListening = null; cancelAnimationFrame(padListenRaf); if (msg) padHintEl.textContent = msg; padRender(); }
+function padListen(action) {                                   // espera o próximo botão apertado (até 8 s; Esc cancela)
+  padListening = action; padListenT0 = performance.now(); padRender();
+  const pad0 = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(Boolean);
+  if (!pad0) { padStopListening('Nenhum controle detectado: conecte e aperte qualquer botão, depois tente de novo.'); return; }
+  padHintEl.textContent = 'Aperte o botão desejado no controle… (Esc cancela)';
+  const prev = pad0.buttons.map(x => !!x.pressed);               // ignora botões já segurados ao começar
+  const tick = () => {
+    if (padListening !== action) return;
+    const p = [...navigator.getGamepads()].find(Boolean), i = p ? p.buttons.findIndex((x, k) => x.pressed && !prev[k]) : -1;
+    if (i >= 0) { padMap = Arena.padAssign(padMap, action, i); padSave(); padStopListening(`${Arena.PAD_ACTIONS.find(a => a.id === action).label}: ${Arena.padLabel(i)}`); return; }
+    if (p) p.buttons.forEach((x, k) => { if (!x.pressed) prev[k] = false; });
+    if (performance.now() - padListenT0 > 8000) { padStopListening('Tempo esgotado.'); return; }
+    padListenRaf = requestAnimationFrame(tick);
+  };
+  padListenRaf = requestAnimationFrame(tick);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && padListening) padStopListening('Cancelado.'); });
+$('padReset').addEventListener('click', () => { padMap = Arena.padDefaults(); padSave(); padStopListening('Padrão restaurado.'); });
+padRender();
 function pollGamepad(dt) {
   const pads = typeof navigator.getGamepads === 'function' ? navigator.getGamepads() : [];
   const p = [...pads].find(Boolean);
@@ -3247,18 +3353,18 @@ function pollGamepad(dt) {
   const just = i => pressed(i) && !gamepadPrev[i];
   gamepadMove.x = padAxis(p.axes?.[0]); gamepadMove.y = padAxis(p.axes?.[1]);
   gamepadLook.x = padAxis(p.axes?.[2]); gamepadLook.y = padAxis(p.axes?.[3]);
-  gamepadFireHeld = pressed(7); gamepadAdsHeld = pressed(6); gamepadJumpQueued = just(0);
+  gamepadFireHeld = pressed(padMap.fire); gamepadAdsHeld = pressed(padMap.ads); gamepadJumpQueued = just(padMap.jump);
   if (locked && alive && !perkOpen) {
     yaw -= gamepadLook.x * dt * 3.2; pitch -= gamepadLook.y * dt * 2.6;
-    if (just(1)) dashQueued = true;
-    if (just(2)) startReload();
-    if (just(3)) throwHandGrenade();
-    if (just(4)) cycleWeapon(-1);
-    if (just(5)) cycleWeapon(1);
-    interactHeld = pressed(10);
-    if (just(10)) interactObjective();
-    if (just(7)) { if (reloading && ammoState[curW].ammo > 0) { reloading = false; el.reloadWrap.style.opacity = 0; } tryShoot(); }
-    if (just(9)) { locked = false; gamepadFireHeld = false; showOverlay('pause'); if (document.pointerLockElement) document.exitPointerLock(); }
+    if (just(padMap.dash)) dashQueued = true;
+    if (just(padMap.reload)) startReload();
+    if (just(padMap.grenade)) throwHandGrenade();
+    if (just(padMap.prev)) cycleWeapon(-1);
+    if (just(padMap.next)) cycleWeapon(1);
+    interactHeld = pressed(padMap.interact);
+    if (just(padMap.interact)) interactObjective();
+    if (just(padMap.fire)) { if (reloading && ammoState[curW].ammo > 0) { reloading = false; el.reloadWrap.style.opacity = 0; } tryShoot(); }
+    if (just(padMap.pause)) { locked = false; gamepadFireHeld = false; showOverlay('pause'); if (document.pointerLockElement) document.exitPointerLock(); }
   }
   gamepadPrev = p.buttons.map(b => !!b.pressed);
 }
@@ -3448,11 +3554,11 @@ const hrow = (keys, txt) => `<div class="kb-row">${keys}<span>${txt}</span></div
 const HELP_TOUCH = `<div class="kb-group"><h3>MOVER E MIRAR</h3>${hrow(kb('Joystick'), 'mover')}${hrow(kb('Arraste'), 'mirar')}${hrow(kb('PULO'), 'pular')}${hrow(kb('DASH'), 'esquiva')}</div>
 <div class="kb-group"><h3>COMBATE</h3>${hrow(kb('FOGO'), 'atirar')}${hrow(kb('MIRAR'), 'zoom')}${hrow(kb('RECAR.'), 'recarregar')}${hrow(kb('GRANADA'), 'explosivo')}${hrow(kb('USAR'), 'interagir')}</div>
 <p class="kb-tip">Toque nos números para trocar de arma · acerte a cabeça para dano dobrado</p>`;
-const HELP = `<div class="kb-group"><h3>MOVER</h3>${hrow(kb('W','A','S','D'), 'mover')}${hrow(kb('Shift'), 'correr')}${hrow(kb('Espaço'), 'pular')}${hrow(kb('Q'), 'dash')}${hrow(kb('E'), 'interagir')}</div>
+const buildHelp = () => `<div class="kb-group"><h3>MOVER</h3>${hrow(kb('W','A','S','D'), 'mover')}${hrow(kb('Shift'), 'correr')}${hrow(kb('Espaço'), 'pular')}${hrow(kb('Q'), 'dash')}${hrow(kb('E'), 'interagir')}</div>
 <div class="kb-group"><h3>COMBATE</h3>${hrow(kb('Clique'), 'atirar')}${hrow(kb('Botão dir.'), 'mirar')}${hrow(kb('R'), 'recarregar')}${hrow(kb('G'), 'granada')}${hrow(kb('1','–','0'), 'trocar arma (ou roda do mouse)')}</div>
-<p class="kb-tip">Gamepad: analógicos mover/mirar · RT fogo · LT mirar · LB/RB trocar · X recarregar · Y granada · B dash · A pular · L3 interagir</p>`;
+<p class="kb-tip">Gamepad: analógicos mover/mirar · ${padTip()} (remapeie em GAMEPAD, abaixo)</p>`;
 const helpCardEl = $('helpCard');
-const helpText = () => useTouch ? HELP_TOUCH : HELP;
+const helpText = () => useTouch ? HELP_TOUCH : buildHelp();   // P66: função, para a dica do gamepad refletir o remapeamento
 function refreshCareerUI() {
   const root = $('careerContent'); if (!root) return;
   const p = career.get(), challenges = career.challenges(), achievements = career.achievements(), skins = career.skins();

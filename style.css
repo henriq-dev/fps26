@@ -650,3 +650,27 @@ body.reduce-fx #waveSplash { display: none; }
 #qualityVignette { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 1; background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.34) 100%); transition: opacity .4s; }
 body.q-high #qualityVignette { opacity: 1; }
 body.reduce-fx #qualityVignette { display: none; }
+
+/* P63: janelas do desktop arrastáveis */
+.desk-win.dragging { border-color: #9fb4ff; box-shadow: 0 6px 22px rgba(0,0,0,.5); z-index: 3; }
+.desk-win:focus-visible { outline: 2px solid #9fb4ff; outline-offset: 2px; }
+.desk-win b::after { content: ' ⠿'; opacity: .6; }
+
+/* P65: seta de direção até o objetivo (azul = console, verde = saída, vermelha pulsando = alarme) */
+.obj-arrow { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; color: var(--cyan); font-size: 10px; letter-spacing: .14em; text-shadow: 0 0 6px rgba(0,0,0,.8); }
+.obj-arrow svg { width: 30px; height: 30px; fill: currentColor; opacity: .9; transform: rotate(var(--ang, 0rad)); filter: drop-shadow(0 0 6px currentColor); }
+.obj-arrow.exit { color: #3ddc84; }
+.obj-arrow.alarm { color: #ff4d4d; }
+.obj-arrow.alarm svg { animation: arrowPulse .7s ease-in-out infinite alternate; }
+@keyframes arrowPulse { from { opacity: .45; } to { opacity: 1; } }
+body.reduce-fx .obj-arrow.alarm svg { animation: none; }
+
+/* P66: remapeamento do gamepad no menu */
+.pad-map { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; margin-top: 10px; }
+.pad-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(77,231,255,.28); border-radius: 8px; background: rgba(5,13,25,.6); color: var(--ui); font: inherit; font-size: 12px; cursor: pointer; }
+.pad-row b { color: var(--cyan); font-weight: 600; }
+.pad-row:hover, .pad-row:focus-visible { border-color: var(--cyan); outline: none; }
+.pad-row.listening { border-color: #ffb04d; box-shadow: 0 0 12px rgba(255,176,77,.35); }
+.pad-row.listening b { color: #ffb04d; }
+.pad-hint { margin: 10px 0 6px; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.pad-reset { padding: 7px 12px; border: 1px solid rgba(77,231,255,.35); border-radius: 8px; background: transparent; color: var(--ui); font: inherit; font-size: 12px; cursor: pointer; }

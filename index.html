@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Arena FPS — Industrial Sci-Fi · P63</title>
+<title>Arena FPS — Industrial Sci-Fi · P69</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -21,6 +21,7 @@
   <div id="vignette"></div>
   <div id="scope"></div>
   <div id="bossBar" class="hidden"><small class="boss-kicker">ALERTA DE CHEFE</small><span id="bossName">CHEFE</span><div><i id="bossFill"></i></div></div>
+  <div id="objArrow" class="obj-arrow hidden" aria-hidden="true"><svg viewBox="0 0 40 40"><path d="M20 3 L35 33 L20 26 L5 33 Z"/></svg><span id="objArrowDist">0 m</span></div>
   <section id="objectivePanel" class="panel hidden" aria-live="polite" aria-label="Objetivo atual">
     <div class="objective-kicker">OPERAÇÃO // <span id="objectiveWave">--</span></div>
     <b id="objectiveName">OBJETIVO</b>
@@ -214,6 +215,17 @@
           <label>Qualidade<select id="qualitySelect"><option value="low">Baixa</option><option value="medium" selected>Média</option><option value="high">Alta</option></select></label>
         </div>
       </details>
+      <details id="padPanel" class="lobby-card pad-box">
+        <summary>GAMEPAD // REMAPEAR BOTÕES</summary>
+        <div id="padMap" class="pad-map"></div>
+        <p id="padHint" class="pad-hint" aria-live="polite">Clique numa ação e aperte o botão do controle. Se o botão já estiver em uso, os dois trocam de lugar.</p>
+        <button id="padReset" type="button" class="pad-reset">Restaurar padrão</button>
+      </details>
+      <details id="perfLobby" class="lobby-card pad-box">
+        <summary>DIAGNÓSTICO // MEDIR FPS</summary>
+        <p id="perfLobbyText" class="pad-hint"></p>
+        <button id="perfLobbyBtn" type="button" class="pad-reset"></button>
+      </details>
       <details id="careerPanel" class="lobby-card career-panel">
         <summary>CARREIRA // CONQUISTAS // PERSONALIZAÇÃO</summary>
         <div id="careerContent"></div>
@@ -229,6 +241,7 @@
 <script src="maps.js"></script>
 <script src="incursion.js"></script>
 <script src="terminal-props.js"></script>
+<script src="gamepad-map.js"></script>
 <script src="deck.js"></script>
 <script src="pathfinding.js"></script>
 <script src="tactics.js"></script>

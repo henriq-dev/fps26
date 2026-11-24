@@ -6,7 +6,7 @@ const context = { window: {}, Math, Uint8Array, Float32Array, Int32Array, Date }
 context.Arena = context.window.Arena = {};
 context.window.window = context.window;
 vm.createContext(context);
-for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'incursion.js', 'terminal-props.js', 'deck.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
+for (const file of ['industrial-materials.js', 'perf-telemetry.js', 'weapons.js', 'enemies.js', 'upgrades.js', 'maps.js', 'incursion.js', 'terminal-props.js', 'gamepad-map.js', 'deck.js', 'pathfinding.js', 'tactics.js', 'progression.js', 'audio.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), context, { filename: file });
 }
 const A = context.Arena;
@@ -245,11 +245,6 @@ console.log('core tests: OK');
 assert.equal(A.INCURSION_STAGES.length, 4);
 assert.equal(A.INCURSION.terminals.t3.x, 23);
 assert.equal(A.INCURSION_LEVELS.length, 4);
-for (const level of A.INCURSION_LEVELS) {
-  const u = level.upperDeck;
-  assert.ok(u && u.height > 0 && u.w > 0 && u.d > 0 && u.rampLength > 0, level.id + ': segundo piso configurado');
-  assert.ok(Math.abs(u.x) < 1 && Math.abs(u.z) < 1, level.id + ': deck central');
-}
 assert.deepEqual(JSON.parse(JSON.stringify(Object.values(A.INCURSION.terminals).map(t => t.kind))), ['kvm', 'network', 'datacenter']);
 assert.ok(Object.values(A.INCURSION.terminals).every(t => Number.isFinite(t.rotation)));
 assert.match(fs.readFileSync('index.html', 'utf8'), /terminal-props\.js/);
@@ -408,7 +403,7 @@ console.log('p29: torretas destrutíveis OK');
   assert.equal(run('theme arch').fx.skin, 'arch'); assert.equal(run('theme xyz').fx.skin, undefined);
   assert.ok(run('foo').lines[0].t.startsWith('zsh:'), 'Kali = zsh'); assert.ok(run('foo', { skin: 'arch' }).lines[0].t.startsWith('bash:'), 'Arch = bash');
   assert.ok(run('neofetch', { skin: 'arch' }).lines.some(l => l.t.includes('Arch Linux (simulado)')));
-  for (const real of ['hydra', 'msfconsole', 'sqlmap', 'ssh', 'ping']) { const r = run(real + ' alvo'); assert.ok(r.lines[0].t.includes('desativado') && !r.fx.scan && !r.fx.jam, `${real} real não executa`); }
+  for (const real of ['hydra', 'msfconsole', 'sqlmap', 'ping']) { const r = run(real + ' alvo'); assert.ok(r.lines[0].t.includes('desativado') && !r.fx.scan && !r.fx.jam, `${real} real não executa`); }
   assert.equal(run('clear').fx.clear, true); assert.equal(run('exit').fx.exit, true);
   const all = JSON.stringify(['help', 'scan', 'jam', 'neofetch', 'uname -a', 'cat notas.txt'].map(c => run(c).lines));
   assert.ok(!/\b(?:\d{1,3}\.){3}\d{1,3}\b/.test(all.replace(/192\.0\.2\.\d+|192\.0\.2\.0\/24/g, '')), 'só IPs da faixa 192.0.2.x');
@@ -417,7 +412,7 @@ console.log('p30: cyberdeck OK');
 
 // ---- p31: detalhes do deck (Tab, boot, status, comandos extras) ----
 {
-  assert.equal(A.deckComplete('sca').line, 'scan ', 'completa único'); assert.equal(JSON.stringify(A.deckComplete('s').options.slice().sort()), '["scan","status"]', 'várias opções');
+  assert.equal(A.deckComplete('sca').line, 'scan ', 'completa único'); assert.equal(JSON.stringify(A.deckComplete('s').options.slice().sort()), '["scan","ssh","status"]', 'várias opções');
   assert.equal(A.deckComplete('theme a').line, 'theme arch ', 'completa argumento'); assert.equal(A.deckComplete('xyz').line, 'xyz');
   assert.ok(A.deckBoot('kali').some(t => t.includes('zsh')) && A.deckBoot('arch').some(t => t.includes('bash')), 'boot por skin');
   const st = A.deckRun('status', { skin: 'kali', scanCd: 3, jamCd: 0, time: 75, status: { stage: 2, mission: 'REDE', camsOff: true, alarm: 0, threats: 0 } });
@@ -488,7 +483,7 @@ assert.match(gameSource, /let wantFov = /); assert.match(gameSource, /function c
 console.log('p55: mãos, hologramas, drone PiP e cinemática OK');
 
 // ---- p56: tiros do jogador barrados por porta fechada, rótulos do mapa sem sobreposição, sol listrado ----
-assert.match(gameSource, /porta fechada barra o tiro do jogador/); assert.match(gameSource, /placed\.some\(/);
+assert.match(gameSource, /porta fechada barra o tiro/); assert.match(gameSource, /placed\.some\(/);
 assert.match(require('fs').readFileSync(require('path').join(__dirname, '..', 'style.css'), 'utf8'), /transparent 8px 12px/);
 console.log('p56: portas barram tiros do jogador e detalhes visuais OK');
 
@@ -515,3 +510,100 @@ console.log('p61: fases do chefe, numeral da onda, telas de fim, ferrolho e clas
 // ---- p62: acabamento em qualidade Alta ----
 assert.match(gameSource, /function addPuddles\(M\)/); assert.match(gameSource, /appliedQuality === 'high'\) addPuddles/); assert.match(gameSource, /curPR < prCap \* 0\.75/);
 console.log('p62: poças, vinheta e faíscas adaptativas OK');
+
+// ---- p63: rastro para na porta, grep/ssh simulados, janelas arrastáveis ----
+assert.match(gameSource, /function doorStopPoint\(/); assert.match(gameSource, /end = doorStopPoint\(_dir\)/);
+assert.match(gameSource, /function deckMakeDraggable\(/);
+{
+  const ctx = { skin: 'kali', history: [] }, run = l => A.deckRun(l, ctx);
+  const g = run('grep scan'); assert.ok(g.lines.some(x => /^scan\.log:1:/.test(x.t)), 'grep acha em scan.log');
+  assert.ok(run('grep zzzz').lines[0].t.includes('nada encontrado'));
+  assert.ok(run('grep').lines[0].t.includes('uso'));
+  assert.ok(run('grep x nao.txt').lines[0].t.includes('não encontrado'));
+  assert.ok(run('ssh operador@192.0.2.10').lines.some(x => x.t.includes('acesso negado')), 'ssh é falso');
+  assert.ok(run('ssh example.com').lines[0].t.includes('fictícia'), 'ssh recusa host real');
+  assert.ok(A.DECK_COMMANDS.includes('grep') && A.DECK_COMMANDS.includes('ssh'));
+}
+console.log('p63: tracer na porta, grep/ssh e janelas arrastáveis OK');
+
+// ---- p64: conquistas da Incursão + ícones do HUD ----
+{
+  const mem = {}, st = { getItem: k => mem[k] || null, setItem: (k, v) => { mem[k] = v; } };
+  const c = A.createCareerStore(st);
+  assert.equal(JSON.stringify(c.event('incursion', { time: 500, silent: false })), JSON.stringify(['escapist']));
+  assert.equal(JSON.stringify(c.event('incursion', { time: 300, silent: true }).sort()), JSON.stringify(['ghost', 'sprinter']));
+  for (let i = 0; i < 4; i++) assert.equal(JSON.stringify(c.event('turret')), JSON.stringify([]));
+  assert.equal(JSON.stringify(c.event('turret')), JSON.stringify(['saboteur']));
+  assert.ok(A.createCareerStore(st).get().totals.turrets === 5, 'persistiu');
+  assert.ok(A.CAREER_ACHIEVEMENTS.length >= 10);
+  assert.ok(!A.createCareerStore({ getItem: () => null, setItem() {} }).event('incursion', { time: 400, silent: false }).includes('sprinter'), '400 s não é relâmpago');
+}
+assert.match(gameSource, /career\.event\('incursion'/); assert.match(gameSource, /career\.event\('turret'\)/); assert.match(gameSource, /◉ CÂMERAS/);
+console.log('p64: conquistas da Incursão OK');
+
+// ---- p65: seta de direção até o objetivo ----
+assert.match(gameSource, /function updateObjArrow\(/); assert.match(gameSource, /updateObjArrow\(active\)/);
+assert.ok(/id="objArrow"/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8')), 'seta no HTML');
+console.log('p65: seta de objetivo OK');
+
+// ---- p66: arquivos do deck por prédio + remapeamento do gamepad ----
+{
+  const ids = ['complexo', 'refinaria', 'laboratorio', 'campus'];
+  for (const b of ids) {
+    const list = A.deckFileList({ building: b }); assert.equal(list.length, A.DECK_FILES.length + 3, b + ': 3 arquivos extras');
+    for (const f of list.slice(-3)) { const lines = A.deckFile(f.name, { building: b, status: { stage: 2 } }); assert.ok(lines && lines.length >= 2, f.name); }
+  }
+  assert.equal(A.deckFileList({ building: 'xyz' }).length, A.DECK_FILES.length, 'prédio desconhecido = só os arquivos base');
+  assert.equal(A.deckFile('complexo-pistas.txt', { building: 'refinaria' }), null, 'arquivo de outro prédio não aparece');
+  assert.ok(A.deckFile('refinaria-plantao.txt', { building: 'refinaria', status: { stage: 3 } }).some(l => /reator/i.test(l.t)), 'plantão muda por setor');
+  const r = A.deckRun('ls', { building: 'campus' }); assert.ok(r.lines[0].t.includes('campus-pistas.txt'));
+  assert.ok(A.deckRun('grep bloco', { building: 'campus' }).lines.some(l => l.t.startsWith('campus-pistas.txt')), 'grep acha nos arquivos do prédio');
+  // gamepad
+  const d = A.padDefaults(); assert.equal(d.fire, 7); assert.equal(Object.keys(d).length, A.PAD_ACTIONS.length);
+  const m = A.padAssign(d, 'fire', 5);                       // 5 era "próxima arma": as duas trocam
+  assert.equal(m.fire, 5); assert.equal(m.next, 7); assert.equal(new Set(Object.values(m)).size, A.PAD_ACTIONS.length);
+  assert.equal(A.padAssign(d, 'fire', 99).fire, 7, 'botão inválido é ignorado'); assert.equal(A.padAssign(d, 'nada', 3).jump, 0);
+  assert.equal(A.padSanitize(null).fire, 7); assert.equal(A.padSanitize({ fire: 'x' }).fire, 7);
+  assert.equal(new Set(Object.values(A.padSanitize({ fire: 3, jump: 3 }))).size, A.PAD_ACTIONS.length, 'repetidos viram únicos');
+  assert.equal(A.padSanitize(m).fire, 5, 'mapa válido é preservado');
+  assert.equal(A.padLabel(7), 'RT (7)'); assert.equal(A.padLabel(20), 'Botão 20');
+}
+assert.match(gameSource, /padMap\.fire/); assert.doesNotMatch(gameSource, /just\(7\)/, 'sem índices fixos de botão');
+assert.match(fs.readFileSync('index.html', 'utf8'), /gamepad-map\.js/); assert.match(fs.readFileSync('sw.js', 'utf8'), /gamepad-map\.js/);
+console.log('p66: arquivos por prédio e remapeamento do gamepad OK');
+
+// ---- p67/p68: mezanino com rampa (4 prédios, Média/Alta) ----
+for (const M of A.INCURSION_LEVELS) {
+  const g = (x, z) => A.groundAt(M, x, z), d = M.decks[0], r = M.ramps[0], cx = (d.x0 + d.x1) / 2, rx = (r.x0 + r.x1) / 2, id = M.id;
+  assert.equal(g(0, 0), 0, id + ': piso comum = 0'); assert.equal(g(cx, (d.z0 + d.z1) / 2), d.h, id + ': em cima do mezanino');
+  assert.equal(g(rx, r.z0), 0, id + ': início da rampa'); assert.ok(Math.abs(g(rx, (r.z0 + r.z1) / 2) - d.h / 2) < 1e-9, id + ': meio da rampa');
+  assert.equal(g(rx, r.z1), d.h, id + ': rampa encontra o mezanino'); assert.equal(r.z1, d.z0, id + ': rampa chega na borda sul');
+  assert.ok(r.x0 >= d.x0 && r.x1 <= d.x1, id + ': rampa dentro da largura do mezanino');
+  for (let z = r.z0; z < r.z1; z += 0.25) assert.ok(g(rx, z + 0.25) >= g(rx, z), id + ': rampa só sobe');
+  assert.ok(d.h + 1.7 + 0.5 <= M.ceiling, id + ': cabe em pé sob o teto');
+  const rails = A.deckRails(M.decks, M.ramps); assert.equal(rails.length, 5, id + ': norte, oeste, leste + 2 pedaços do sul');
+  const south = rails.filter(q => Math.abs(q[1] - (d.z0 + 0.15)) < 1e-9); assert.equal(south.length, 2);
+  assert.ok(south.every(q => q[0] + q[2] / 2 <= r.x0 + 1e-9 || q[0] - q[2] / 2 >= r.x1 - 1e-9), id + ': parapeito não tampa a rampa');
+  assert.ok(rails.every(([x, z, w, dd]) => x - w / 2 >= d.x0 - 1e-9 && x + w / 2 <= d.x1 + 1e-9 && z - dd / 2 >= d.z0 - 1e-9 && z + dd / 2 <= d.z1 + 1e-9), id + ': parapeito dentro');
+  const zone = [[d.x0, d.x1, d.z0, d.z1], [r.x0, r.x1, r.z0, r.z1]];       // nada do mapa invade o mezanino/rampa, nem terminais, portas, câmeras e torretas
+  for (const [bx, bz, bw, , bd] of M.blocks) for (const [x0, x1, z0, z1] of zone) assert.ok(bx + bw / 2 <= x0 || bx - bw / 2 >= x1 || bz + bd / 2 <= z0 || bz - bd / 2 >= z1, `${id}: bloco ${bx},${bz} invade o mezanino`);
+  const pts = [...Object.values(M.terminals), ...M.doors, ...(M.cameras || []), ...(M.turrets || [])];
+  for (const q of pts) for (const [x0, x1, z0, z1] of zone) assert.ok(!(q.x > x0 - 0.5 && q.x < x1 + 0.5 && q.z > z0 - 0.5 && q.z < z1 + 0.5), `${id}: objeto em ${q.x},${q.z} dentro do mezanino`);
+}
+assert.equal(A.groundAt(null, 1, 1), 0);
+assert.match(gameSource, /function buildDecks\(/); assert.match(gameSource, /appliedQuality !== 'low'/); assert.match(gameSource, /groundEye/);
+console.log('p67: mezanino e rampa OK');
+
+// ---- p68: botão de diagnóstico no menu ----
+assert.match(fs.readFileSync('index.html', 'utf8'), /id="perfLobbyBtn"/); assert.match(gameSource, /searchParams\.set\('perf', '1'\)/);
+console.log('p68: mezaninos nos 4 prédios + diagnóstico no menu OK');
+
+// ---- p69: comando "missao" no deck ----
+assert.equal(A.deckCompass(0, -10), 'norte'); assert.equal(A.deckCompass(10, 0), 'leste'); assert.equal(A.deckCompass(-10, 10), 'sudoeste'); assert.equal(A.deckCompass(-10, -10), 'noroeste');
+{
+  const r = A.deckRun('missao', { status: { stage: 2, mission: 'REDE DE SEGURANÇA', hint: 'Vá à SALA DE REDE', dist: 31, dx: 20, dz: -22 }, time: 125 });
+  const txt = r.lines.map(l => l.t).join('|'); assert.ok(/setor 2\/4/.test(txt) && /SALA DE REDE/.test(txt) && /31 m ao nordeste/.test(txt) && /2:05/.test(txt), txt);
+  assert.ok(A.deckRun('objetivo', { status: { dist: 0 } }).lines.some(l => /segure E/.test(l.t)));
+  assert.ok(A.DECK_COMMANDS.includes('missao'));
+}
+console.log('p69: comando missao OK');
